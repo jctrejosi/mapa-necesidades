@@ -37,3 +37,4 @@ bootstrap().catch((e) => {
   console.error('✖ Error al arrancar el backend:', e);
   process.exit(1);
 });
+

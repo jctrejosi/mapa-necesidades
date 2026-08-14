@@ -4,7 +4,16 @@
  * - En desarrollo Vite proxya /api (ver vite.config.ts).
  */
 
-export const API_URL: string = (import.meta.env.VITE_API_URL as string) || '/api'
+const RAW_API_URL: string = (import.meta.env.VITE_API_URL as string) || '/api'
+
+/**
+ * URL base de la API. El backend sirve todo bajo /api (NestJS con prefijo
+ * global), así que normalizamos: si VITE_API_URL viene sin el sufijo
+ * (p. ej. https://redsolidaria.onrender.com), se lo agregamos automáticamente.
+ */
+export const API_URL: string = RAW_API_URL.endsWith('/api')
+  ? RAW_API_URL
+  : `${RAW_API_URL.replace(/\/+$/, '')}/api`
 
 const ORIGIN = API_URL.replace(/\/api$/, '')
 

@@ -35,8 +35,8 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
       proxy: {
-        '/api': { target: 'http://localhost:3000', changeOrigin: true },
-        '/uploads': { target: 'http://localhost:3000', changeOrigin: true },
+        '/api': { target: process.env.API_PROXY_TARGET || 'http://localhost:3000', changeOrigin: true },
+        '/uploads': { target: process.env.API_PROXY_TARGET || 'http://localhost:3000', changeOrigin: true },
       },
     },
     preview: {

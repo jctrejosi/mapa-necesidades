@@ -44,6 +44,10 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Work Sans', sans-serif; margin: 0; }
 ::-webkit-scrollbar-thumb:hover { background: #9AA0AC; }
 
 .leaflet-container { font-family: 'Nunito', sans-serif !important; }
+/* Contiene el z-index interno de Leaflet (panes 200-700) para que el mapa no
+   tape el header ni la barra de tabs móvil (z-index 190/200). Los botones
+   flotantes del mapa quedan fuera de este contenedor y siguen por encima. */
+.map-container .leaflet-container { isolation: isolate; }
 .leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important; }
 .leaflet-popup-content { margin: 14px 16px !important; font-family: 'Nunito', sans-serif !important; }
 
@@ -303,6 +307,10 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 
   /* Bottom sheet sits above the tab bar */
   .map-bottom-sheet { bottom: 62px; }
+
+  /* Campana de notificaciones: en desktop queda sobre el botón "Reportar";
+     en móvil vuelve a 74px (12px sobre el navbar) */
+  .notif-bell { bottom: 74px !important; }
 
   /* Hide admin + emergency badge on mobile header (in drawer instead) */
   .hide-on-mobile { display: none !important; }

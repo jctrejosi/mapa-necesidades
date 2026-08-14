@@ -16,8 +16,8 @@ export default defineConfig({
     port: 8444,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      '/uploads': { target: 'http://localhost:3000', changeOrigin: true },
+      '/api': { target: process.env.API_PROXY_TARGET || 'http://localhost:3000', changeOrigin: true },
+      '/uploads': { target: process.env.API_PROXY_TARGET || 'http://localhost:3000', changeOrigin: true },
     },
   },
 })

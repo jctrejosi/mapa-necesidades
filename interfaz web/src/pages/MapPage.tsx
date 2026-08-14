@@ -276,7 +276,7 @@ export default function MapPage({ store, setPage }: Props) {
     // — Daño markers
     danoMarkersRef.current.forEach(m => m.remove())
     danoMarkersRef.current = []
-    if (layers.danos && ciudad === 'Manizales') {
+    if (layers.danos) {
       const nivelColor: Record<string, string> = { leve: '#E08E00', moderado: '#CE1126', severo: '#7f1d1d', colapso: '#1f2430' }
       danos.filter(d => d.ciudad === ciudad).forEach(d => {
         const color = nivelColor[d.nivel_percibido] || '#CE1126'
@@ -665,45 +665,110 @@ export default function MapPage({ store, setPage }: Props) {
   }
 
   // Layer toggle buttons (shared between desktop and mobile)
-  const LayerToggles = ({ bottomOffset = 60 }: { bottomOffset?: number }) => {
+  // compact: en móvil se muestran solo con ícono para ocupar menos espacio
+  const LayerToggles = ({ bottomOffset = 60, compact = false }: { bottomOffset?: number; compact?: boolean }) => {
     const buttons = [
-      ...NEED_TYPES.filter(t => t.key !== 'mascotas').map(t => ({ key: t.key, label: t.label })),
-      { key: 'centros', label: '📦 Centros' },
-      { key: 'mascotas', label: '🐾 Mascotas perdidas' },
-      ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚️ Daños' }] : []),
+      ...NEED_TYPES.filter(t => t.key !== 'mascotas').map(t => ({
+        key: t.key,
+        icon: t.icon,
+        label: t.label.split(' ').slice(1).join(' ') || t.label,
+      })),
+      { key: 'centros', icon: '📦', label: 'Centros' },
+      { key: 'mascotas', icon: '🐾', label: 'Mascotas perdidas' },
+      { key: 'danos', icon: '🏚️', label: 'Daños' },
     ]
     const allOn = buttons.every(b => layers[b.key])
+
+    const chipStyle = (active: boolean) => compact
+      ? {
+          pointerEvents: 'auto',
+          background: active ? '#003893' : 'rgba(255,255,255,0.92)',
+          color: active ? '#fff' : '#374151',
+          border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
+          borderRadius: 18, width: 34, height: 34, padding: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, lineHeight: 1, cursor: 'pointer',
+          boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
+          fontFamily: 'Nunito, sans-serif', opacity: active ? 1 : 0.82,
+        }
+      : {
+          pointerEvents: 'auto',
+          background: active ? '#003893' : 'rgba(255,255,255,0.92)',
+          color: active ? '#fff' : '#374151',
+          border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
+          borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+          cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
+          fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
+        }
+
     return (
-      <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
-        <button
-          onClick={() => setLayers(prev => Object.fromEntries(Object.keys(prev).map(k => [k, true])))}
-          disabled={allOn}
-          style={{
-            pointerEvents: 'auto',
-            background: allOn ? '#e8eeff' : '#003893',
-            color: allOn ? '#9AA0AC' : '#fff',
-            border: '1px solid ' + (allOn ? '#c9d6f2' : '#003893'),
-            borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 800,
-            cursor: allOn ? 'default' : 'pointer',
-            boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
-            fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: allOn ? 0.6 : 1,
-          }}
-        >👁️ Ver todos</button>
-        {buttons.map(btn => {
-          const active = layers[btn.key]
-          return (
-            <button key={btn.key} onClick={() => toggleLayer(btn.key)} style={{
+      <>
+        <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: compact ? 4 : 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
+          <button
+            onClick={() => setLayers(prev => Object.fromEntries(Object.keys(prev).map(k => [k, true])))}
+            disabled={allOn}
+            title="Mostrar todas las capas"
+            style={{
               pointerEvents: 'auto',
-              background: active ? '#003893' : 'rgba(255,255,255,0.92)',
-              color: active ? '#fff' : '#374151',
-              border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
-              borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
-              cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
-              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
-            }}>{btn.label}</button>
-          )
-        })}
-      </div>
+              background: allOn ? '#e8eeff' : '#003893',
+              color: allOn ? '#9AA0AC' : '#fff',
+              border: '1px solid ' + (allOn ? '#c9d6f2' : '#003893'),
+              borderRadius: compact ? 18 : 20,
+              width: compact ? 34 : undefined, height: compact ? 34 : undefined, padding: compact ? 0 : '4px 10px',
+              display: compact ? 'flex' : undefined, alignItems: compact ? 'center' : undefined, justifyContent: compact ? 'center' : undefined,
+              fontSize: compact ? 16 : 11, lineHeight: compact ? 1 : undefined, fontWeight: 800,
+              cursor: allOn ? 'default' : 'pointer',
+              boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
+              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: allOn ? 0.6 : 1,
+            }}
+          >
+            {compact ? '👁️' : '👁️ Ver todos'}
+          </button>
+          {buttons.map(btn => {
+            const active = layers[btn.key]
+            return (
+              <button key={btn.key} onClick={() => toggleLayer(btn.key)} title={btn.label} style={chipStyle(active)}>
+                {compact ? btn.icon : `${btn.icon} ${btn.label}`}
+              </button>
+            )
+          })}
+
+          {/* + Reportar necesidad — móvil: dentro de la columna, debajo de las capas */}
+          {compact && (
+            <button
+              onClick={handlePickLocation}
+              style={{
+                pointerEvents: 'auto',
+                background: '#CE1126',
+                color: '#fff',
+                border: '1px solid #CE1126',
+                borderRadius: 20, padding: '7px 12px', fontSize: 11, fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(206,17,38,0.45)', backdropFilter: 'blur(4px)',
+                fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', marginTop: 4,
+              }}
+            >
+              + Reportar necesidad
+            </button>
+          )}
+        </div>
+
+        {/* + Reportar necesidad — desktop: a la derecha, bajo la campana y al mismo nivel que las capas */}
+        {!compact && (
+          <button
+            onClick={handlePickLocation}
+            style={{
+              position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400,
+              background: '#CE1126', color: '#fff', border: '1px solid #CE1126',
+              borderRadius: 20, padding: '8px 14px', fontSize: 12, fontWeight: 800,
+              cursor: 'pointer', boxShadow: '0 2px 8px rgba(206,17,38,0.45)', backdropFilter: 'blur(4px)',
+              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap',
+            }}
+          >
+            + Reportar necesidad
+          </button>
+        )}
+      </>
     )
   }
 
@@ -742,26 +807,20 @@ export default function MapPage({ store, setPage }: Props) {
               <LayerToggles bottomOffset={60} />
             </div>
 
-            {/* Mobile layer toggles — above the bottom sheet handle */}
-            <div className="map-toggles-mobile">
-              <LayerToggles bottomOffset={sheetState === 'collapsed' ? 68 : sheetState === 'peek' ? 8 : 8} />
-            </div>
-
-            {/* Report button */}
-            <button
-              onClick={handlePickLocation}
-              className="btn btn-primary"
-              style={{ position: 'absolute', bottom: 20, right: 10, zIndex: 400, boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}
-            >
-              + Reportar necesidad
-            </button>
+            {/* Mobile layer toggles — compactos (solo ícono), 15px sobre el navbar; ocultos al expandir el sheet */}
+            {sheetState === 'collapsed' && (
+              <div className="map-toggles-mobile">
+                <LayerToggles bottomOffset={77} compact />
+              </div>
+            )}
 
             {/* Centro de notificaciones */}
             <button
               onClick={() => { setOpenSection('actividad'); markAllRead(); setSheetState('full') }}
               title="Centro de notificaciones"
+              className="notif-bell"
               style={{
-                position: 'absolute', bottom: 74, right: 10, zIndex: 400,
+                position: 'absolute', bottom: 104, right: 10, zIndex: 400,
                 background: 'rgba(255,255,255,0.95)', border: '1px solid #d1d5db',
                 borderRadius: 999, width: 40, height: 40, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',

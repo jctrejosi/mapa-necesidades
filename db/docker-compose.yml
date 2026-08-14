@@ -1,15 +1,23 @@
 # SolidaridadCO — despliegue local de la aplicación.
 # La base de datos vive en Supabase (nube); aquí solo corren backend y frontends.
 #
-#   docker compose up -d --build
+#   node setup.js            -> producción local (imágenes construidas: NestJS + nginx)
+#   node setup.js --dev      -> desarrollo (hot reload: nest start --watch + Vite HMR)
+#
+# Perfiles:
+#   - "prod": servicios de producción local (servidos por nginx)
+#   - "dev":  servicios de desarrollo con código montado y watch activo
 #
 # Nombre de proyecto único: evita colisionar con otros compose del equipo que
 # también se ejecutan desde una carpeta llamada "db" (mercaldas-ecommerce, tesis).
 name: redsolidaria
+
 services:
+  # ── Producción local (build) ─────────────────────────────────────────
   backend:
     build: ../backend
     container_name: redsolidaria-backend
+    profiles: ["prod"]
     restart: unless-stopped
     environment:
       # PostgreSQL alojado en Supabase (el password va URL-encoded: @ → %40)
@@ -32,6 +40,7 @@ services:
   frontend:
     build: "../interfaz web"
     container_name: redsolidaria-frontend
+    profiles: ["prod"]
     restart: unless-stopped
     depends_on:
       - backend
@@ -41,11 +50,80 @@ services:
   frontend-admin:
     build: "../interfaz web admin"
     container_name: redsolidaria-admin
+    profiles: ["prod"]
     restart: unless-stopped
     depends_on:
       - backend
     ports:
       - "8081:80"
+
+  # ── Desarrollo local (hot reload) ────────────────────────────────────
+  # Usan la etapa "build" de cada Dockerfile (con node_modules completos) y
+  # montan el código fuente como volumen: NestJS reinicia con --watch y Vite
+  # aplica HMR ante cualquier cambio.
+  backend-dev:
+    build:
+      context: ../backend
+      target: build
+    container_name: redsolidaria-backend-dev
+    profiles: ["dev"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true
+      DB_SSL: "true"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      PORT: "3000"
+      UPLOAD_DIR: /app/uploads
+      FRONTEND_ORIGIN: http://localhost:8080,http://localhost:8081
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+    ports:
+      - "3000:3000"
+    command: npm run start:dev
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+      - ../backups:/app/legacy-backups:ro
+
+  frontend-dev:
+    build:
+      context: "../interfaz web"
+      target: build
+    container_name: redsolidaria-frontend-dev
+    profiles: ["dev"]
+    restart: unless-stopped
+    depends_on:
+      - backend-dev
+    environment:
+      # El proxy de Vite apunta al backend de desarrollo dentro de la red
+      API_PROXY_TARGET: http://backend-dev:3000
+      PORT: "8443"
+    ports:
+      - "8080:8443"
+    command: pnpm dev
+    volumes:
+      - "../interfaz web:/app"
+      - /app/node_modules
+
+  frontend-admin-dev:
+    build:
+      context: "../interfaz web admin"
+      target: build
+    container_name: redsolidaria-admin-dev
+    profiles: ["dev"]
+    restart: unless-stopped
+    depends_on:
+      - backend-dev
+    environment:
+      API_PROXY_TARGET: http://backend-dev:3000
+      PORT: "8444"
+    ports:
+      - "8081:8444"
+    command: npm run dev
+    volumes:
+      - "../interfaz web admin:/app"
+      - /app/node_modules
 
 volumes:
   uploads_data:

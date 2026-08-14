@@ -2,8 +2,9 @@
 /**
  * setup.js — Monta el proyecto completo en local con Docker.
  *
- *   node setup.js            -> levanta PostgreSQL + backend (NestJS) + interfaz web
- *                              e importa los datos del backup si la DB está vacía
+ *   node setup.js            -> levanta backend (NestJS) + interfaz web + panel admin
+ *                              en modo producción local (imágenes construidas)
+ *   node setup.js --dev      -> modo desarrollo: hot reload (nest --watch + Vite HMR)
  *   node setup.js --import   -> fuerza la importación de los datos de producción
  *   node setup.js --down     -> detiene los contenedores (conserva los datos)
  *   node setup.js --reset    -> detiene, borra la base y vuelve a montar desde cero
@@ -24,6 +25,11 @@ const COMPOSE = ['docker', 'compose', '-p', 'redsolidaria', '-f', COMPOSE_FILE];
 
 // Nombres reservados por docker-compose.yml (db/)
 const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin'];
+const DEV_CONTAINERS = ['redsolidaria-backend-dev', 'redsolidaria-frontend-dev', 'redsolidaria-admin-dev'];
+// Perfiles compose: prod (build) y dev (hot reload)
+const PROD = ['--profile', 'prod'];
+const DEV = ['--profile', 'dev'];
+const ALL = ['--profile', 'prod', '--profile', 'dev'];
 
 const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
@@ -105,9 +111,9 @@ function projectName() {
  * Elimina contenedores huérfanos que bloqueen los nombres reservados por este
  * proyecto (p. ej. instancias viejas creadas desde otra carpeta).
  */
-function removeStaleContainers() {
+function removeStaleContainers(names) {
   const project = projectName();
-  for (const name of CONTAINERS) {
+  for (const name of names) {
     const exists = quiet(['docker', 'container', 'inspect', '-f', '{{.Id}}', name]) !== '';
     if (!exists) continue;
 
@@ -165,7 +171,7 @@ async function waitForWeb(timeoutMs = 60000) {
 }
 
 /** Importa los datos de producción (dump MySQL) si la DB está vacía. */
-async function importLegacyIfNeeded(force = false) {
+async function importLegacyIfNeeded(force = false, devMode = false) {
   let totalSectores = 0;
   try {
     const res = await fetch(`${API_URL}/stats?ciudad=manizales`);
@@ -183,7 +189,7 @@ async function importLegacyIfNeeded(force = false) {
   } else {
     info('Importando los datos del backup de producción...');
   }
-  run(COMPOSE.concat(['exec', '-T', 'backend', 'npm', 'run', 'db:import-legacy']));
+  run(COMPOSE.concat(['exec', '-T', devMode ? 'backend-dev' : 'backend', 'npm', 'run', 'db:import-legacy']));
 }
 
 async function up() {
@@ -210,46 +216,77 @@ async function up() {
   }
 
   removeStaleContainers();
+removeStaleContainers(CONTAINERS);
 
   info('Montando backend + interfaz web + panel admin (docker compose up -d --build)...');
-  run(COMPOSE.concat(['up', '-d', '--build']));
+  run(COMPOSE.concat(PROD, ['up', '-d', '--build']));
 
   await waitForApi();
   await waitForWeb();
   await importLegacyIfNeeded();
 
-  summary();
+  summary(false);
+}
+
+/** Modo desarrollo: código montado + hot reload (NestJS watch y Vite HMR). */
+async function devUp() {
+  banner();
+
+  if (!hasDocker()) fail('Docker no está instalado o no corre. Instálalo y vuelve a intentar.');
+  ok(`Docker: ${quiet(['docker', '--version'])}`);
+
+  if (!hasCompose()) fail('Falta el plugin "docker compose" de Docker.');
+  ok(`Compose: ${quiet(COMPOSE.concat(['version']))}`);
+
+  // El modo dev usa los mismos puertos (3000/8080/8081): detener el stack de prod
+  for (const name of CONTAINERS) {
+    if (containerRunning(name)) {
+      warn(`El contenedor de producción "${name}" está corriendo; se detiene (mismos puertos).`);
+      run(['docker', 'stop', name]);
+    }
+  }
+
+  removeStaleContainers(DEV_CONTAINERS);
+
+  info('Montando backend + frontends en modo DEV (hot reload: nest start --watch + Vite HMR)...');
+  run(COMPOSE.concat(DEV, ['up', '-d', '--build']));
+
+  await waitForApi();
+  await waitForWeb();
+  await importLegacyIfNeeded(false, true);
+
+  summary(true);
 }
 
 async function down() {
   banner();
   info('Deteniendo los contenedores (los datos se conservan)...');
-  run(COMPOSE.concat(['down']));
+  run(COMPOSE.concat(ALL, ['down']));
   ok('Contenedores detenidos.');
 }
 
 async function reset() {
   banner();
   info('Deteniendo y borrando la base de datos (docker compose down -v)...');
-  run(COMPOSE.concat(['down', '-v']));
+  run(COMPOSE.concat(ALL, ['down', '-v']));
   info('Montando de cero...');
-  run(COMPOSE.concat(['up', '-d', '--build']));
+  run(COMPOSE.concat(PROD, ['up', '-d', '--build']));
   await waitForApi();
   await waitForWeb();
   await importLegacyIfNeeded();
-  summary();
+  summary(false);
 }
 
 async function forceImport() {
   banner();
   info('Asegurando que el stack esté arriba...');
-  run(COMPOSE.concat(['up', '-d']));
+  run(COMPOSE.concat(PROD, ['up', '-d']));
   await waitForApi();
   await importLegacyIfNeeded(true);
   ok('Importación completada.');
 }
 
-function summary() {
+function summary(dev = false) {
   console.log(`
 ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${c.reset}
 
@@ -257,7 +294,9 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
   ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
   ${c.bold}PostgreSQL${c.reset}     Supabase (nube) — se migra con: node setup.js --import
-
+${dev ? `
+  ${c.dim}Modo DEV: hot reload activo — backend (nest --watch) y frontends (Vite HMR)${c.reset}
+` : ''}
   ${c.dim}Parar:  node setup.js --down${c.reset}
   ${c.dim}Reset:  node setup.js --reset${c.reset}
 `);
@@ -269,9 +308,10 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
     if (arg === '--down') await down();
     else if (arg === '--reset') await reset();
     else if (arg === '--import') await forceImport();
+    else if (arg === '--dev') await devUp();
     else if (arg === '--help' || arg === '-h') {
       banner();
-      console.log('Uso: node setup.js [--import | --down | --reset]');
+      console.log('Uso: node setup.js [--dev | --import | --down | --reset]');
     } else await up();
   } catch (e) {
     fail(e && e.message ? e.message : String(e));
