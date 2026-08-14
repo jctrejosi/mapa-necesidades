@@ -16,6 +16,7 @@ import { Pool } from 'pg';
 import type { PoolConfig } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
+import { poolOptions, resolveDbUrl } from '../src/db/connection';
 import {
   centrosAcopio,
   contactos,
@@ -346,13 +347,9 @@ async function main() {
   }
   console.log(`✔ Dump: ${dumpPath}`);
 
-  const url =
-    process.env.DATABASE_URL ??
-    'postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true';
   const pool = new Pool({
-    connectionString: url,
-    family: 4, // IPv4: el pooler de Supabase no expone IPv6 en este entorno
-    ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
+    connectionString: resolveDbUrl(),
+    ...poolOptions(),
   } as PoolConfig);
   const db = drizzle(pool);
   const sqlText = fs.readFileSync(dumpPath, 'utf8');
