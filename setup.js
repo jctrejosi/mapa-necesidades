@@ -263,6 +263,13 @@ async function devUp() {
   await importLegacyIfNeeded(false, true);
 
   summary(true);
+
+  // Logs en vivo: el script se queda pegado mostrando la salida de los 3
+  // contenedores (nest --watch + Vite HMR). Ctrl+C sale sin apagar nada.
+  info('Mostrando logs en vivo (Ctrl+C para salir; los contenedores siguen corriendo).');
+  info('Para volver a verlos: node setup.js --dev');
+  run(COMPOSE.concat(DEV, ['logs', '-f', '--tail=50']));
+  ok('Seguimiento de logs terminado. Los contenedores dev siguen arriba.');
 }
 
 async function down() {
@@ -321,6 +328,10 @@ ${dev ? `
       console.log('Uso: node setup.js [--dev | --import | --down | --reset]');
     } else await up();
   } catch (e) {
+    if (e && (e.signal === 'SIGINT' || e.signal === 'SIGTERM')) {
+      console.log('\n  Detenido por el usuario.');
+      process.exit(0);
+    }
     fail(e && e.message ? e.message : String(e));
   }
 })();

@@ -130,7 +130,9 @@ export default function MapPage({ store, setPage }: Props) {
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return
-    const map = L.map(mapRef.current, { zoomControl: true }).setView(center, 13)
+    const map = L.map(mapRef.current, { zoomControl: false }).setView(center, 13)
+    // Zoom (+/-) al lado derecho
+    L.control.zoom({ position: 'topright' }).addTo(map)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map)
