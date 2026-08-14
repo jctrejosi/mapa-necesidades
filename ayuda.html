@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ayuda — Cómo usar la app</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --amarillo: #FCD116; --azul: #003893; --rojo: #CE1126;
+    --naranja: #E08E00; --verde: #2E9E5B; --gris: #9AA0AC;
+    --bg: #f4f5f7; --texto: #1f2430; --borde: #e1e4e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+  }
+  header {
+    background: linear-gradient(90deg, var(--amarillo) 0 34%, var(--azul) 34% 67%, var(--rojo) 67% 100%);
+    padding: 3px 0 0 0;
+  }
+  .header-inner {
+    background: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .header-inner h1 { font-size: 1.05rem; margin: 0; }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  .btn-outline { background: #fff; color: var(--azul); border: 1.5px solid var(--azul); }
+
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  .intro {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+    font-size: 0.92rem;
+  }
+  .intro strong { color: var(--azul); }
+
+  section.bloque {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  section.bloque h2 {
+    font-size: 1rem;
+    margin: 0 0 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .paso {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .paso:last-child { margin-bottom: 0; }
+  .paso-num {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--azul);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .paso-texto { font-size: 0.88rem; line-height: 1.5; }
+  .paso-texto strong { color: var(--texto); }
+
+  .leyenda-estados {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .leyenda-estados span {
+    font-size: 0.82rem;
+    background: #f4f5f7;
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+
+  .aviso-importante {
+    background: #FFF9E5;
+    border: 1px solid var(--amarillo);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    margin-top: 12px;
+  }
+
+  .enlaces-rapidos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  footer { text-align: center; font-size: 0.72rem; color: #999; padding: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <h1>❓ Ayuda — Cómo usar la app</h1>
+    <div style="display:flex; gap:8px;">
+      <a href="index.html" class="btn btn-outline">🗺️ Ver mapa</a>
+      <a href="mascotas.html" class="btn btn-outline">🐾 Mascotas</a>
+      <a href="noticias.html" class="btn btn-outline">📰 Noticias</a>
+      <a href="vivienda.html" class="btn btn-outline">🏠 Vivienda</a>
+      <a href="danos.html" class="btn btn-outline">🏚️ Reporte de daños (Manizales)</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="intro">
+    Esta es una <strong>plataforma solidaria y apolítica</strong>, hecha por la comunidad para coordinar la ayuda después del terremoto y evitar que se duplique el esfuerzo. Cualquier persona puede reportar, ofrecer o coordinar ayuda — no se necesita cuenta ni contraseña, excepto para el panel de administración.
+  </div>
+
+  <section class="bloque">
+    <h2>🔑 Tu código de edición</h2>
+    <div class="paso-texto">Cada vez que publicas una necesidad, un ofrecimiento, una mascota perdida o una vivienda, la app te muestra un <strong>código de 4 dígitos</strong> justo después de publicar. <strong>Guárdalo</strong> — es el único que puede usar el botón "✎ Actualizar" para editar esa publicación después. Nadie más, aunque vea tu publicación en el mapa, puede modificarla sin ese código. Si lo pierdes, escríbenos por WhatsApp y lo resolvemos desde el panel de administración.</div>
+  </section>
+
+  <section class="bloque">
+    <h2>🗺️ El mapa de necesidades</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">Elige tu ciudad con el selector en la parte superior del mapa. La app recuerda tu elección la próxima vez que entres.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Los sectores aparecen marcados con colores según su situación:
+        <div class="leyenda-estados">
+          <span>🟥 Requiere ayuda</span>
+          <span>🟧 Alguien ya se encargó</span>
+          <span>✅ Resuelto</span>
+          <span>⬜ Sin reportes</span>
+        </div>
+      </div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Toca un sector para ver qué necesita, quién es el <strong>contacto de coordinación</strong> del sector, y si alguien ya se comprometió a resolver alguna necesidad.</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>➕ Reportar una necesidad</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">Toca el botón <strong>"+ Reportar necesidad"</strong>.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Haz clic en el punto exacto del mapa donde está la necesidad.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Completa el formulario: qué se necesita (agua, comida, refugio, medicamentos, mascotas, etc.), cantidad aproximada, y el nombre y teléfono de la <strong>persona con quien hay que coordinar</strong> en el sitio.</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>🙋 Ayudar con una necesidad</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">Toca cualquier necesidad marcada en rojo y presiona <strong>"Yo puedo ayudar con esto"</strong>, dejando tu nombre y teléfono.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Quedará marcada en naranja para que nadie más duplique el esfuerzo.</div>
+    </div>
+    <div class="aviso-importante">
+      ✅ <strong>Muy importante:</strong> cuando termines de resolver la necesidad, vuelve a entrar, toca "✎ Actualizar" sobre esa necesidad y marca "Ya fue resuelta / atendida". Esto mantiene el mapa al día para todos.
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>🤝 Ofrecimientos de ayuda</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">En la sección <strong>Ofrecimientos</strong> (sin necesidad de ubicarlo en el mapa), publica lo que tengas disponible para donar o apoyar: agua, alimentos, transporte, atención veterinaria, voluntariado, etc.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Usa el buscador o los filtros por categoría para encontrar rápido lo que necesitas entre muchos ofrecimientos.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Si alguien necesita lo que ofreces, puede tocar <strong>"Coordinar / reservar"</strong> y dejar sus datos para que se pongan de acuerdo. Cuando ya se haya entregado, actualiza el estado a "Ya se entregó".</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>📊 Dashboard de avance</h2>
+    <div class="paso-texto">Muestra en tiempo real cuántas necesidades hay reportadas por ciudad, cuántas siguen pendientes, cuántas están en proceso y cuántas ya se resolvieron — útil para tener una vista general rápida sin recorrer todo el mapa.</div>
+  </section>
+
+  <section class="bloque">
+    <h2>📸 Fotos en necesidades y ofrecimientos</h2>
+    <div class="paso-texto">Al reportar o actualizar una necesidad, o al publicar un ofrecimiento, puedes adjuntar una foto opcional — es muy útil para mostrar el estado real de una vivienda, o cómo se ve lo que estás donando. Las fotos se comprimen automáticamente antes de subirse, así que funcionan bien incluso con señal limitada.</div>
+  </section>
+
+  <section class="bloque">
+    <h2>🐾 Mascotas perdidas</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">En la sección <strong>Mascotas</strong>, toca "+ Reportar mascota" y marca en el mapa el lugar donde se vio por última vez.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Describe sus señas particulares, agrega una foto (muy recomendable) y deja tus datos de contacto.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Si alguien la ve o la tiene, puede tocar <strong>"Yo la vi / la tengo yo"</strong> y dejar sus datos para coordinar contigo directamente. Cuando aparezca, actualiza el reporte marcándolo como "¡Ya apareció!".</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>🏠 Vivienda y alojamiento</h2>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">En la sección <strong>Vivienda</strong>, toca "+ Ofrecer vivienda" si tienes un espacio disponible para alquilar o para alojar a alguien de manera gratuita mientras se recupera de la emergencia.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Indica el barrio o sector aproximado (por seguridad, no se publica la dirección exacta), capacidad, tiempo disponible y una foto del espacio.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Quien esté interesado toca <strong>"Estoy interesado"</strong> y deja sus datos. La dirección exacta y los detalles finales se coordinan directamente por teléfono. Verifica bien con quién estás hablando antes de aceptar quedarte en un sitio o de recibir a alguien en tu casa.</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>🏚️ Reporte de daños estructurales</h2>
+    <div class="aviso-importante" style="margin-top:0;margin-bottom:12px;">
+      ⚠️ Esto <strong>no es un canal de emergencia</strong>. Si hay riesgo de colapso inminente o personas atrapadas, llama de inmediato a la línea de emergencia <strong>123</strong>.
+    </div>
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <div class="paso-texto">Si tu vivienda o un inmueble cercano tiene daños visibles, toca "+ Reportar daño", marca la ubicación exacta en el mapa y describe el estado (grietas, columnas, riesgo de colapso, etc.), idealmente con una foto. <strong>Esta información se usa para agendar una visita técnica de ingenieros</strong> que revisarán el estado estructural del inmueble.</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <div class="paso-texto">Al enviarlo recibirás un <strong>número de radicado</strong> — guárdalo. Con él puedes volver más adelante y tocar "🔎 Consultar mi reporte" para ver en qué va tu solicitud (pendiente, visita programada, o ya visitado con el resultado del ingeniero).</div>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <div class="paso-texto">Esta información pasa directamente al equipo que gestiona las visitas técnicas. Tus datos de contacto (nombre, teléfono, cédula) <strong>no se muestran en el mapa público</strong> — solo el tipo de inmueble, la ubicación y el estado del proceso son visibles para todos.</div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2>📦🩸 Centros de acopio y bancos de sangre</h2>
+    <div class="paso-texto">En el mapa principal verás también puntos fijos de organizaciones como Cruz Roja, hospitales o fundaciones, marcados con 📦 (centro de acopio), 🩸 (banco de sangre) o 🏠 (alojamiento temporal institucional). Cada uno muestra qué está recibiendo en este momento, dirección, horario y un botón para trazar la ruta. Puedes ocultarlos con la casilla en la barra lateral. Estos puntos solo los publica el administrador, verificados directamente con la organización — no son reportes abiertos al público (a diferencia de la sección de Vivienda, que sí es abierta a la comunidad).</div>
+  </section>
+
+  <section class="bloque">
+    <h2>🛠️ Panel de administración</h2>
+    <div class="paso-texto">Reservado para quien administra la plataforma. Permite editar o eliminar cualquier registro, cerrar sectores ya resueltos (sin borrarlos), liberar compromisos si alguien ya no puede ayudar, y exportar todo a CSV por ciudad. Se accede con una contraseña.</div>
+  </section>
+
+  <div class="enlaces-rapidos">
+    <a href="index.html" class="btn btn-outline">🗺️ Ir al mapa</a>
+    <a href="ofrecimientos.html" class="btn btn-outline">🤝 Ver ofrecimientos</a>
+    <a href="mascotas.html" class="btn btn-outline">🐾 Ver mascotas</a>
+    <a href="danos.html" class="btn btn-outline">🏚️ Reportar daño</a>
+    <a href="dashboard.html" class="btn btn-outline">📊 Ver dashboard</a>
+  </div>
+</main>
+
+<footer>🌎 Plataforma solidaria y apolítica · 📍 Terremoto Colombia 10/08/2026 · App hecha con ❤️ por un Manizaleño solidario · ✉️ wilmarecheverry@gmail.com · 💬 WhatsApp +57 310 381 7213</footer>
+
+</body>
+</html>

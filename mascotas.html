@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mascotas Perdidas</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="ciudades.js"></script>
+<script src="imagenes.js"></script>
+<style>
+  :root {
+    --amarillo: #FCD116; --azul: #003893; --rojo: #CE1126;
+    --naranja: #E08E00; --verde: #2E9E5B; --gris: #9AA0AC;
+    --bg: #f4f5f7; --texto: #1f2430; --borde: #e1e4e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+    overflow: hidden;
+  }
+  header {
+    flex: 0 0 auto;
+    background: linear-gradient(90deg, var(--amarillo) 0 34%, var(--azul) 34% 67%, var(--rojo) 67% 100%);
+    padding: 3px 0 0 0;
+  }
+  .header-inner {
+    background: #fff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .header-inner h1 { font-size: 1.05rem; margin: 0; }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block;
+    touch-action: manipulation;
+  }
+  .btn:hover { opacity: .88; }
+  .btn-primary { background: var(--azul); color: #fff; }
+  .btn-danger { background: var(--rojo); color: #fff; }
+  .btn-outline { background: #fff; color: var(--azul); border: 1.5px solid var(--azul); }
+  .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+  .selector-ciudad {
+    padding: 9px 12px;
+    border: 1.5px solid var(--azul);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--azul);
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .layout {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+  }
+  #map { flex: 1 1 auto; min-width: 0; touch-action: manipulation; }
+
+  .sidebar {
+    width: 360px;
+    flex: 0 0 360px;
+    background: #fff;
+    border-left: 1px solid var(--borde);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px;
+  }
+  .sidebar h2 { font-size: 0.95rem; margin: 0 0 10px 0; }
+
+  .filtros { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--borde); background: #fff; border-radius: 999px;
+    padding: 5px 12px; font-size: 0.75rem; cursor: pointer;
+  }
+  .chip.active { background: var(--azul); color: #fff; border-color: var(--azul); }
+
+  .card-mascota {
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .card-mascota:hover { border-color: var(--azul); }
+  .card-mascota img.foto-lista {
+    width: 100%;
+    height: 110px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: #eee;
+  }
+  .card-mascota h3 { margin: 4px 0 2px 0; font-size: 0.9rem; }
+  .tag {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; color: #fff; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .tag-perdido { background: var(--rojo); }
+  .tag-encontrado { background: var(--verde); }
+  .meta { font-size: 0.75rem; color: #666; margin-top: 4px; }
+
+  /* Popups del mapa */
+  .popup-content { max-width: 230px; }
+  .popup-content img { width: 100%; max-height: 130px; object-fit: cover; border-radius: 6px; margin: 6px 0; }
+  .popup-content h3 { margin: 4px 0; font-size: 0.92rem; }
+  .popup-content .btn { width: 100%; margin-top: 6px; }
+
+  .banner-mapa {
+    display: none;
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 1000;
+    background: #fff;
+    border: 1.5px solid var(--amarillo);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    box-shadow: 0 3px 10px rgba(0,0,0,.18);
+    align-items: center;
+    gap: 12px;
+    max-width: 88%;
+  }
+  .banner-mapa.visible { display: flex; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    align-items: center; justify-content: center; z-index: 2000; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin-top: 0; font-size: 1.05rem; }
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+  .campo input, .campo select, .campo textarea {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--borde); border-radius: 8px;
+    font-size: 16px; font-family: inherit;
+  }
+  .campo textarea { resize: vertical; min-height: 60px; }
+  .campo input[type="file"] { padding: 6px; font-size: 0.82rem; }
+  .fila-2 { display: flex; gap: 10px; }
+  .fila-2 .campo { flex: 1; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .aviso { background: #FFF9E5; border: 1px solid var(--amarillo); padding: 8px 10px; border-radius: 8px; font-size: 0.78rem; margin-bottom: 12px; }
+  .preview-imagen {
+    margin-top: 8px; max-width: 100%; max-height: 160px; border-radius: 8px;
+    border: 1px solid var(--borde); object-fit: cover;
+  }
+
+  @media (max-width: 720px) {
+    .layout { flex-direction: column; }
+    #map { flex: 1 1 45%; min-height: 180px; }
+    .sidebar { flex: 1 1 55%; width: 100%; }
+    .header-inner p { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <h1>🐾 Mascotas Perdidas</h1>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="selectorCiudad" class="selector-ciudad"></select>
+      <button class="btn btn-outline" id="btnReportarMascota">+ Reportar mascota</button>
+      <a href="index.html" class="btn btn-outline">🗺️ Ver mapa</a>
+      <a href="noticias.html" class="btn btn-outline">📰 Noticias</a>
+      <a href="vivienda.html" class="btn btn-outline">🏠 Vivienda</a>
+      <a href="danos.html" class="btn btn-outline">🏚️ Reporte de daños (Manizales)</a>
+      <a href="ayuda.html" class="btn btn-outline">❓ Ayuda</a>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <div id="map"></div>
+  <div class="banner-mapa" id="bannerSeleccion">
+    <span>📍 Haz clic en el mapa donde se vio a la mascota</span>
+    <button class="btn btn-outline btn-sm" onclick="cancelarSeleccionUbicacion()">Cancelar</button>
+  </div>
+  <div class="sidebar">
+    <h2>Reportes <span id="contadorMascotas" style="color:#888;">(0)</span></h2>
+    <div class="filtros" id="filtros">
+      <div class="chip active" data-filtro="todos">Todos</div>
+      <div class="chip" data-filtro="perdido">🟥 Perdidos</div>
+      <div class="chip" data-filtro="encontrado">✅ Encontrados</div>
+    </div>
+    <div id="listaMascotas">Cargando...</div>
+  </div>
+</div>
+
+<footer style="text-align:center;font-size:0.68rem;color:#999;padding:8px;flex:0 0 auto;">🌎 Plataforma solidaria y apolítica · 📍 Terremoto Colombia 10/08/2026 · App hecha con ❤️ por un Manizaleño solidario · ✉️ wilmarecheverry@gmail.com · 💬 WhatsApp +57 310 381 7213</footer>
+
+<!-- ============ MODAL: Reportar mascota perdida ============ -->
+<div class="modal-overlay" id="modalMascota">
+  <div class="modal">
+    <h2>Reportar mascota perdida</h2>
+    <div class="aviso" id="avisoClickMascota">📍 Haz clic en el mapa donde la viste por última vez, luego completa los datos.</div>
+    <form id="formMascota">
+      <div class="campo">
+        <label>Tipo de animal *</label>
+        <select id="m_tipo" required>
+          <option value="">Selecciona...</option>
+          <option>Perro</option>
+          <option>Gato</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Nombre de la mascota (si lo sabes)</label>
+        <input type="text" id="m_nombre_mascota" placeholder="Ej: Firulais">
+      </div>
+      <div class="campo">
+        <label>Señas particulares *</label>
+        <textarea id="m_senas" required placeholder="Ej: Color café, orejas paradas, collar rojo, cojea de la pata izquierda..."></textarea>
+      </div>
+      <div class="campo">
+        <label>Foto (muy recomendable)</label>
+        <input type="file" id="m_imagen" accept="image/*" capture="environment">
+        <img id="m_preview" class="preview-imagen" style="display:none;">
+      </div>
+      <div class="fila-2">
+        <div class="campo">
+          <label>Lugar donde se vio</label>
+          <input type="text" id="m_lugar_visto" placeholder="Ej: Barrio La Enea, cerca al parque">
+        </div>
+        <div class="campo">
+          <label>Fecha en que se vio *</label>
+          <input type="date" id="m_fecha_visto" required>
+        </div>
+      </div>
+      <hr>
+      <div class="campo">
+        <label>Tu nombre (dueño o quien reporta) *</label>
+        <input type="text" id="m_nombre_reporta" required>
+      </div>
+      <div class="campo">
+        <label>Tu teléfono *</label>
+        <input type="tel" id="m_telefono_reporta" required placeholder="300 000 0000">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalMascota()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Publicar reporte</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Yo la vi / la tengo yo ============ -->
+<div class="modal-overlay" id="modalAvistamiento">
+  <div class="modal">
+    <h2>Yo la vi / la tengo yo</h2>
+    <p style="font-size:.85rem;color:#666;margin-top:-6px;" id="av_texto"></p>
+    <div class="aviso">Al confirmar, tu nombre quedará visible junto al reporte para que el dueño pueda contactarte directamente.</div>
+    <form id="formAvistamiento">
+      <input type="hidden" id="av_id">
+      <div class="campo"><label>Tu nombre *</label><input type="text" id="av_nombre" required></div>
+      <div class="campo"><label>Tu teléfono *</label><input type="tel" id="av_telefono" required></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalAvistamiento()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Actualizar mascota ============ -->
+<div class="modal-overlay" id="modalActualizarMascota">
+  <div class="modal">
+    <h2>Actualizar reporte</h2>
+    <div class="meta" id="am_avistamiento_info" style="display:none;margin-bottom:12px;background:#FFF9E5;border:1px solid var(--amarillo);border-radius:8px;padding:8px;"></div>
+    <form id="formActualizarMascota">
+      <input type="hidden" id="am_id">
+      <div class="campo">
+        <label>Nombre de la mascota</label>
+        <input type="text" id="am_nombre_mascota">
+      </div>
+      <div class="campo">
+        <label>Señas particulares</label>
+        <textarea id="am_senas"></textarea>
+      </div>
+      <div class="campo">
+        <label>Actualizar foto (opcional)</label>
+        <input type="file" id="am_imagen" accept="image/*" capture="environment">
+        <img id="am_preview" class="preview-imagen" style="display:none;">
+      </div>
+      <div class="campo">
+        <label>Estado *</label>
+        <select id="am_estado">
+          <option value="perdido">Sigue perdida</option>
+          <option value="encontrado">¡Ya apareció!</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Código de edición *</label>
+        <input type="text" id="am_pin" inputmode="numeric" maxlength="4" required placeholder="El código de 4 dígitos que te dimos al publicar">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalActualizarMascota()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Código de edición (se muestra al publicar) ============ -->
+<div class="modal-overlay" id="modalMostrarPin">
+  <div class="modal" style="text-align:center;">
+    <h2>✅ ¡Publicado!</h2>
+    <p style="font-size:.88rem;color:#666;">Guarda este código — lo vas a necesitar para editar o actualizar esta publicación después. Nadie más podrá cambiarla sin él.</p>
+    <div style="font-size:2.2rem;font-weight:800;letter-spacing:.15em;color:var(--azul);background:#eef0f4;border-radius:12px;padding:16px;margin:14px 0;" id="pinMostrado">0000</div>
+    <button type="button" class="btn btn-primary" style="width:100%;" onclick="document.getElementById('modalMostrarPin').classList.remove('open')">Ya lo guardé</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = 'api.php';
+let ciudadActual = obtenerCiudadActual();
+let infoCiudad = datosCiudad(ciudadActual);
+
+const map = L.map('map').setView([infoCiudad.lat, infoCiudad.lng], infoCiudad.zoom);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+const coloresEstado = { perdido: '#CE1126', encontrado: '#2E9E5B' };
+let mascotasData = [];
+let marcadores = {};
+let filtroActivo = 'todos';
+let modoReportar = false;
+let coordsNuevaMascota = null;
+
+function crearIconoPata(estado) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${coloresEstado[estado]};width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
+             <span style="transform:rotate(45deg);font-size:12px;">🐾</span>
+           </div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26]
+  });
+}
+
+async function cargarMascotas() {
+  const res = await fetch(`${API}?action=listar_mascotas&ciudad=${ciudadActual}`);
+  const data = await res.json();
+  mascotasData = data.mascotas || [];
+  renderMapa();
+  renderLista();
+}
+
+function popupHTML(m) {
+  return `
+    <div class="popup-content">
+      <span class="tag tag-${m.estado}">${m.estado === 'perdido' ? '🟥 Perdido' : '✅ Encontrado'}</span>
+      <h3>${escapeHtml(m.tipo_animal)}${m.nombre_mascota ? ' — ' + escapeHtml(m.nombre_mascota) : ''}</h3>
+      ${m.imagen ? `<img src="uploads/${m.imagen}" onclick="window.open('uploads/${m.imagen}','_blank')" alt="Foto de la mascota">` : ''}
+      <div class="meta">${escapeHtml(m.senas || '')}</div>
+      <div class="meta">📍 ${escapeHtml(m.lugar_visto || 'Sin lugar especificado')} · ${formatearFecha(m.fecha_visto)}</div>
+      <div class="meta">📞 Reporta: ${escapeHtml(m.nombre_reporta)}${m.telefono_reporta ? ' · ' + escapeHtml(m.telefono_reporta) : ''}</div>
+      ${m.avistado_por_nombre ? `<div class="meta">🙋 Avistado por: <strong>${escapeHtml(m.avistado_por_nombre)}</strong>${m.avistado_por_telefono ? ' · ' + escapeHtml(m.avistado_por_telefono) : ''}</div>` : ''}
+      ${m.estado === 'perdido' && !m.avistado_por_nombre ? `<button class="btn btn-primary btn-sm" onclick="abrirModalAvistamiento(${m.id}, '${escapeHtml(m.tipo_animal)}')">Yo la vi / la tengo yo</button>` : ''}
+      <button class="btn btn-outline btn-sm" onclick='abrirModalActualizarMascota(${JSON.stringify(m)})'>✎ Actualizar</button>
+    </div>`;
+}
+
+function renderMapa() {
+  Object.values(marcadores).forEach(mk => map.removeLayer(mk));
+  marcadores = {};
+  mascotasData.forEach(m => {
+    if (filtroActivo !== 'todos' && m.estado !== filtroActivo) return;
+    const marker = L.marker([m.lat, m.lng], { icon: crearIconoPata(m.estado) }).addTo(map);
+    marker.bindPopup(popupHTML(m), { maxWidth: 250 });
+    marcadores[m.id] = marker;
+  });
+}
+
+function renderLista() {
+  const cont = document.getElementById('listaMascotas');
+  const filtrados = mascotasData.filter(m => filtroActivo === 'todos' || m.estado === filtroActivo);
+  document.getElementById('contadorMascotas').textContent = `(${filtrados.length})`;
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<p style="font-size:.85rem;color:#888;">No hay reportes en esta categoría todavía.</p>';
+    return;
+  }
+
+  cont.innerHTML = filtrados.map(m => `
+    <div class="card-mascota" onclick="irAMascota(${m.id})">
+      ${m.imagen ? `<img src="uploads/${m.imagen}" class="foto-lista" alt="Foto de la mascota">` : ''}
+      <span class="tag tag-${m.estado}">${m.estado === 'perdido' ? '🟥 Perdido' : '✅ Encontrado'}</span>
+      <h3>${escapeHtml(m.tipo_animal)}${m.nombre_mascota ? ' — ' + escapeHtml(m.nombre_mascota) : ''}</h3>
+      <div class="meta">📍 ${escapeHtml(m.lugar_visto || 'Sin lugar especificado')} · ${formatearFecha(m.fecha_visto)}</div>
+    </div>
+  `).join('');
+}
+
+function irAMascota(id) {
+  const m = mascotasData.find(x => x.id == id);
+  if (!m) return;
+  map.setView([m.lat, m.lng], 16);
+  if (marcadores[id]) marcadores[id].openPopup();
+}
+
+document.getElementById('filtros').addEventListener('click', (e) => {
+  if (!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  filtroActivo = e.target.dataset.filtro;
+  renderMapa();
+  renderLista();
+});
+
+// --- Modal: reportar mascota ---
+document.getElementById('btnReportarMascota').addEventListener('click', () => {
+  modoReportar = true;
+  coordsNuevaMascota = null;
+  document.getElementById('bannerSeleccion').classList.add('visible');
+});
+function cancelarSeleccionUbicacion() {
+  modoReportar = false;
+  document.getElementById('bannerSeleccion').classList.remove('visible');
+}
+map.on('click', (e) => {
+  if (!modoReportar) return;
+  coordsNuevaMascota = e.latlng;
+  modoReportar = false;
+  document.getElementById('bannerSeleccion').classList.remove('visible');
+  document.getElementById('avisoClickMascota').textContent = `📍 Ubicación: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+  document.getElementById('m_fecha_visto').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('modalMascota').classList.add('open');
+});
+function cerrarModalMascota() {
+  document.getElementById('modalMascota').classList.remove('open');
+  document.getElementById('formMascota').reset();
+  document.getElementById('m_preview').style.display = 'none';
+}
+document.getElementById('m_imagen').addEventListener('change', function () {
+  previsualizarImagen(this, document.getElementById('m_preview'));
+});
+document.getElementById('formMascota').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!coordsNuevaMascota) {
+    alert('Primero haz clic en el mapa para marcar dónde se vio a la mascota.');
+    return;
+  }
+  let nombreImagen = null;
+  try {
+    nombreImagen = await subirImagen(document.getElementById('m_imagen').files[0], API);
+  } catch (err) {
+    alert('No se pudo subir la imagen: ' + err.message);
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('ciudad', ciudadActual);
+  fd.append('tipo_animal', document.getElementById('m_tipo').value);
+  fd.append('nombre_mascota', document.getElementById('m_nombre_mascota').value);
+  fd.append('senas', document.getElementById('m_senas').value);
+  if (nombreImagen) fd.append('imagen', nombreImagen);
+  fd.append('lat', coordsNuevaMascota.lat);
+  fd.append('lng', coordsNuevaMascota.lng);
+  fd.append('lugar_visto', document.getElementById('m_lugar_visto').value);
+  fd.append('fecha_visto', document.getElementById('m_fecha_visto').value);
+  fd.append('nombre_reporta', document.getElementById('m_nombre_reporta').value);
+  fd.append('telefono_reporta', document.getElementById('m_telefono_reporta').value);
+
+  const res = await fetch(`${API}?action=crear_mascota`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalMascota();
+    cargarMascotas();
+    if (data.pin) mostrarPin(data.pin);
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo publicar'));
+  }
+});
+
+// --- Modal: yo la vi / la tengo yo ---
+function abrirModalAvistamiento(id, tipoTexto) {
+  document.getElementById('av_id').value = id;
+  document.getElementById('av_texto').textContent = 'Reporte: ' + tipoTexto;
+  document.getElementById('modalAvistamiento').classList.add('open');
+}
+function cerrarModalAvistamiento() {
+  document.getElementById('modalAvistamiento').classList.remove('open');
+  document.getElementById('formAvistamiento').reset();
+}
+document.getElementById('formAvistamiento').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('id', document.getElementById('av_id').value);
+  fd.append('avistado_por_nombre', document.getElementById('av_nombre').value);
+  fd.append('avistado_por_telefono', document.getElementById('av_telefono').value);
+
+  const res = await fetch(`${API}?action=avistar_mascota`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalAvistamiento();
+    map.closePopup();
+    cargarMascotas();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
+
+// --- Modal: actualizar mascota ---
+function abrirModalActualizarMascota(m) {
+  document.getElementById('am_id').value = m.id;
+  document.getElementById('am_nombre_mascota').value = m.nombre_mascota || '';
+  document.getElementById('am_senas').value = m.senas || '';
+  document.getElementById('am_estado').value = m.estado;
+  document.getElementById('am_imagen').value = '';
+  document.getElementById('am_pin').value = '';
+
+  const preview = document.getElementById('am_preview');
+  if (m.imagen) {
+    preview.src = 'uploads/' + m.imagen;
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+
+  const infoAv = document.getElementById('am_avistamiento_info');
+  if (m.avistado_por_nombre && m.estado !== 'encontrado') {
+    infoAv.style.display = 'block';
+    infoAv.innerHTML = `🙋 Avistado por: <strong>${escapeHtml(m.avistado_por_nombre)}</strong>${m.avistado_por_telefono ? ' · 📞 ' + escapeHtml(m.avistado_por_telefono) : ''}
+      <br><button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="quitarAvistamiento(${m.id})">Quitar este avistamiento</button>`;
+  } else {
+    infoAv.style.display = 'none';
+  }
+
+  document.getElementById('modalActualizarMascota').classList.add('open');
+}
+function cerrarModalActualizarMascota() {
+  document.getElementById('modalActualizarMascota').classList.remove('open');
+}
+function mostrarPin(pin) {
+  document.getElementById('pinMostrado').textContent = pin;
+  document.getElementById('modalMostrarPin').classList.add('open');
+}
+document.getElementById('am_imagen').addEventListener('change', function () {
+  previsualizarImagen(this, document.getElementById('am_preview'));
+});
+document.getElementById('formActualizarMascota').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  let nombreImagen = null;
+  try {
+    nombreImagen = await subirImagen(document.getElementById('am_imagen').files[0], API);
+  } catch (err) {
+    alert('No se pudo subir la nueva foto: ' + err.message);
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('id', document.getElementById('am_id').value);
+  fd.append('pin', document.getElementById('am_pin').value);
+  fd.append('nombre_mascota', document.getElementById('am_nombre_mascota').value);
+  fd.append('senas', document.getElementById('am_senas').value);
+  fd.append('estado', document.getElementById('am_estado').value);
+  if (nombreImagen) fd.append('imagen', nombreImagen);
+
+  const res = await fetch(`${API}?action=actualizar_mascota_publico`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalActualizarMascota();
+    map.closePopup();
+    cargarMascotas();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo actualizar'));
+  }
+});
+
+async function quitarAvistamiento(id) {
+  if (!confirm('¿Quitar este avistamiento?')) return;
+  const fd = new FormData();
+  fd.append('id', id);
+  await fetch(`${API}?action=quitar_avistamiento`, { method: 'POST', body: fd });
+  cerrarModalActualizarMascota();
+  map.closePopup();
+  cargarMascotas();
+}
+
+function formatearFecha(fechaStr) {
+  if (!fechaStr) return '';
+  const [y, mo, d] = fechaStr.split('-');
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${parseInt(d)} ${meses[parseInt(mo) - 1]}`;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function cambiarCiudad(nuevaCiudad) {
+  ciudadActual = nuevaCiudad;
+  infoCiudad = datosCiudad(ciudadActual);
+  map.setView([infoCiudad.lat, infoCiudad.lng], infoCiudad.zoom);
+  cargarMascotas();
+}
+inicializarSelectorCiudad('selectorCiudad', cambiarCiudad);
+
+cargarMascotas();
+setInterval(cargarMascotas, 30000);
+</script>
+</body>
+</html>

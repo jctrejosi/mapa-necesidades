@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Avance de Necesidades</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="ciudades.js"></script>
+<style>
+  :root {
+    --amarillo: #FCD116; --azul: #003893; --rojo: #CE1126;
+    --naranja: #E08E00; --verde: #2E9E5B; --gris: #9AA0AC;
+    --bg: #eef1f5; --texto: #1f2430; --borde: #e1e4e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+  }
+  header {
+    background: linear-gradient(90deg, var(--amarillo) 0 34%, var(--azul) 34% 67%, var(--rojo) 67% 100%);
+    padding: 3px 0 0 0;
+  }
+  .header-inner {
+    background: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .header-inner h1 { font-size: 1.05rem; margin: 0; }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  .btn-outline { background: #fff; color: var(--azul); border: 1.5px solid var(--azul); }
+  .selector-ciudad {
+    padding: 9px 12px; border: 1.5px solid var(--azul); border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600; color: var(--azul); background: #fff; cursor: pointer;
+  }
+
+  main { max-width: 1040px; margin: 0 auto; padding: 16px; }
+
+  @keyframes entrada {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .anim { opacity: 0; animation: entrada .45s ease forwards; }
+
+  .fila-superior {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 760px) {
+    .fila-superior { grid-template-columns: 1fr; }
+  }
+
+  .card-donut {
+    background: #fff; border: 1px solid var(--borde); border-radius: 14px;
+    padding: 18px; text-align: center; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .card-donut h2 { font-size: 0.82rem; margin: 0 0 12px 0; color: #666; text-transform: uppercase; letter-spacing: .03em; }
+  .donut {
+    width: 150px; height: 150px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.03);
+  }
+  .donut-hueco {
+    width: 68%; height: 68%; border-radius: 50%; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .donut-hueco .pct { font-size: 1.7rem; font-weight: 800; color: var(--azul); line-height: 1; }
+  .donut-hueco .pct-label { font-size: 0.68rem; color: #888; margin-top: 3px; }
+  .leyenda { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; justify-content: center; font-size: 0.72rem; }
+  .leyenda span { display: inline-flex; align-items: center; gap: 5px; }
+  .punto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  .resumen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+  }
+  .card-resumen {
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    border: 1px solid transparent;
+  }
+  .card-resumen .icono { font-size: 1.6rem; line-height: 1; margin-bottom: 4px; }
+  .card-resumen .num { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+  .card-resumen .label { font-size: 0.72rem; color: #555; margin-top: 4px; }
+  .card-resumen.total { background: #E8ECF7; }
+  .card-resumen.total .num { color: var(--azul); }
+  .card-resumen.requiere { background: #FCE9E9; }
+  .card-resumen.requiere .num { color: var(--rojo); }
+  .card-resumen.en_proceso { background: #FFF1DE; }
+  .card-resumen.en_proceso .num { color: var(--naranja); }
+  .card-resumen.atendidas { background: #E5F5EA; }
+  .card-resumen.atendidas .num { color: var(--verde); }
+
+  section.bloque {
+    background: #fff; border: 1px solid var(--borde); border-radius: 14px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  section.bloque h2 { font-size: 0.9rem; margin: 0 0 12px 0; }
+  #miniMapa { height: 260px; border-radius: 10px; }
+
+  .fila-tipo, .fila-sector {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f1f2f5;
+  }
+  .fila-tipo:last-child, .fila-sector:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .fila-tipo-head, .fila-sector-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 0.85rem; margin-bottom: 5px; gap: 8px;
+  }
+  .fila-tipo-head strong, .fila-sector-head strong { font-weight: 600; }
+  .badge-urgente {
+    background: var(--rojo); color: #fff; font-size: 0.65rem; font-weight: 700;
+    padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
+  }
+  .barra-mini {
+    display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #eee;
+  }
+  .barra-mini > div { transition: width .5s ease; }
+  .seg-atendidas { background: var(--verde); }
+  .seg-en_proceso { background: var(--naranja); }
+  .seg-requiere { background: var(--rojo); }
+  .meta-chip { font-size: 0.72rem; color: #888; white-space: nowrap; }
+
+  .empty { text-align: center; color: #999; padding: 30px 10px; font-size: 0.85rem; }
+  footer { text-align: center; font-size: 0.72rem; color: #999; padding: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <h1 id="tituloCiudad">📊 Avance de Necesidades</h1>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="selectorCiudad" class="selector-ciudad"></select>
+      <a href="ofrecimientos.html" class="btn btn-outline">🤝 Ofrecimientos</a>
+      <a href="mascotas.html" class="btn btn-outline">🐾 Mascotas</a>
+      <a href="noticias.html" class="btn btn-outline">📰 Noticias</a>
+      <a href="vivienda.html" class="btn btn-outline">🏠 Vivienda</a>
+      <a href="danos.html" class="btn btn-outline">🏚️ Reporte de daños (Manizales)</a>
+      <a href="index.html" class="btn btn-outline">🗺️ Ver mapa</a>
+      <a href="ayuda.html" class="btn btn-outline">❓ Ayuda</a>
+      <a href="admin.html" class="btn btn-outline">Panel admin</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenido">
+  <p style="text-align:center;color:#888;">Cargando estadísticas...</p>
+</main>
+
+<footer>🌎 Plataforma solidaria y apolítica · 📍 Terremoto Colombia 10/08/2026 · App hecha con ❤️ por un Manizaleño solidario · ✉️ wilmarecheverry@gmail.com · 💬 WhatsApp +57 310 381 7213</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = 'api.php';
+let ciudadActual = obtenerCiudadActual();
+let miniMapa = null;
+let marcadoresMiniMapa = [];
+
+async function cargar() {
+  const res = await fetch(`${API}?action=estadisticas&ciudad=${ciudadActual}`);
+  const d = await res.json();
+  render(d);
+}
+
+function actualizarTituloCiudad() {
+  document.getElementById('tituloCiudad').textContent = '📊 Avance de Necesidades — ' + datosCiudad(ciudadActual).nombre;
+}
+
+function cambiarCiudad(nuevaCiudad) {
+  ciudadActual = nuevaCiudad;
+  actualizarTituloCiudad();
+  cargar();
+}
+inicializarSelectorCiudad('selectorCiudad', cambiarCiudad);
+actualizarTituloCiudad();
+
+function pct(parte, total) {
+  return total > 0 ? Math.round((parte / total) * 100) : 0;
+}
+
+function render(d) {
+  const cont = document.getElementById('contenido');
+
+  if (d.total_necesidades === 0) {
+    cont.innerHTML = '<div class="empty">Todavía no hay necesidades reportadas.</div>';
+    return;
+  }
+
+  const pAtendidas = pct(d.atendidas, d.total_necesidades);
+  const pEnProceso = pct(d.en_proceso, d.total_necesidades);
+  const pRequiere = 100 - pAtendidas - pEnProceso;
+  const corte1 = pAtendidas;
+  const corte2 = pAtendidas + pEnProceso;
+
+  const porTipoOrdenado = [...d.por_tipo].sort((a, b) => (b.total - b.atendidas) - (a.total - a.atendidas));
+  const porSectorOrdenado = [...d.por_sector].sort((a, b) => (b.sin_asignar + b.en_proceso) - (a.sin_asignar + a.en_proceso));
+
+  const filasTipo = porTipoOrdenado.map((t, i) => {
+    const sinAsignar = t.total - t.atendidas - t.en_proceso;
+    return `
+      <div class="fila-tipo anim" style="animation-delay:${i * 0.04}s">
+        <div class="fila-tipo-head">
+          <strong>${escapeHtml(t.tipo)}${sinAsignar > 0 ? `<span class="badge-urgente">${sinAsignar} sin asignar</span>` : ''}</strong>
+          <span class="meta-chip">${t.atendidas}/${t.total} atendidas</span>
+        </div>
+        <div class="barra-mini">
+          <div class="seg-atendidas" style="width:${pct(t.atendidas, t.total)}%"></div>
+          <div class="seg-en_proceso" style="width:${pct(t.en_proceso, t.total)}%"></div>
+          <div class="seg-requiere" style="width:${pct(sinAsignar, t.total)}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const filasSector = porSectorOrdenado.map((s, i) => `
+      <div class="fila-sector anim" style="animation-delay:${i * 0.04}s">
+        <div class="fila-sector-head">
+          <strong>${escapeHtml(s.nombre)}${s.sin_asignar > 0 ? `<span class="badge-urgente">${s.sin_asignar} sin asignar</span>` : ''}</strong>
+          <span class="meta-chip">${s.atendidas}/${s.total} atendidas</span>
+        </div>
+        <div class="barra-mini">
+          <div class="seg-atendidas" style="width:${pct(s.atendidas, s.total)}%"></div>
+          <div class="seg-en_proceso" style="width:${pct(s.en_proceso, s.total)}%"></div>
+          <div class="seg-requiere" style="width:${pct(s.sin_asignar, s.total)}%"></div>
+        </div>
+      </div>`
+  ).join('');
+
+  cont.innerHTML = `
+    <div class="fila-superior">
+      <div class="card-donut anim">
+        <h2>Progreso general</h2>
+        <div class="donut" style="background:conic-gradient(var(--verde) 0% ${corte1}%, var(--naranja) ${corte1}% ${corte2}%, var(--rojo) ${corte2}% 100%);">
+          <div class="donut-hueco">
+            <div class="pct">${pAtendidas}%</div>
+            <div class="pct-label">atendido</div>
+          </div>
+        </div>
+        <div class="leyenda">
+          <span><span class="punto" style="background:var(--verde);"></span> Atendidas</span>
+          <span><span class="punto" style="background:var(--naranja);"></span> En proceso</span>
+          <span><span class="punto" style="background:var(--rojo);"></span> Sin asignar</span>
+        </div>
+      </div>
+
+      <div class="resumen-grid">
+        <div class="card-resumen total anim" style="animation-delay:.05s"><div class="icono">📍</div><div class="num">${d.total_sectores}</div><div class="label">Sectores activos</div></div>
+        <div class="card-resumen total anim" style="animation-delay:.1s"><div class="icono">📋</div><div class="num">${d.total_necesidades}</div><div class="label">Necesidades reportadas</div></div>
+        <div class="card-resumen requiere anim" style="animation-delay:.15s"><div class="icono">🟥</div><div class="num">${d.sin_asignar}</div><div class="label">Sin asignar</div></div>
+        <div class="card-resumen en_proceso anim" style="animation-delay:.2s"><div class="icono">🟧</div><div class="num">${d.en_proceso}</div><div class="label">En proceso</div></div>
+        <div class="card-resumen atendidas anim" style="animation-delay:.25s"><div class="icono">✅</div><div class="num">${d.atendidas}</div><div class="label">Atendidas</div></div>
+        <div class="card-resumen total anim" style="animation-delay:.3s"><div class="icono">🤝</div><div class="num">${d.ofrecimientos_disponibles ?? 0}</div><div class="label">Ofrecimientos disponibles</div></div>
+      </div>
+    </div>
+
+    <section class="bloque anim" style="animation-delay:.1s">
+      <h2>🗺️ Mapa de urgencia por sector</h2>
+      <div id="miniMapa"></div>
+    </section>
+
+    <section class="bloque anim" style="animation-delay:.15s">
+      <h2>Avance por tipo de necesidad <span class="meta-chip">(lo más pendiente primero)</span></h2>
+      ${filasTipo || '<div class="empty">Sin datos</div>'}
+    </section>
+
+    <section class="bloque anim" style="animation-delay:.2s">
+      <h2>Avance por sector <span class="meta-chip">(lo más urgente primero)</span></h2>
+      ${filasSector || '<div class="empty">Sin datos</div>'}
+    </section>
+  `;
+
+  dibujarMiniMapa(d.por_sector);
+}
+
+function dibujarMiniMapa(sectores) {
+  const info = datosCiudad(ciudadActual);
+  if (!miniMapa) {
+    miniMapa = L.map('miniMapa').setView([info.lat, info.lng], info.zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(miniMapa);
+  } else {
+    miniMapa.setView([info.lat, info.lng], info.zoom);
+  }
+
+  marcadoresMiniMapa.forEach(mk => miniMapa.removeLayer(mk));
+  marcadoresMiniMapa = [];
+
+  const colores = { rojo: '#CE1126', naranja: '#E08E00', verde: '#2E9E5B' };
+
+  sectores.forEach(s => {
+    if (!s.lat || !s.lng) return;
+    let color = colores.verde;
+    if (s.sin_asignar > 0) color = colores.rojo;
+    else if (s.en_proceso > 0) color = colores.naranja;
+    const radio = 8 + Math.min(s.total, 10) * 1.5;
+
+    const marker = L.circleMarker([s.lat, s.lng], {
+      radius: radio,
+      fillColor: color,
+      color: '#fff',
+      weight: 2,
+      fillOpacity: 0.75
+    }).addTo(miniMapa);
+    marker.bindTooltip(`${s.nombre}: ${s.sin_asignar} sin asignar, ${s.en_proceso} en proceso, ${s.atendidas} atendidas`);
+    marcadoresMiniMapa.push(marker);
+  });
+
+  setTimeout(() => miniMapa.invalidateSize(), 150);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+cargar();
+setInterval(cargar, 30000);
+</script>
+</body>
+</html>

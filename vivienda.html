@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vivienda y Alojamiento</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="ciudades.js"></script>
+<script src="imagenes.js"></script>
+<style>
+  :root {
+    --amarillo: #FCD116; --azul: #003893; --rojo: #CE1126;
+    --naranja: #E08E00; --verde: #2E9E5B; --gris: #9AA0AC;
+    --bg: #f4f5f7; --texto: #1f2430; --borde: #e1e4e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+  }
+  header {
+    background: linear-gradient(90deg, var(--amarillo) 0 34%, var(--azul) 34% 67%, var(--rojo) 67% 100%);
+    padding: 3px 0 0 0;
+  }
+  .header-inner {
+    background: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .header-inner h1 { font-size: 1.05rem; margin: 0; }
+  .header-inner p { margin: 2px 0 0 0; font-size: 0.75rem; color: #666; }
+  .btn {
+    border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block;
+    touch-action: manipulation;
+  }
+  .btn:hover { opacity: .88; }
+  .btn-primary { background: var(--azul); color: #fff; }
+  .btn-danger { background: var(--rojo); color: #fff; }
+  .btn-outline { background: #fff; color: var(--azul); border: 1.5px solid var(--azul); }
+  .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+  .selector-ciudad {
+    padding: 9px 12px; border: 1.5px solid var(--azul); border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600; color: var(--azul); background: #fff; cursor: pointer;
+  }
+
+  main { max-width: 820px; margin: 0 auto; padding: 16px; }
+
+  #buscador {
+    width: 100%; padding: 11px 14px; border: 1px solid var(--borde); border-radius: 10px;
+    font-size: 16px; font-family: inherit; margin-bottom: 12px;
+  }
+  #buscador:focus { outline: 2px solid var(--azul); outline-offset: 1px; }
+
+  .filtros { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--borde); background: #fff; border-radius: 999px;
+    padding: 5px 12px; font-size: 0.78rem; cursor: pointer;
+  }
+  .chip.active { background: var(--azul); color: #fff; border-color: var(--azul); }
+
+  .card-vivienda {
+    background: #fff; border: 1px solid var(--borde); border-radius: 12px;
+    padding: 14px; margin-bottom: 12px;
+  }
+  .card-vivienda h3 { margin: 6px 0 4px 0; font-size: 1rem; }
+  .tag {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; color: #fff; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .tag-gratis { background: var(--verde); }
+  .tag-alquiler { background: var(--naranja); }
+  .tag-ocupado { background: var(--gris); }
+  .meta { font-size: 0.78rem; color: #666; margin-top: 4px; }
+  .desc { font-size: 0.85rem; margin-top: 6px; }
+  .precio-destacado { font-weight: 700; color: var(--azul); font-size: 0.95rem; }
+  .card-vivienda.ocupado { opacity: .6; }
+  .card-vivienda img.foto {
+    width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-top: 8px;
+  }
+  .card-vivienda .acciones { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .empty { text-align: center; color: #999; padding: 30px 10px; font-size: 0.9rem; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    align-items: center; justify-content: center; z-index: 2000; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin-top: 0; font-size: 1.05rem; }
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+  .campo input, .campo select, .campo textarea {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--borde); border-radius: 8px;
+    font-size: 16px; font-family: inherit;
+  }
+  .campo textarea { resize: vertical; min-height: 60px; }
+  .campo input[type="file"] { padding: 6px; font-size: 0.82rem; }
+  .fila-2 { display: flex; gap: 10px; }
+  .fila-2 .campo { flex: 1; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .aviso { background: #FFF9E5; border: 1px solid var(--amarillo); padding: 8px 10px; border-radius: 8px; font-size: 0.78rem; margin-bottom: 12px; }
+  .preview-imagen {
+    margin-top: 8px; max-width: 100%; max-height: 160px; border-radius: 8px;
+    border: 1px solid var(--borde); object-fit: cover;
+  }
+
+  footer { text-align: center; font-size: 0.68rem; color: #999; padding: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <h1>🏠 Vivienda y Alojamiento</h1>
+      <p>Ofertas de alquiler o alojamiento temporal gratuito</p>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="selectorCiudad" class="selector-ciudad"></select>
+      <button class="btn btn-outline" id="btnOfrecerVivienda">+ Ofrecer vivienda</button>
+      <a href="index.html" class="btn btn-outline">🗺️ Ver mapa</a>
+      <a href="danos.html" class="btn btn-outline">🏚️ Reporte de daños (Manizales)</a>
+      <a href="ayuda.html" class="btn btn-outline">❓ Ayuda</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <input type="search" id="buscador" placeholder="🔍 Buscar por sector, descripción o precio...">
+
+  <div class="filtros" id="filtrosTipo">
+    <div class="chip active" data-tipo="todos">Todos</div>
+    <div class="chip" data-tipo="gratis">🏠 Gratis</div>
+    <div class="chip" data-tipo="alquiler">💰 Alquiler</div>
+  </div>
+  <div class="filtros" id="filtrosEstado">
+    <div class="chip active" data-estado="todos">Todos los estados</div>
+    <div class="chip" data-estado="disponible">🟢 Disponibles</div>
+    <div class="chip" data-estado="ocupado">⚪ Ocupados</div>
+  </div>
+
+  <div id="listaViviendas"><p style="text-align:center;color:#888;">Cargando...</p></div>
+</main>
+
+<footer>🌎 Plataforma solidaria y apolítica · 📍 Terremoto Colombia 10/08/2026 · App hecha con ❤️ por un Manizaleño solidario · ✉️ wilmarecheverry@gmail.com · 💬 WhatsApp +57 310 381 7213</footer>
+
+<!-- ============ MODAL: Ofrecer vivienda ============ -->
+<div class="modal-overlay" id="modalVivienda">
+  <div class="modal">
+    <h2>Ofrecer vivienda o alojamiento</h2>
+    <div class="aviso">🔒 Por seguridad, no se publica una dirección exacta — solo el barrio o sector aproximado. La dirección completa se comparte en privado cuando ya coordines por teléfono con la persona interesada.</div>
+    <form id="formVivienda">
+      <div class="campo">
+        <label>Tipo *</label>
+        <select id="v_tipo" required>
+          <option value="gratis">🏠 Alojamiento gratuito</option>
+          <option value="alquiler">💰 Alquiler</option>
+        </select>
+      </div>
+      <div class="campo" id="campoPrecio" style="display:none;">
+        <label>Precio</label>
+        <input type="text" id="v_precio" placeholder="Ej: $800,000/mes">
+      </div>
+      <div class="campo">
+        <label>Barrio / sector de referencia</label>
+        <input type="text" id="v_sector" placeholder="Ej: La Enea, cerca al parque principal">
+      </div>
+      <div class="fila-2">
+        <div class="campo">
+          <label>Capacidad</label>
+          <input type="text" id="v_capacidad" placeholder="Ej: 4 personas / 1 familia">
+        </div>
+        <div class="campo">
+          <label>Tiempo disponible</label>
+          <input type="text" id="v_tiempo" placeholder="Ej: Por 2 meses, indefinido...">
+        </div>
+      </div>
+      <div class="campo">
+        <label>Detalles</label>
+        <textarea id="v_descripcion" placeholder="Cuartos, baños, amoblado, mascotas permitidas, condiciones..."></textarea>
+      </div>
+      <div class="campo">
+        <label>Foto (muy recomendable)</label>
+        <input type="file" id="v_imagen" accept="image/*" capture="environment">
+        <img id="v_preview" class="preview-imagen" style="display:none;">
+      </div>
+      <hr>
+      <div class="campo">
+        <label>Tu nombre *</label>
+        <input type="text" id="v_nombre_ofrece" required>
+      </div>
+      <div class="campo">
+        <label>Tu teléfono *</label>
+        <input type="tel" id="v_telefono_ofrece" required placeholder="300 000 0000">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalVivienda()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Publicar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Estoy interesado ============ -->
+<div class="modal-overlay" id="modalInteresado">
+  <div class="modal">
+    <h2>Estoy interesado</h2>
+    <p style="font-size:.85rem;color:#666;margin-top:-6px;" id="int_texto"></p>
+    <div class="aviso">Tu nombre y teléfono quedarán visibles para que quien ofrece pueda contactarte, y para que otras personas sepan que ya alguien está coordinando. Antes de aceptar quedarte en un sitio (o de recibir a alguien), verifica bien con quién estás hablando y, si puedes, coordina un primer encuentro en un lugar público.</div>
+    <form id="formInteresado">
+      <input type="hidden" id="int_id">
+      <div class="campo"><label>Tu nombre *</label><input type="text" id="int_nombre" required></div>
+      <div class="campo"><label>Tu teléfono *</label><input type="tel" id="int_telefono" required></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalInteresado()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Actualizar vivienda ============ -->
+<div class="modal-overlay" id="modalActualizarVivienda">
+  <div class="modal">
+    <h2>Actualizar oferta</h2>
+    <div class="meta" id="av_interesado_info" style="display:none;margin-bottom:12px;background:#FFF9E5;border:1px solid var(--amarillo);border-radius:8px;padding:8px;"></div>
+    <form id="formActualizarVivienda">
+      <input type="hidden" id="av_id">
+      <div class="fila-2">
+        <div class="campo"><label>Precio</label><input type="text" id="av_precio"></div>
+        <div class="campo"><label>Capacidad</label><input type="text" id="av_capacidad"></div>
+      </div>
+      <div class="campo"><label>Barrio / sector de referencia</label><input type="text" id="av_sector"></div>
+      <div class="campo"><label>Tiempo disponible</label><input type="text" id="av_tiempo"></div>
+      <div class="campo"><label>Detalles</label><textarea id="av_descripcion"></textarea></div>
+      <div class="campo">
+        <label>Actualizar foto (opcional)</label>
+        <input type="file" id="av_imagen" accept="image/*" capture="environment">
+        <img id="av_preview" class="preview-imagen" style="display:none;">
+      </div>
+      <div class="campo">
+        <label>Estado *</label>
+        <select id="av_estado">
+          <option value="disponible">Disponible</option>
+          <option value="ocupado">Ya se ocupó / alquiló</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Código de edición *</label>
+        <input type="text" id="av_pin" inputmode="numeric" maxlength="4" required placeholder="El código de 4 dígitos que te dimos al publicar">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="cerrarModalActualizarVivienda()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Código de edición (se muestra al publicar) ============ -->
+<div class="modal-overlay" id="modalMostrarPin">
+  <div class="modal" style="text-align:center;">
+    <h2>✅ ¡Publicado!</h2>
+    <p style="font-size:.88rem;color:#666;">Guarda este código — lo vas a necesitar para editar o actualizar esta publicación después. Nadie más podrá cambiarla sin él.</p>
+    <div style="font-size:2.2rem;font-weight:800;letter-spacing:.15em;color:var(--azul);background:#eef0f4;border-radius:12px;padding:16px;margin:14px 0;" id="pinMostrado">0000</div>
+    <button type="button" class="btn btn-primary" style="width:100%;" onclick="document.getElementById('modalMostrarPin').classList.remove('open')">Ya lo guardé</button>
+  </div>
+</div>
+
+<script>
+const API = 'api.php';
+let viviendasData = [];
+let filtroTipo = 'todos';
+let filtroEstado = 'todos';
+let ciudadActual = obtenerCiudadActual();
+
+async function cargarViviendas() {
+  const res = await fetch(`${API}?action=listar_viviendas&ciudad=${ciudadActual}`);
+  const data = await res.json();
+  viviendasData = data.viviendas || [];
+  render();
+}
+
+function tarjetaHTML(v) {
+  let etiqueta, claseTag;
+  if (v.estado === 'ocupado') { etiqueta = '⚪ Ocupado'; claseTag = 'ocupado'; }
+  else if (v.tipo === 'gratis') { etiqueta = '🟢 Gratis, disponible'; claseTag = 'gratis'; }
+  else { etiqueta = '🟢 En alquiler, disponible'; claseTag = 'alquiler'; }
+
+  let accion = '';
+  if (v.estado === 'disponible' && !v.interesado_nombre) {
+    accion = `<button class="btn btn-primary btn-sm" onclick="abrirModalInteresado(${v.id})">Estoy interesado</button>`;
+  } else if (v.interesado_nombre && v.estado !== 'ocupado') {
+    accion = `<span class="meta">🙋 Interesado: <strong>${escapeHtml(v.interesado_nombre)}</strong>${v.interesado_telefono ? ' · 📞 ' + escapeHtml(v.interesado_telefono) : ''}</span>`;
+  }
+
+  return `
+    <div class="card-vivienda ${v.estado === 'ocupado' ? 'ocupado' : ''}">
+      <span class="tag tag-${claseTag}">${etiqueta}</span>
+      <h3>${v.tipo === 'gratis' ? '🏠 Alojamiento gratuito' : '💰 En alquiler'}${v.sector_referencia ? ' — ' + escapeHtml(v.sector_referencia) : ''}</h3>
+      ${v.imagen ? `<img src="uploads/${v.imagen}" class="foto" onclick="window.open('uploads/${v.imagen}','_blank')" alt="Foto de la vivienda">` : ''}
+      ${v.precio ? `<div class="precio-destacado">${escapeHtml(v.precio)}</div>` : ''}
+      ${v.capacidad ? `<div class="meta">👥 ${escapeHtml(v.capacidad)}</div>` : ''}
+      ${v.tiempo_disponible ? `<div class="meta">🕒 ${escapeHtml(v.tiempo_disponible)}</div>` : ''}
+      ${v.descripcion ? `<div class="desc">${escapeHtml(v.descripcion)}</div>` : ''}
+      <div class="meta">📞 Ofrece: ${escapeHtml(v.nombre_ofrece)}${v.telefono_ofrece ? ' · ' + escapeHtml(v.telefono_ofrece) : ''} · ${formatearFecha(v.fecha)}</div>
+      <div class="acciones">
+        ${accion}
+        <button class="btn btn-outline btn-sm" onclick='abrirModalActualizarVivienda(${JSON.stringify(v)})'>✎ Actualizar</button>
+      </div>
+    </div>`;
+}
+
+function render() {
+  const texto = document.getElementById('buscador').value.trim().toLowerCase();
+  const filtrados = viviendasData.filter(v => {
+    if (filtroTipo !== 'todos' && v.tipo !== filtroTipo) return false;
+    if (filtroEstado !== 'todos' && v.estado !== filtroEstado) return false;
+    if (texto) {
+      const campo = `${v.sector_referencia || ''} ${v.descripcion || ''} ${v.precio || ''} ${v.nombre_ofrece}`.toLowerCase();
+      if (!campo.includes(texto)) return false;
+    }
+    return true;
+  });
+
+  const cont = document.getElementById('listaViviendas');
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<div class="empty">No hay ofertas con esos filtros todavía. ¡Sé el primero en publicar!</div>';
+    return;
+  }
+  cont.innerHTML = filtrados.map(tarjetaHTML).join('');
+}
+
+function formatearFecha(fechaStr) {
+  if (!fechaStr) return '';
+  const [y, m, d] = fechaStr.split('-');
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${parseInt(d)} ${meses[parseInt(m) - 1]}`;
+}
+
+document.getElementById('buscador').addEventListener('input', render);
+document.getElementById('filtrosTipo').addEventListener('click', (e) => {
+  if (!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('#filtrosTipo .chip').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  filtroTipo = e.target.dataset.tipo;
+  render();
+});
+document.getElementById('filtrosEstado').addEventListener('click', (e) => {
+  if (!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('#filtrosEstado .chip').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  filtroEstado = e.target.dataset.estado;
+  render();
+});
+
+// --- Modal: ofrecer vivienda ---
+document.getElementById('btnOfrecerVivienda').addEventListener('click', () => {
+  document.getElementById('modalVivienda').classList.add('open');
+});
+function cerrarModalVivienda() {
+  document.getElementById('modalVivienda').classList.remove('open');
+  document.getElementById('formVivienda').reset();
+  document.getElementById('v_preview').style.display = 'none';
+  document.getElementById('campoPrecio').style.display = 'none';
+}
+document.getElementById('v_tipo').addEventListener('change', function () {
+  document.getElementById('campoPrecio').style.display = this.value === 'alquiler' ? 'block' : 'none';
+});
+document.getElementById('v_imagen').addEventListener('change', function () {
+  previsualizarImagen(this, document.getElementById('v_preview'));
+});
+document.getElementById('formVivienda').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  let nombreImagen = null;
+  try {
+    nombreImagen = await subirImagen(document.getElementById('v_imagen').files[0], API);
+  } catch (err) {
+    alert('No se pudo subir la imagen: ' + err.message);
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('ciudad', ciudadActual);
+  fd.append('tipo', document.getElementById('v_tipo').value);
+  fd.append('precio', document.getElementById('v_precio').value);
+  fd.append('sector_referencia', document.getElementById('v_sector').value);
+  fd.append('capacidad', document.getElementById('v_capacidad').value);
+  fd.append('tiempo_disponible', document.getElementById('v_tiempo').value);
+  fd.append('descripcion', document.getElementById('v_descripcion').value);
+  if (nombreImagen) fd.append('imagen', nombreImagen);
+  fd.append('nombre_ofrece', document.getElementById('v_nombre_ofrece').value);
+  fd.append('telefono_ofrece', document.getElementById('v_telefono_ofrece').value);
+  fd.append('fecha', new Date().toISOString().slice(0, 10));
+
+  const res = await fetch(`${API}?action=crear_vivienda`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalVivienda();
+    cargarViviendas();
+    if (data.pin) mostrarPin(data.pin);
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo publicar'));
+  }
+});
+
+// --- Modal: estoy interesado ---
+function abrirModalInteresado(id) {
+  document.getElementById('int_id').value = id;
+  document.getElementById('int_texto').textContent = 'Vivienda #' + id;
+  document.getElementById('modalInteresado').classList.add('open');
+}
+function cerrarModalInteresado() {
+  document.getElementById('modalInteresado').classList.remove('open');
+  document.getElementById('formInteresado').reset();
+}
+document.getElementById('formInteresado').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('id', document.getElementById('int_id').value);
+  fd.append('interesado_nombre', document.getElementById('int_nombre').value);
+  fd.append('interesado_telefono', document.getElementById('int_telefono').value);
+
+  const res = await fetch(`${API}?action=marcar_interesado`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalInteresado();
+    cargarViviendas();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
+
+// --- Modal: actualizar vivienda ---
+function abrirModalActualizarVivienda(v) {
+  document.getElementById('av_id').value = v.id;
+  document.getElementById('av_precio').value = v.precio || '';
+  document.getElementById('av_capacidad').value = v.capacidad || '';
+  document.getElementById('av_sector').value = v.sector_referencia || '';
+  document.getElementById('av_tiempo').value = v.tiempo_disponible || '';
+  document.getElementById('av_descripcion').value = v.descripcion || '';
+  document.getElementById('av_estado').value = v.estado;
+  document.getElementById('av_imagen').value = '';
+  document.getElementById('av_pin').value = '';
+
+  const preview = document.getElementById('av_preview');
+  if (v.imagen) {
+    preview.src = 'uploads/' + v.imagen;
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+
+  const infoInt = document.getElementById('av_interesado_info');
+  if (v.interesado_nombre && v.estado !== 'ocupado') {
+    infoInt.style.display = 'block';
+    infoInt.innerHTML = `🙋 Interesado: <strong>${escapeHtml(v.interesado_nombre)}</strong>${v.interesado_telefono ? ' · 📞 ' + escapeHtml(v.interesado_telefono) : ''}
+      <br><button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="quitarInteresado(${v.id})">Quitar este interesado</button>`;
+  } else {
+    infoInt.style.display = 'none';
+  }
+
+  document.getElementById('modalActualizarVivienda').classList.add('open');
+}
+function cerrarModalActualizarVivienda() {
+  document.getElementById('modalActualizarVivienda').classList.remove('open');
+}
+function mostrarPin(pin) {
+  document.getElementById('pinMostrado').textContent = pin;
+  document.getElementById('modalMostrarPin').classList.add('open');
+}
+document.getElementById('av_imagen').addEventListener('change', function () {
+  previsualizarImagen(this, document.getElementById('av_preview'));
+});
+document.getElementById('formActualizarVivienda').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  let nombreImagen = null;
+  try {
+    nombreImagen = await subirImagen(document.getElementById('av_imagen').files[0], API);
+  } catch (err) {
+    alert('No se pudo subir la nueva foto: ' + err.message);
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('id', document.getElementById('av_id').value);
+  fd.append('pin', document.getElementById('av_pin').value);
+  fd.append('precio', document.getElementById('av_precio').value);
+  fd.append('capacidad', document.getElementById('av_capacidad').value);
+  fd.append('sector_referencia', document.getElementById('av_sector').value);
+  fd.append('tiempo_disponible', document.getElementById('av_tiempo').value);
+  fd.append('descripcion', document.getElementById('av_descripcion').value);
+  fd.append('estado', document.getElementById('av_estado').value);
+  if (nombreImagen) fd.append('imagen', nombreImagen);
+
+  const res = await fetch(`${API}?action=actualizar_vivienda_publico`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    cerrarModalActualizarVivienda();
+    cargarViviendas();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo actualizar'));
+  }
+});
+
+async function quitarInteresado(id) {
+  if (!confirm('¿Quitar este interesado? La oferta quedará disponible de nuevo.')) return;
+  const fd = new FormData();
+  fd.append('id', id);
+  await fetch(`${API}?action=quitar_interesado`, { method: 'POST', body: fd });
+  cerrarModalActualizarVivienda();
+  cargarViviendas();
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function cambiarCiudad(nuevaCiudad) {
+  ciudadActual = nuevaCiudad;
+  cargarViviendas();
+}
+inicializarSelectorCiudad('selectorCiudad', cambiarCiudad);
+
+cargarViviendas();
+setInterval(cargarViviendas, 30000);
+</script>
+</body>
+</html>
