@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-interface Props { store: Store }
+interface Props { store: Store; setPage: (p: string) => void }
 
 function getStatusColor(estado: string) {
   if (estado === 'requiere') return '#CE1126'
@@ -24,14 +24,40 @@ function getStatusColor(estado: string) {
   return '#9AA0AC'
 }
 
-function SectorStatus({ estado }: { estado: string }) {
-  if (estado === 'requiere') return <span className="tag tag-red">🔴 Requiere ayuda</span>
-  if (estado === 'en_proceso') return <span className="tag tag-orange">🟠 En proceso</span>
-  if (estado === 'atendido') return <span className="tag tag-green">✅ Atendido</span>
-  return <span className="tag tag-gray">⬜ Sin reportes</span>
+/** Ícono según el tipo de necesidad reportada. */
+const NEED_TYPES = [
+  { key: 'agua', icon: '💧', label: '💧 Agua' },
+  { key: 'alimentos', icon: '🍞', label: '🍞 Alimentos' },
+  { key: 'refugio', icon: '⛺', label: '⛺ Refugio' },
+  { key: 'medicamentos', icon: '💊', label: '💊 Medicamentos' },
+  { key: 'salud', icon: '🩺', label: '🩺 Atención médica' },
+  { key: 'ropa', icon: '🧥', label: '🧥 Ropa / Cobijas' },
+  { key: 'maquinaria', icon: '🚜', label: '🚜 Maquinaria' },
+  { key: 'mascotas', icon: '🐾', label: '🐾 Mascotas' },
+  { key: 'otro', icon: '🆘', label: '🆘 Otro' },
+]
+
+/** Clave de categoría según el tipo de necesidad reportada. */
+function needKey(tipo: string) {
+  const t = (tipo || '').toLowerCase()
+  if (t.includes('agua')) return 'agua'
+  if (t.includes('aliment') || t.includes('comida')) return 'alimentos'
+  if (t.includes('refugio') || t.includes('carpa')) return 'refugio'
+  if (t.includes('medicament')) return 'medicamentos'
+  if (t.includes('médica') || t.includes('medica') || t.includes('salud') || t.includes('psicol')) return 'salud'
+  if (t.includes('ropa') || t.includes('cobija') || t.includes('abrigo')) return 'ropa'
+  if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'maquinaria'
+  if (t.includes('mascota')) return 'mascotas'
+  return 'otro'
 }
 
-export default function MapPage({ store }: Props) {
+/** Ícono según el tipo de necesidad reportada. */
+function needIcon(tipo: string) {
+  return NEED_TYPES.find(t => t.key === needKey(tipo))?.icon ?? '🆘'
+}
+
+
+export default function MapPage({ store, setPage }: Props) {
   const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
     addSector, addNecesidad, updateNecesidad, getSectorEstado } = store
@@ -43,11 +69,14 @@ export default function MapPage({ store }: Props) {
   const mascotaMarkersRef = useRef<any[]>([])
   const danoMarkersRef = useRef<any[]>([])
   const [mapReady, setMapReady] = useState(false)
-  const [filter, setFilter] = useState('todos')
-  const [showCentros, setShowCentros] = useState(true)
-  const [showMascotas, setShowMascotas] = useState(false)
-  const [showDanos, setShowDanos] = useState(false)
-  const [selectedSector, setSelectedSector] = useState<number | null>(null)
+  const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
+    ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
+    sin_reportes: true,
+    centros: true,
+    mascotas: false,
+    danos: false,
+  }))
+  const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
   // Mobile UX
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -89,16 +118,6 @@ export default function MapPage({ store }: Props) {
   const ciudadSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
   const unreadCount = notificaciones.filter(n => !n.leida).length
 
-  // Filter sectors
-  const filteredSectores = ciudadSectores.filter(s => {
-    if (filter === 'todos') return true
-    const estado = getSectorEstado(s.id)
-    if (filter === 'requiere') return estado === 'requiere'
-    if (filter === 'en_proceso') return estado === 'en_proceso'
-    if (filter === 'atendido') return estado === 'atendido'
-    if (filter === 'sin_reportes') return estado === 'sin_reportes'
-    return true
-  })
 
   // Default map center by city
   const cityCenter: Record<string, [number, number]> = {
@@ -153,13 +172,24 @@ export default function MapPage({ store }: Props) {
     curSectores.forEach(sector => {
       const estado = getSectorEstado(sector.id)
       const color = getStatusColor(estado)
+      const ns = necesidades.filter(n => n.sector_id === sector.id && n.estado === 'requiere')
+      // Necesidad principal (más urgente) para el ícono del marcador
+      const prioridadOrder: Record<string, number> = { alta: 0, media: 1, baja: 2 }
+      const primary = ns.slice().sort((a, b) => {
+        const ua = a.responsable ? 1 : 0
+        const ub = b.responsable ? 1 : 0
+        if (ua !== ub) return ua - ub
+        return (prioridadOrder[a.prioridad] ?? 1) - (prioridadOrder[b.prioridad] ?? 1)
+      })[0]
+      const emoji = primary ? needIcon(primary.tipo) : '📍'
+      const key = primary ? needKey(primary.tipo) : 'sin_reportes'
+      if (!layers[key]) return
       const icon = L.divIcon({
         className: '',
-        html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`,
-        iconSize: [20, 20], iconAnchor: [10, 10],
+        html: `<div style="width:30px;height:30px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:15px">${emoji}</div>`,
+        iconSize: [30, 30], iconAnchor: [15, 15],
       })
       const marker = L.marker([sector.lat, sector.lng], { icon }).addTo(mapInstance.current)
-      const ns = necesidades.filter(n => n.sector_id === sector.id && n.estado === 'requiere')
       const contacto = sector.contactos[0]
 
       const statusBadge = estado === 'requiere'
@@ -173,7 +203,7 @@ export default function MapPage({ store }: Props) {
       const needsHtml = ns.length
         ? ns.slice(0, 4).map(n => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;gap:6px">
-              <span style="font-size:12px;font-weight:600;color:#1f2430;flex:1">${n.tipo}${n.cantidad ? ' — ' + n.cantidad : ''}</span>
+              <span style="font-size:12px;font-weight:600;color:#1f2430;flex:1">${needIcon(n.tipo)} ${n.tipo}${n.cantidad ? ' — ' + n.cantidad : ''}</span>
               ${!n.responsable ? `<button onclick="window.__helpNeed('${n.id}')" style="background:#003893;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">🙋 Yo ayudo</button>` : '<span style="font-size:11px;color:#2E9E5B;white-space:nowrap">🙋 En proceso</span>'}
             </div>`).join('')
           + (ns.length > 4 ? `<div style="font-size:12px;color:#003893;padding:4px 0">+${ns.length - 4} más...</div>` : '')
@@ -194,7 +224,7 @@ export default function MapPage({ store }: Props) {
     // — Centro de acopio markers
     centroMarkersRef.current.forEach(m => m.remove())
     centroMarkersRef.current = []
-    if (showCentros) {
+    if (layers.centros) {
       const curCentros = centros.filter(c => c.ciudad === ciudad)
       curCentros.forEach(c => {
         const emoji = c.es_sangre ? '🩸' : c.es_alojamiento ? '🏠' : '📦'
@@ -222,7 +252,7 @@ export default function MapPage({ store }: Props) {
     // — Mascota markers
     mascotaMarkersRef.current.forEach(m => m.remove())
     mascotaMarkersRef.current = []
-    if (showMascotas) {
+    if (layers.mascotas) {
       mascotas.filter(m => m.ciudad === ciudad && m.estado === 'perdido').forEach(m => {
         const icon = L.divIcon({
           className: '',
@@ -246,7 +276,7 @@ export default function MapPage({ store }: Props) {
     // — Daño markers
     danoMarkersRef.current.forEach(m => m.remove())
     danoMarkersRef.current = []
-    if (showDanos && ciudad === 'Manizales') {
+    if (layers.danos && ciudad === 'Manizales') {
       const nivelColor: Record<string, string> = { leve: '#E08E00', moderado: '#CE1126', severo: '#7f1d1d', colapso: '#1f2430' }
       danos.filter(d => d.ciudad === ciudad).forEach(d => {
         const color = nivelColor[d.nivel_percibido] || '#CE1126'
@@ -268,7 +298,7 @@ export default function MapPage({ store }: Props) {
         danoMarkersRef.current.push(mk)
       })
     }
-  }, [sectores, necesidades, centros, mascotas, danos, ciudad, getSectorEstado, showCentros, showMascotas, showDanos])
+  }, [sectores, necesidades, centros, mascotas, danos, ciudad, getSectorEstado, layers])
 
   useEffect(() => {
     renderMarkers()
@@ -376,7 +406,6 @@ export default function MapPage({ store }: Props) {
     mapInstance.current.setView([s.lat, s.lng], 15)
     const marker = markersRef.current[ciudadSectores.indexOf(s)]
     if (marker) marker.openPopup()
-    setSelectedSector(sectorId)
   }
 
   const centerOn = (lat: number, lng: number) => {
@@ -502,43 +531,6 @@ export default function MapPage({ store }: Props) {
         </ReportSection>
 
         {/* 📍 Sectores */}
-        <ReportSection id="sectores" icon="📍" title="Sectores" count={ciudadSectores.length}>
-          <Chips value={filter} onChange={setFilter} options={[
-            { id: 'todos', label: 'Todos' },
-            { id: 'requiere', label: '🟥 Urgentes' },
-            { id: 'en_proceso', label: '🟠 En proceso' },
-            { id: 'atendido', label: '✅ Atendidos' },
-            { id: 'sin_reportes', label: '⬜ Sin reportes' },
-          ]} />
-          {filteredSectores.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>No hay sectores con este filtro en {ciudad}.</p>}
-          {filteredSectores.map(s => {
-            const estado = getSectorEstado(s.id)
-            const ns = necesidades.filter(n => n.sector_id === s.id)
-            const urgentes = ns.filter(n => n.estado === 'requiere' && !n.responsable)
-            const contacto = s.contactos[0]
-            return (
-              <div
-                key={s.id}
-                onClick={() => { centerOnSector(s.id); if (sheetState === 'full') setSheetState('peek') }}
-                style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selectedSector === s.id ? '#f0f4ff' : 'transparent' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13.5, color: '#1f2430' }}>{s.nombre}</span>
-                  <SectorStatus estado={estado} />
-                </div>
-                {urgentes.length > 0 && (
-                  <p style={{ margin: '2px 0', fontSize: 12, color: '#CE1126', fontWeight: 600 }}>
-                    Requiere: {urgentes.slice(0, 2).map(n => n.tipo).join(', ')}{urgentes.length > 2 ? '...' : ''}
-                  </p>
-                )}
-                {contacto
-                  ? <p style={{ margin: 0, fontSize: 11.5, color: '#6b7280' }}>📞 {contacto.nombre}</p>
-                  : <p style={{ margin: 0, fontSize: 11.5, color: '#E08E00' }}>⚠️ Sin contacto registrado</p>
-                }
-              </div>
-            )
-          })}
-        </ReportSection>
 
         {/* 🆘 Necesidades (alimentos y demás) */}
         <ReportSection id="necesidades" icon="🆘" title="Necesidades" count={nsDeCiudad.length}>
@@ -555,7 +547,7 @@ export default function MapPage({ store }: Props) {
             return (
               <div key={n.id} onClick={() => sector && centerOnSector(sector.id)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
                   <span className={urgente ? 'tag tag-red' : n.estado === 'atendida' ? 'tag tag-green' : 'tag tag-orange'} style={{ fontSize: 10, flexShrink: 0 }}>
                     {urgente ? '🔴 Urgente' : n.estado === 'atendida' ? '✅ Atendida' : '🟠 En proceso'}
                   </span>
@@ -662,8 +654,8 @@ export default function MapPage({ store }: Props) {
         <ReportSection id="noticias" icon="📰" title="Noticias" count={nsNoticias.length}>
           {nsNoticias.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin comunicados publicados.</p>}
           {nsNoticias.map(n => (
-            <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.titulo}</p>
+            <div key={n.id} onClick={() => setPage('noticias')} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#003893' }}>{n.titulo} <span style={{ fontSize: 11, color: '#9AA0AC', fontWeight: 400 }}>→ ver</span></p>
               <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>✍️ {n.autor || 'Equipo'} · {timeAgo(n.fecha + 'T00:00:00Z')}</p>
             </div>
           ))}
@@ -673,24 +665,33 @@ export default function MapPage({ store }: Props) {
   }
 
   // Layer toggle buttons (shared between desktop and mobile)
-  const LayerToggles = ({ bottomOffset = 60 }: { bottomOffset?: number }) => (
-    <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {[
-        { key: 'centros', label: '📦 Centros', active: showCentros, color: '#003893', toggle: () => setShowCentros(v => !v) },
-        { key: 'mascotas', label: '🐾 Mascotas', active: showMascotas, color: '#7C3AED', toggle: () => setShowMascotas(v => !v) },
-        ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚 Daños', active: showDanos, color: '#CE1126', toggle: () => setShowDanos(v => !v) }] : []),
-      ].map(btn => (
-        <button key={btn.key} onClick={btn.toggle} style={{
-          background: btn.active ? btn.color : 'rgba(255,255,255,0.92)',
-          color: btn.active ? '#fff' : '#374151',
-          border: '1px solid ' + (btn.active ? btn.color : '#d1d5db'),
-          borderRadius: 20, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-          cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
-          fontFamily: 'Nunito, sans-serif',
-        }}>{btn.label}</button>
-      ))}
-    </div>
-  )
+  const LayerToggles = ({ bottomOffset = 60 }: { bottomOffset?: number }) => {
+    const buttons = [
+      ...NEED_TYPES.map(t => ({ key: t.key, label: t.label, color: '#1f2430' })),
+      { key: 'sin_reportes', label: '📍 Sin reportes', color: '#9AA0AC' },
+      { key: 'centros', label: '📦 Centros', color: '#003893' },
+      { key: 'mascotas', label: '🐾 Mascotas perdidas', color: '#7C3AED' },
+      ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚️ Daños', color: '#CE1126' }] : []),
+    ]
+    return (
+      <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
+        {buttons.map(btn => {
+          const active = layers[btn.key]
+          return (
+            <button key={btn.key} onClick={() => toggleLayer(btn.key)} style={{
+              pointerEvents: 'auto',
+              background: active ? btn.color : 'rgba(255,255,255,0.92)',
+              color: active ? '#fff' : '#374151',
+              border: '1px solid ' + (active ? btn.color : '#d1d5db'),
+              borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+              cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
+              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
+            }}>{btn.label}</button>
+          )
+        })}
+      </div>
+    )
+  }
 
   const sheetHeights: Record<string, string> = {
     collapsed: 'calc(100% - 58px)',  // only handle visible

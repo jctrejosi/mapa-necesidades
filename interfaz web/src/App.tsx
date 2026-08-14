@@ -59,7 +59,7 @@ export default function App() {
         minHeight: 0,
         overflow: isMapPage ? 'hidden' : 'auto',
       }}>
-        {page === 'mapa'          && <MapPage store={store} />}
+        {page === 'mapa'          && <MapPage store={store} setPage={setPage} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
         {page === 'noticias'      && <NoticiasPage store={store} />}
