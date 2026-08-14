@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from './store'
 import Header from './components/Header'
 import Footer from './components/Footer'
@@ -13,6 +13,27 @@ import DashboardPage from './pages/DashboardPage'
 import AyudaPage from './pages/AyudaPage'
 
 const MAP_PAGES = new Set(['mapa'])
+
+// Ruta por tab. `dashboard` usa `/estadisticas`; `/dashboard` queda como alias.
+const PAGE_ROUTES: Record<string, string> = {
+  mapa: '/mapa',
+  ofrecimientos: '/ofrecimientos',
+  mascotas: '/mascotas',
+  noticias: '/noticias',
+  vivienda: '/vivienda',
+  danos: '/danos',
+  dashboard: '/estadisticas',
+  ayuda: '/ayuda',
+}
+const ROUTE_TO_PAGE: Record<string, string> = Object.fromEntries(
+  Object.entries(PAGE_ROUTES).map(([page, route]) => [route, page]),
+)
+
+function pathToPage(pathname: string): string {
+  if (ROUTE_TO_PAGE[pathname]) return ROUTE_TO_PAGE[pathname]
+  if (pathname === '/dashboard') return 'dashboard' // alias del nombre anterior
+  return 'mapa'
+}
 
 // Bottom tabs shown on mobile
 const BOTTOM_TABS = [
@@ -35,7 +56,7 @@ const ALL_NAV = [
 ]
 
 export default function App() {
-  const [page, setPage] = useState('mapa')
+  const [page, setPage] = useState(() => pathToPage(window.location.pathname))
   const [drawerOpen, setDrawerOpen] = useState(false)
   const store = useStore()
   const isMapPage = MAP_PAGES.has(page)
@@ -44,11 +65,23 @@ export default function App() {
     if (id === '__more__') { setDrawerOpen(true); return }
     setPage(id)
     setDrawerOpen(false)
+    window.scrollTo(0, 0)
+    const route = PAGE_ROUTES[id] ?? '/mapa'
+    if (window.location.pathname !== route) {
+      window.history.pushState(null, '', route)
+    }
   }
+
+  // Navegar con los botones atrás/adelante del navegador
+  useEffect(() => {
+    const onPop = () => setPage(pathToPage(window.location.pathname))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100svh', background: '#f4f5f7' }}>
-      <Header currentPage={page} setPage={p => { setPage(p); setDrawerOpen(false) }} ciudad={store.ciudad} setCiudad={store.setCiudad} />
+      <Header currentPage={page} setPage={navigate} ciudad={store.ciudad} setCiudad={store.setCiudad} />
 
       <main style={{
         flex: 1,
@@ -57,17 +90,18 @@ export default function App() {
         minHeight: 0,
         overflow: isMapPage ? 'hidden' : 'auto',
       }}>
-        {page === 'mapa'          && <MapPage store={store} setPage={setPage} />}
+        {page === 'mapa'          && <MapPage store={store} setPage={navigate} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
         {page === 'noticias'      && <NoticiasPage store={store} />}
         {page === 'vivienda'      && <ViviendaPage store={store} />}
         {page === 'danos'         && <DanosPage store={store} />}
         {page === 'dashboard'     && <DashboardPage store={store} />}
-        {page === 'ayuda'         && <AyudaPage setPage={setPage} />}
+        {page === 'ayuda'         && <AyudaPage setPage={navigate} />}
       </main>
 
-      {!isMapPage && <Footer />}
+      {/* Footer visible en todas las pestañas, incluido el mapa */}
+      <Footer />
 
       {/* ── Mobile bottom tab bar ── */}
       <nav className="bottom-tab-bar">

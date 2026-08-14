@@ -4,7 +4,8 @@
  *
  *   node setup.js            -> levanta backend (NestJS) + interfaz web + panel admin
  *                              en modo producción local (imágenes construidas)
- *   node setup.js --dev      -> modo desarrollo: hot reload (nest --watch + Vite HMR)
+ *   node setup.js --dev      -> modo desarrollo: servicios directos en el host con
+ *                              hot reload y logs en vivo (Ctrl+C los detiene)
  *   node setup.js --import   -> fuerza la importación de los datos de producción
  *   node setup.js --down     -> detiene los contenedores (conserva los datos)
  *   node setup.js --reset    -> detiene, borra la base y vuelve a montar desde cero
@@ -12,7 +13,7 @@
  * Sin dependencias externas (solo Node >= 18 y Docker con el plugin Compose).
  */
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const net = require('net');
 const path = require('path');
 
@@ -35,6 +36,26 @@ const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
 const PORTS = [8080, 8081, 3000];
+
+// ── Modo desarrollo: servicios directos en el host (como dev.js de mercaldas) ──
+// Cada servicio corre en su carpeta con sus propias dependencias; los logs se
+// muestran en vivo con prefijo de color y Ctrl+C los detiene (la BD Supabase
+// queda intacta, no hay contenedores).
+const DEV_SERVICES = [
+  {
+    name: 'BACKEND', dir: 'backend', cmd: ['npm', 'run', 'start:dev'],
+    env: {}, port: 3000, url: 'http://localhost:3000/api', color: '\x1b[35m',
+  },
+  {
+    name: 'WEB', dir: 'interfaz web', cmd: ['pnpm', 'dev'],
+    env: { PORT: '8080' }, port: 8080, url: 'http://localhost:8080', color: '\x1b[32m',
+  },
+  {
+    name: 'ADMIN', dir: 'interfaz web admin', cmd: ['npm', 'run', 'dev'],
+    env: { PORT: '8081' }, port: 8081, url: 'http://localhost:8081', color: '\x1b[34m',
+  },
+];
+const devChildren = [];
 
 const c = {
   reset: '\x1b[0m',
@@ -62,8 +83,8 @@ function fail(msg) {
 }
 
 /** Ejecuta un comando mostrando su salida en vivo. Lanza si falla. */
-function run(cmd) {
-  execFileSync(cmd[0], cmd.slice(1), { stdio: 'inherit', cwd: ROOT });
+function run(cmd, cwd = ROOT) {
+  execFileSync(cmd[0], cmd.slice(1), { stdio: 'inherit', cwd });
 }
 
 /** Ejecuta un comando silenciosamente y devuelve su stdout ('' si falla). */
@@ -233,43 +254,105 @@ async function up() {
   await importLegacyIfNeeded();
 
   summary(false);
+
+  // Mantener la consola abierta mostrando los logs (como dev.js): Ctrl+C sale
+  // del log sin apagar los contenedores.
+  info('Mostrando logs en vivo (Ctrl+C para salir; los contenedores siguen corriendo).');
+  info('Para volver a verlos: node setup.js');
+  run(COMPOSE.concat(PROD, ['logs', '-f', '--tail=50']));
+  ok('Seguimiento de logs terminado. Los contenedores siguen arriba.');
 }
 
-/** Modo desarrollo: código montado + hot reload (NestJS watch y Vite HMR). */
+/** Mata el proceso que esté escuchando en `port` (Unix: fuser). */
+function killPort(port) {
+  try {
+    execFileSync('fuser', ['-k', `${port}/tcp`], { stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { /* nada que liberar */ }
+}
+
+/** Asegura node_modules en la carpeta del servicio (instala si falta). */
+function ensureDeps(svc) {
+  const dir = path.join(ROOT, svc.dir);
+  if (require('fs').existsSync(path.join(dir, 'node_modules'))) return;
+  info(`Instalando dependencias de ${svc.name} (${svc.dir})...`);
+  const pm = svc.cmd[0] === 'pnpm' ? 'pnpm' : 'npm';
+  run([pm, 'install'], dir);
+}
+
+/** Arranca un servicio dev en el host con salida prefijada en vivo. */
+function startDevService(svc) {
+  const cwd = path.join(ROOT, svc.dir);
+  const prefix = `${svc.color}[${svc.name}]${c.reset} `;
+  console.log(`${prefix}▶ ${svc.url}  (cwd: ${cwd})`);
+
+  killPort(svc.port);
+  // dar tiempo a que el SO libere el socket
+  const sab = new SharedArrayBuffer(4);
+  Atomics.wait(new Int32Array(sab), 0, 0, 800);
+
+  const child = spawn(svc.cmd[0], svc.cmd.slice(1), {
+    cwd,
+    env: { ...process.env, ...svc.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+  });
+  const pipe = (stream, out) => {
+    stream.on('data', (chunk) => {
+      chunk.toString().split('\n').forEach((line) => {
+        if (line.trim()) out.write(prefix + line + '\n');
+      });
+    });
+  };
+  if (child.stdout) pipe(child.stdout, process.stdout);
+  if (child.stderr) pipe(child.stderr, process.stderr);
+  child.on('exit', (code, signal) => {
+    console.log(`${prefix}terminó (${signal || code})`);
+  });
+  devChildren.push(child);
+}
+
+function killDevChildren() {
+  if (!devChildren.length) return;
+  console.log('\n⏹  Deteniendo servicios dev...');
+  for (const child of devChildren) {
+    try {
+      if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
+      else child.kill('SIGTERM');
+    } catch { /* ya terminó */ }
+  }
+}
+
+/** Modo desarrollo: servicios en el host con hot reload y logs en vivo. */
 async function devUp() {
   banner();
 
-  if (!hasDocker()) fail('Docker no está instalado o no corre. Instálalo y vuelve a intentar.');
-  ok(`Docker: ${quiet(['docker', '--version'])}`);
-
-  if (!hasCompose()) fail('Falta el plugin "docker compose" de Docker.');
-  ok(`Compose: ${quiet(COMPOSE.concat(['version']))}`);
-
-  // El modo dev usa los mismos puertos (3000/8080/8081): detener el stack de prod
-  for (const name of CONTAINERS) {
+  // El modo dev usa los mismos puertos (3000/8080/8081): detener contenedores del proyecto
+  for (const name of CONTAINERS.concat(DEV_CONTAINERS)) {
     if (containerRunning(name)) {
-      warn(`El contenedor de producción "${name}" está corriendo; se detiene (mismos puertos).`);
+      warn(`El contenedor "${name}" está corriendo; se detiene (mismos puertos).`);
       run(['docker', 'stop', name]);
     }
   }
 
-  removeStaleContainers(DEV_CONTAINERS);
+  info('Preparando servicios dev en el host (hot reload: nest --watch + Vite HMR)...');
+  for (const svc of DEV_SERVICES) ensureDeps(svc);
 
-  info('Montando backend + frontends en modo DEV (hot reload: nest start --watch + Vite HMR)...');
-  run(COMPOSE.concat(DEV, ['up', '-d', '--build']));
+  console.log(`
+${c.bold}  Levantando ${DEV_SERVICES.length} servicios — logs en vivo:${c.reset}
+`);
+  for (const svc of DEV_SERVICES) startDevService(svc);
 
-  await waitForApi();
-  await waitForWeb();
-  await importLegacyIfNeeded(false, true);
+  console.log(`
+${c.green}${c.bold}  ✔ Servicios dev arriba${c.reset}
+  ${c.bold}Interfaz web${c.reset}  ${c.cyan}http://localhost:8080${c.reset}
+  ${c.bold}Panel admin${c.reset}   ${c.cyan}http://localhost:8081${c.reset}
+  ${c.bold}API${c.reset}          ${c.cyan}http://localhost:3000/api${c.reset}
 
-  summary(true);
+  ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 3 servicios.${c.reset}
+`);
 
-  // Logs en vivo: el script se queda pegado mostrando la salida de los 3
-  // contenedores (nest --watch + Vite HMR). Ctrl+C sale sin apagar nada.
-  info('Mostrando logs en vivo (Ctrl+C para salir; los contenedores siguen corriendo).');
-  info('Para volver a verlos: node setup.js --dev');
-  run(COMPOSE.concat(DEV, ['logs', '-f', '--tail=50']));
-  ok('Seguimiento de logs terminado. Los contenedores dev siguen arriba.');
+  // El script se queda vivo hasta Ctrl+C (manejado abajo).
+  await new Promise(() => {});
 }
 
 async function down() {
@@ -335,3 +418,11 @@ ${dev ? `
     fail(e && e.message ? e.message : String(e));
   }
 })();
+
+// Ctrl+C / SIGTERM: detiene servicios dev si los hay y sale limpio.
+function onStop() {
+  killDevChildren();
+  process.exit(0);
+}
+process.on('SIGINT', onStop);
+process.on('SIGTERM', onStop);

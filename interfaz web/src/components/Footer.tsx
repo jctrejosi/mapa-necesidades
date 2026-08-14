@@ -15,10 +15,11 @@ export default function Footer() {
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        fontSize: 'clamp(6.5px, calc((100vw - 44px) / 42), 12px)',
+        fontSize: 'clamp(6px, calc((100vw - 44px) / 45), 11px)',
         lineHeight: 1.2,
       }}>
-        🌎 Plataforma solidaria · Colaboradores: <a href="mailto:wilmarecheverry@gmail.com" style={{ color: '#FCD116' }}>wilmarecheverry@gmail.com</a> · <a href="https://www.jcti.xyz" style={{ color: '#FCD116' }}>www.jcti.xyz</a>
+        <span style={{ fontSize: '0.7em', verticalAlign: 'middle' }}>🌎</span>
+        {' '}Plataforma solidaria · Colaboradores: <a href="mailto:wilmarecheverry@gmail.com" style={{ color: '#FCD116' }}>wilmarecheverry@gmail.com</a> · <a href="https://www.jcti.xyz" style={{ color: '#FCD116' }}>www.jcti.xyz</a>
       </p>
     </footer>
   )
