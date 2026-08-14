@@ -20,6 +20,7 @@ import { desc, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { reportesDanos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum } from '../common/serialize';
 import { genRadicado, str, toDate, toInt, toNum, today } from '../common/util';
 
@@ -150,6 +151,13 @@ class DanosService {
         fecha: today(),
       })
       .returning();
+    emitAppEvent({
+      type: 'dano',
+      mensaje: `Nuevo reporte de daños: ${tipoInmueble}`,
+      ciudad,
+      item: { ...this.serializePublic(d), radicado },
+      at: new Date().toISOString(),
+    });
     return { ...this.serializePublic(d), radicado };
   }
 

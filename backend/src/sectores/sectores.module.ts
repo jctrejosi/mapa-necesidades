@@ -17,6 +17,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { contactos, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asNum, asIso } from '../common/serialize';
 import { str, toInt, toNum } from '../common/util';
 
@@ -143,7 +144,17 @@ class SectoresService {
     // La necesidad inicial se crea con POST /necesidades desde el frontend,
     // igual que en el flujo de la interfaz nueva (MapPage.submitReport).
 
-    return this.get(s.id);
+    const sector = await this.get(s.id);
+    if (sector) {
+      emitAppEvent({
+        type: 'sector',
+        mensaje: `Nuevo sector: ${sector.nombre}`,
+        ciudad: sector.ciudad,
+        item: sector,
+        at: new Date().toISOString(),
+      });
+    }
+    return sector;
   }
 
   async update(id: number, b: SectorBody) {

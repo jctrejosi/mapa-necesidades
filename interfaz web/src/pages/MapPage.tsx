@@ -32,7 +32,8 @@ function SectorStatus({ estado }: { estado: string }) {
 }
 
 export default function MapPage({ store }: Props) {
-  const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias,
+  const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias, ofrecimientos, viviendas,
+    notificaciones, markAllRead,
     addSector, addNecesidad, updateNecesidad, getSectorEstado } = store
 
   const mapRef = useRef<any>(null)
@@ -58,6 +59,14 @@ export default function MapPage({ store }: Props) {
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null) // need_id
   const [pinResult, setPinResult] = useState<string | null>(null)
 
+  // Centro de reportes (panel de notificaciones por secciones)
+  const [openSection, setOpenSection] = useState<string | null>('actividad')
+  const [nFilter, setNFilter] = useState('urgentes')
+  const [oFilter, setOFilter] = useState('disponibles')
+  const [mFilter, setMFilter] = useState('perdidas')
+  const [dFilter, setDFilter] = useState('pendientes')
+  const [vFilter, setVFilter] = useState('disponibles')
+
   // Report form state
   const [rForm, setRForm] = useState({
     nombre: '', barrio: '', tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const,
@@ -78,7 +87,7 @@ export default function MapPage({ store }: Props) {
   })
 
   const ciudadSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
-  const latestNoticia = noticias.find(n => n.ciudad === null || n.ciudad === ciudad)
+  const unreadCount = notificaciones.filter(n => !n.leida).length
 
   // Filter sectors
   const filteredSectores = ciudadSectores.filter(s => {
@@ -370,44 +379,298 @@ export default function MapPage({ store }: Props) {
     setSelectedSector(sectorId)
   }
 
-  // Shared sector list (used both in sidebar and bottom sheet)
-  const SectorList = () => (
-    <>
-      {filteredSectores.length === 0 && (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
-          No hay sectores con este filtro en {ciudad}.
-        </div>
-      )}
-      {filteredSectores.map(s => {
-        const estado = getSectorEstado(s.id)
-        const ns = necesidades.filter(n => n.sector_id === s.id)
-        const urgentes = ns.filter(n => n.estado === 'requiere' && !n.responsable)
-        const contacto = s.contactos[0]
-        return (
-          <div
-            key={s.id}
-            onClick={() => { centerOnSector(s.id); if (sheetState === 'full') setSheetState('peek') }}
-            className="sector-card"
-            style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', background: selectedSector === s.id ? '#f0f4ff' : 'transparent', transition: 'background 0.1s' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#1f2430' }}>{s.nombre}</span>
-              <SectorStatus estado={estado} />
-            </div>
-            {urgentes.length > 0 && (
-              <p style={{ margin: '2px 0', fontSize: 12, color: '#CE1126', fontWeight: 600 }}>
-                Requiere: {urgentes.slice(0, 2).map(n => n.tipo).join(', ')}{urgentes.length > 2 ? '...' : ''}
-              </p>
-            )}
-            {contacto
-              ? <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>📞 {contacto.nombre}</p>
-              : <p style={{ margin: 0, fontSize: 12, color: '#E08E00' }}>⚠️ Sin contacto registrado</p>
-            }
-          </div>
-        )
-      })}
-    </>
+  const centerOn = (lat: number, lng: number) => {
+    if (!mapInstance.current) return
+    mapInstance.current.setView([lat, lng], 15)
+    if (sheetState === 'full') setSheetState('peek')
+  }
+
+  const timeAgo = (iso: string) => {
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+    if (s < 60) return 'ahora'
+    if (s < 3600) return `hace ${Math.floor(s / 60)} min`
+    if (s < 86400) return `hace ${Math.floor(s / 3600)} h`
+    return `hace ${Math.max(1, Math.floor(s / 86400))} d`
+  }
+
+  const NOTIF_ICONS: Record<string, string> = {
+    sector: '📍', necesidad: '🆘', ofrecimiento: '🤝', mascota: '🐾',
+    noticia: '📰', vivienda: '🏠', dano: '🏚️', centro: '📦',
+  }
+
+  // Chips de filtro reutilizables dentro de cada sección del panel
+  const Chips = ({ options, value, onChange }: { options: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) => (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 6px' }}>
+      {options.map(o => (
+        <button key={o.id} className={`chip ${value === o.id ? 'active' : ''}`} style={{ fontSize: 11 }}
+          onClick={() => onChange(o.id)}>{o.label}</button>
+      ))}
+    </div>
   )
+
+  // Encabezado colapsable (dropdown) de cada sección del centro de reportes
+  const ReportSection = ({ id, icon, title, count, badge, children }: { id: string; icon: string; title: string; count: number; badge?: React.ReactNode; children: React.ReactNode }) => {
+    const open = openSection === id
+    return (
+      <div style={{ borderBottom: '1px solid #f0f0f0' }}>
+        <button
+          onClick={() => setOpenSection(prev => {
+            const next = prev === id ? null : id
+            if (next === 'actividad') markAllRead()
+            return next
+          })}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Nunito, sans-serif', textAlign: 'left' }}
+        >
+          <span style={{ fontSize: 15 }}>{icon}</span>
+          <span style={{ flex: 1, fontWeight: 700, fontSize: 13.5, color: '#1f2430' }}>{title}</span>
+          {badge}
+          <span style={{ color: '#9AA0AC', fontSize: 12, fontWeight: 700 }}>{count}</span>
+          <span style={{ color: '#9AA0AC', fontSize: 11, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', display: 'inline-block' }}>▼</span>
+        </button>
+        {open && <div style={{ padding: '0 16px 12px' }}>{children}</div>}
+      </div>
+    )
+  }
+
+  // ── Centro de reportes: actividad + secciones por entidad ──
+  const ReportesPanel = () => {
+    const unread = notificaciones.filter(n => !n.leida).length
+    const prioridadOrder: Record<string, number> = { alta: 0, media: 1, baja: 2 }
+
+    const nsDeCiudad = necesidades.filter(n => ciudadSectores.some(s => s.id === n.sector_id))
+    const nsFiltered = nsDeCiudad
+      .filter(n =>
+        nFilter === 'urgentes' ? (n.estado === 'requiere' && !n.responsable)
+        : nFilter === 'en_proceso' ? (n.estado === 'requiere' && n.responsable)
+        : nFilter === 'atendidas' ? n.estado === 'atendida'
+        : true)
+      .sort((a, b) => {
+        const ua = a.estado === 'requiere' && !a.responsable ? 0 : a.estado === 'requiere' ? 1 : 2
+        const ub = b.estado === 'requiere' && !b.responsable ? 0 : b.estado === 'requiere' ? 1 : 2
+        if (ua !== ub) return ua - ub
+        return (prioridadOrder[a.prioridad] ?? 1) - (prioridadOrder[b.prioridad] ?? 1)
+      })
+
+    const ofs = ofrecimientos
+      .filter(o => o.ciudad === ciudad)
+      .filter(o =>
+        oFilter === 'disponibles' ? (o.estado === 'disponible' && !o.reservado_por)
+        : oFilter === 'reservados' ? (o.estado === 'disponible' && o.reservado_por)
+        : oFilter === 'entregados' ? o.estado === 'entregado'
+        : true)
+
+    const ms = mascotas
+      .filter(m => m.ciudad === ciudad)
+      .filter(m => mFilter === 'perdidas' ? m.estado === 'perdido' : mFilter === 'encontradas' ? m.estado === 'encontrado' : true)
+
+    const ds = danos
+      .filter(d => d.ciudad === ciudad)
+      .filter(d =>
+        dFilter === 'pendientes' ? d.estado === 'pendiente'
+        : dFilter === 'visita' ? d.estado === 'visita_programada'
+        : dFilter === 'visitados' ? d.estado === 'visitado'
+        : true)
+
+    const vs = viviendas
+      .filter(v => v.ciudad === ciudad)
+      .filter(v => vFilter === 'disponibles' ? v.estado === 'disponible' : vFilter === 'ocupadas' ? v.estado === 'ocupado' : true)
+
+    const nsNoticias = noticias.filter(n => n.ciudad === null || n.ciudad === ciudad)
+
+    return (
+      <div>
+        {/* 🔔 Actividad reciente — notificaciones en tiempo real */}
+        <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={notificaciones.length}
+          badge={unread > 0 ? <span className="tag tag-red" style={{ fontSize: 10 }}>{unread} nuevas</span> : null}>
+          {notificaciones.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
+              Sin actividad todavía. Cuando alguien reporte una necesidad, una mascota, un ofrecimiento,
+              una vivienda o un daño —o se publique una noticia— aparecerá aquí en tiempo real.
+            </p>
+          ) : (
+            notificaciones.slice(0, 20).map(n => (
+              <div key={n.id} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>{n.ciudad ?? 'Todas las ciudades'} · {timeAgo(n.at)}</p>
+                </div>
+                {!n.leida && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#CE1126', flexShrink: 0, marginTop: 4 }} />}
+              </div>
+            ))
+          )}
+        </ReportSection>
+
+        {/* 📍 Sectores */}
+        <ReportSection id="sectores" icon="📍" title="Sectores" count={ciudadSectores.length}>
+          <Chips value={filter} onChange={setFilter} options={[
+            { id: 'todos', label: 'Todos' },
+            { id: 'requiere', label: '🟥 Urgentes' },
+            { id: 'en_proceso', label: '🟠 En proceso' },
+            { id: 'atendido', label: '✅ Atendidos' },
+            { id: 'sin_reportes', label: '⬜ Sin reportes' },
+          ]} />
+          {filteredSectores.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>No hay sectores con este filtro en {ciudad}.</p>}
+          {filteredSectores.map(s => {
+            const estado = getSectorEstado(s.id)
+            const ns = necesidades.filter(n => n.sector_id === s.id)
+            const urgentes = ns.filter(n => n.estado === 'requiere' && !n.responsable)
+            const contacto = s.contactos[0]
+            return (
+              <div
+                key={s.id}
+                onClick={() => { centerOnSector(s.id); if (sheetState === 'full') setSheetState('peek') }}
+                style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selectedSector === s.id ? '#f0f4ff' : 'transparent' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: '#1f2430' }}>{s.nombre}</span>
+                  <SectorStatus estado={estado} />
+                </div>
+                {urgentes.length > 0 && (
+                  <p style={{ margin: '2px 0', fontSize: 12, color: '#CE1126', fontWeight: 600 }}>
+                    Requiere: {urgentes.slice(0, 2).map(n => n.tipo).join(', ')}{urgentes.length > 2 ? '...' : ''}
+                  </p>
+                )}
+                {contacto
+                  ? <p style={{ margin: 0, fontSize: 11.5, color: '#6b7280' }}>📞 {contacto.nombre}</p>
+                  : <p style={{ margin: 0, fontSize: 11.5, color: '#E08E00' }}>⚠️ Sin contacto registrado</p>
+                }
+              </div>
+            )
+          })}
+        </ReportSection>
+
+        {/* 🆘 Necesidades (alimentos y demás) */}
+        <ReportSection id="necesidades" icon="🆘" title="Necesidades" count={nsDeCiudad.length}>
+          <Chips value={nFilter} onChange={setNFilter} options={[
+            { id: 'urgentes', label: '🟥 Urgentes' },
+            { id: 'en_proceso', label: '🟠 En proceso' },
+            { id: 'atendidas', label: '✅ Atendidas' },
+            { id: 'todos', label: 'Todas' },
+          ]} />
+          {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro.</p>}
+          {nsFiltered.map(n => {
+            const sector = sectores.find(s => s.id === n.sector_id)
+            const urgente = n.estado === 'requiere' && !n.responsable
+            return (
+              <div key={n.id} onClick={() => sector && centerOnSector(sector.id)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
+                  <span className={urgente ? 'tag tag-red' : n.estado === 'atendida' ? 'tag tag-green' : 'tag tag-orange'} style={{ fontSize: 10, flexShrink: 0 }}>
+                    {urgente ? '🔴 Urgente' : n.estado === 'atendida' ? '✅ Atendida' : '🟠 En proceso'}
+                  </span>
+                </div>
+                <p style={{ margin: '2px 0', fontSize: 11.5, color: '#6b7280' }}>📍 {sector?.nombre ?? 'Sector'}</p>
+                {urgente && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowHelpModal(n.id) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
+                )}
+                {n.responsable && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>}
+              </div>
+            )
+          })}
+        </ReportSection>
+
+        {/* 🤝 Ofrecimientos */}
+        <ReportSection id="ofrecimientos" icon="🤝" title="Ofrecimientos" count={ofrecimientos.filter(o => o.ciudad === ciudad).length}>
+          <Chips value={oFilter} onChange={setOFilter} options={[
+            { id: 'disponibles', label: '🟢 Disponibles' },
+            { id: 'reservados', label: '🟠 Reservados' },
+            { id: 'entregados', label: '✅ Entregados' },
+            { id: 'todos', label: 'Todos' },
+          ]} />
+          {ofs.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin ofrecimientos con este filtro.</p>}
+          {ofs.map(o => (
+            <div key={o.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{o.tipo}{o.cantidad ? ` — ${o.cantidad}` : ''}</span>
+                <span className={o.estado === 'entregado' ? 'tag tag-gray' : o.reservado_por ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
+                  {o.estado === 'entregado' ? '✅ Entregado' : o.reservado_por ? '🟠 Reservado' : '🟢 Disponible'}
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>🤝 {o.nombre_ofrece}</p>
+            </div>
+          ))}
+        </ReportSection>
+
+        {/* 🐾 Mascotas */}
+        <ReportSection id="mascotas" icon="🐾" title="Mascotas" count={mascotas.filter(m => m.ciudad === ciudad).length}>
+          <Chips value={mFilter} onChange={setMFilter} options={[
+            { id: 'perdidas', label: '🔴 Perdidas' },
+            { id: 'encontradas', label: '✅ Encontradas' },
+            { id: 'todos', label: 'Todas' },
+          ]} />
+          {ms.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin mascotas con este filtro.</p>}
+          {ms.map(m => (
+            <div key={m.id} onClick={() => centerOn(m.lat, m.lng)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{m.nombre || m.tipo_animal}</span>
+                <span className={m.estado === 'perdido' ? 'tag tag-red' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
+                  {m.estado === 'perdido' ? '🔴 Perdida' : '✅ Encontrada'}
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>📍 {m.lugar_visto || 'Sin lugar'}</p>
+            </div>
+          ))}
+        </ReportSection>
+
+        {/* 🏠 Viviendas */}
+        <ReportSection id="viviendas" icon="🏠" title="Viviendas" count={viviendas.filter(v => v.ciudad === ciudad).length}>
+          <Chips value={vFilter} onChange={setVFilter} options={[
+            { id: 'disponibles', label: '🟢 Disponibles' },
+            { id: 'ocupadas', label: '⚪ Ocupadas' },
+            { id: 'todos', label: 'Todas' },
+          ]} />
+          {vs.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin ofertas con este filtro.</p>}
+          {vs.map(v => (
+            <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{v.sector_referencia || 'Vivienda'}</span>
+                <span className={v.estado === 'ocupado' ? 'tag tag-gray' : v.tipo === 'alquiler' ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
+                  {v.estado === 'ocupado' ? '⚪ Ocupada' : v.tipo === 'alquiler' ? '💰 Alquiler' : '🏠 Gratis'}
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>👥 {v.capacidad} · 🕒 {v.tiempo_disponible}</p>
+            </div>
+          ))}
+        </ReportSection>
+
+        {/* 🏚️ Daños (solo Manizales) */}
+        {ciudad === 'Manizales' && (
+          <ReportSection id="danos" icon="🏚️" title="Daños estructurales" count={danos.filter(d => d.ciudad === ciudad).length}>
+            <Chips value={dFilter} onChange={setDFilter} options={[
+              { id: 'pendientes', label: '🔴 Pendientes' },
+              { id: 'visita', label: '🟠 Con visita' },
+              { id: 'visitados', label: '✅ Visitados' },
+              { id: 'todos', label: 'Todos' },
+            ]} />
+            {ds.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin reportes con este filtro.</p>}
+            {ds.map(d => (
+              <div key={d.id} onClick={() => centerOn(d.lat, d.lng)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{d.tipo_inmueble} — {d.direccion}</span>
+                  <span className={d.estado === 'pendiente' ? 'tag tag-red' : d.estado === 'visita_programada' ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
+                    {d.estado === 'pendiente' ? '🔴 Pendiente' : d.estado === 'visita_programada' ? '🟠 Visita' : '✅ Visitado'}
+                  </span>
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>Radicado: {d.radicado} · {d.nivel_percibido}</p>
+              </div>
+            ))}
+          </ReportSection>
+        )}
+
+        {/* 📰 Noticias */}
+        <ReportSection id="noticias" icon="📰" title="Noticias" count={nsNoticias.length}>
+          {nsNoticias.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin comunicados publicados.</p>}
+          {nsNoticias.map(n => (
+            <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.titulo}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>✍️ {n.autor || 'Equipo'} · {timeAgo(n.fecha + 'T00:00:00Z')}</p>
+            </div>
+          ))}
+        </ReportSection>
+      </div>
+    )
+  }
 
   // Layer toggle buttons (shared between desktop and mobile)
   const LayerToggles = ({ bottomOffset = 60 }: { bottomOffset?: number }) => (
@@ -437,14 +700,6 @@ export default function MapPage({ store }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      {/* News banner */}
-      {latestNoticia && !isFullscreen && (
-        <div className="news-banner">
-          <span>📰</span>
-          <span style={{ flex: 1 }}>{latestNoticia.titulo}</span>
-        </div>
-      )}
-
       {/* Picking location banner */}
       {pickingLocation && (
         <div style={{ background: '#003893', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, fontWeight: 600, flexShrink: 0, zIndex: isFullscreen ? 600 : 1 }}>
@@ -504,37 +759,41 @@ export default function MapPage({ store }: Props) {
             >
               + Reportar necesidad
             </button>
+
+            {/* Centro de notificaciones */}
+            <button
+              onClick={() => { setOpenSection('actividad'); markAllRead(); setSheetState('full') }}
+              title="Centro de notificaciones"
+              style={{
+                position: 'absolute', bottom: 74, right: 10, zIndex: 400,
+                background: 'rgba(255,255,255,0.95)', border: '1px solid #d1d5db',
+                borderRadius: 999, width: 40, height: 40, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(4px)', fontSize: 17,
+              }}
+            >
+              🔔
+              {unreadCount > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, background: '#CE1126', color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
           </div>
 
-          {/* ── Desktop Sidebar ── */}
+          {/* ── Desktop Sidebar (centro de reportes) ── */}
           <div className="map-sidebar">
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e1e4e9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Sectores reportados</h2>
-                <span style={{ background: '#e8eeff', color: '#003893', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 999 }}>
-                  {ciudadSectores.length}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {[
-                  { id: 'todos', label: 'Todos' },
-                  { id: 'requiere', label: '🟥 Urgentes' },
-                  { id: 'en_proceso', label: '🟧 En proceso' },
-                  { id: 'atendido', label: '✅ Atendidos' },
-                  { id: 'sin_reportes', label: '⬜ Sin reportes' },
-                ].map(f => (
-                  <button key={f.id} className={`chip ${filter === f.id ? 'active' : ''}`} style={{ fontSize: 12 }}
-                    onClick={() => setFilter(f.id)}>{f.label}</button>
-                ))}
-              </div>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #e1e4e9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>📋 Reportes</h2>
+              {unreadCount > 0 && <span className="tag tag-red" style={{ fontSize: 10 }}>{unreadCount} nuevas</span>}
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              <SectorList />
+              <ReportesPanel />
             </div>
           </div>
         </div>
 
-        {/* ── Mobile Bottom Sheet ── */}
+        {/* ── Mobile Bottom Sheet (centro de reportes) ── */}
         <div
           className="map-bottom-sheet"
           style={{ top: sheetHeights[sheetState] }}
@@ -547,41 +806,23 @@ export default function MapPage({ store }: Props) {
             <div className="sheet-handle-pill" />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 10px', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2430' }}>
-                  Sectores · <span style={{ color: '#003893' }}>{ciudadSectores.length}</span>
-                </span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2430' }}>📋 Reportes</span>
+                {unreadCount > 0 && <span className="tag tag-red" style={{ fontSize: 10 }}>{unreadCount} nuevas</span>}
                 {ciudadSectores.filter(s => getSectorEstado(s.id) === 'requiere').length > 0 && (
                   <span className="tag tag-red" style={{ fontSize: 10 }}>
                     {ciudadSectores.filter(s => getSectorEstado(s.id) === 'requiere').length} urgentes
                   </span>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                {/* Quick filter chips on handle */}
-                {[{ id: 'todos', label: 'Todos' }, { id: 'requiere', label: '🔴' }, { id: 'en_proceso', label: '🟠' }, { id: 'atendido', label: '✅' }].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={e => { e.stopPropagation(); setFilter(f.id) }}
-                    style={{
-                      background: filter === f.id ? '#003893' : '#f0f4ff',
-                      color: filter === f.id ? '#fff' : '#374151',
-                      border: 'none', borderRadius: 6,
-                      padding: '3px 8px', fontSize: 11, fontWeight: 700,
-                      cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
-                    }}
-                  >{f.label}</button>
-                ))}
-                {/* Expand/collapse chevron */}
-                <span style={{ color: '#9AA0AC', fontSize: 14, marginLeft: 4, userSelect: 'none' }}>
-                  {sheetState === 'collapsed' ? '▲' : sheetState === 'full' ? '▼' : '⋯'}
-                </span>
-              </div>
+              <span style={{ color: '#9AA0AC', fontSize: 14, userSelect: 'none' }}>
+                {sheetState === 'collapsed' ? '▲' : sheetState === 'full' ? '▼' : '⋯'}
+              </span>
             </div>
           </div>
 
-          {/* Scrollable sector list */}
+          {/* Panel de reportes por secciones */}
           <div style={{ flex: 1, overflow: 'auto', overscrollBehavior: 'contain' }}>
-            <SectorList />
+            <ReportesPanel />
           </div>
         </div>
       </div>

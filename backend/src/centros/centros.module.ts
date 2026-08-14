@@ -17,6 +17,7 @@ import { desc, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { centrosAcopio } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asNum } from '../common/serialize';
 import { str, toInt, toNum } from '../common/util';
 
@@ -99,6 +100,13 @@ class CentrosService {
         estado: b.estado === 'cerrado' ? 'cerrado' : 'abierto',
       })
       .returning();
+    emitAppEvent({
+      type: 'centro',
+      mensaje: `Nuevo centro: ${nombre}`,
+      ciudad: c.ciudad,
+      item: this.serialize(c),
+      at: new Date().toISOString(),
+    });
     return this.serialize(c);
   }
 

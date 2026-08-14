@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import * as api from './api'
 import { getAdminPass, imgUrl, setAdminPass } from './api/client'
 import { cityLabel } from './api'
+import { subscribeEvents, type AppEvent } from './api/events'
 import type {
   CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
   ReporteDano, Sector, Vivienda,
@@ -50,6 +51,20 @@ export async function compressImage(file: File): Promise<string> {
   })
 }
 
+// ── Notificaciones en tiempo real (SSE) ─────────────────────────────────────
+
+export interface Notificacion {
+  id: string
+  type: string
+  mensaje: string
+  ciudad: string | null   // etiqueta ('Manizales') o null (todas las ciudades)
+  at: string
+  leida: boolean
+}
+
+const MAX_NOTIFS = 60
+const MAX_TOASTS = 4
+
 // ── Estado global (datos vienen de la API) ─────────────────────────────────
 
 interface Data {
@@ -61,16 +76,35 @@ interface Data {
   noticias: Noticia[]
   viviendas: Vivienda[]
   danos: ReporteDano[]
+  notificaciones: Notificacion[]
+  toasts: Notificacion[]
+}
+
+function loadNotificaciones(): Notificacion[] {
+  try {
+    const raw = localStorage.getItem('cr_notificaciones')
+    return raw ? (JSON.parse(raw) as Notificacion[]) : []
+  } catch {
+    return []
+  }
 }
 
 let cache: Data = {
   sectores: [], necesidades: [], ofrecimientos: [], mascotas: [],
   centros: [], noticias: [], viviendas: [], danos: [],
+  notificaciones: loadNotificaciones(),
+  toasts: [],
 }
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.delete(l) }
 const getSnapshot = () => cache
+
+const persistNotificaciones = () => {
+  try { localStorage.setItem('cr_notificaciones', JSON.stringify(cache.notificaciones)) } catch { /* noop */ }
+}
+
+let currentCiudad = 'Manizales'
 
 const mapItem = (x: any) => ({
   ...x,
@@ -80,7 +114,6 @@ const mapItem = (x: any) => ({
 
 /** Carga todos los listados (admin ve sectores cerrados y campos completos). */
 async function refresh(ciudad: string): Promise<void> {
-  const isAdmin = !!getAdminPass()
   const [sectores, necesidades, ofrecimientos, mascotas, centros, noticias, viviendas, danos] =
     await Promise.all([
       api.listSectores(ciudad),
@@ -90,10 +123,11 @@ async function refresh(ciudad: string): Promise<void> {
       api.listCentros(ciudad),
       api.listNoticias(ciudad),
       api.listViviendas(ciudad),
-      isAdmin ? api.listDanos(ciudad) : api.listDanos(ciudad),
+      api.listDanos(ciudad),
     ])
 
   cache = {
+    ...cache,
     sectores: sectores.map(mapItem),
     necesidades: necesidades.map(mapItem),
     ofrecimientos: ofrecimientos.map(mapItem),
@@ -118,6 +152,30 @@ async function mutate(fn: () => Promise<unknown>, ciudad: string): Promise<any> 
   }
 }
 
+// ── Suscripción única al stream de eventos del backend ─────────────────────
+
+const handleEvent = (e: AppEvent) => {
+  const notif: Notificacion = {
+    id: genId(),
+    type: e.type,
+    mensaje: e.mensaje,
+    ciudad: e.ciudad ? cityLabel(e.ciudad) : null,
+    at: e.at,
+    leida: false,
+  }
+  cache = {
+    ...cache,
+    notificaciones: [notif, ...cache.notificaciones].slice(0, MAX_NOTIFS),
+    toasts: [...cache.toasts, notif].slice(-MAX_TOASTS),
+  }
+  persistNotificaciones()
+  emit()
+  // Actualiza los datos de todas las páginas en tiempo real
+  refresh(currentCiudad).catch(() => { /* silencioso */ })
+}
+
+const unsubscribeEvents = subscribeEvents(handleEvent)
+
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useStore() {
@@ -128,12 +186,16 @@ export function useStore() {
 
   const setCiudad = useCallback((c: string) => {
     setCiudadState(c)
+    currentCiudad = c
     try { localStorage.setItem('cr_ciudad', c) } catch { /* noop */ }
   }, [])
 
   useEffect(() => {
+    currentCiudad = ciudad
     refresh(ciudad).catch((e) => console.error('Error cargando datos:', e))
   }, [ciudad])
+
+  useEffect(() => () => unsubscribeEvents(), [])
 
   // Estado agregado de un sector según sus necesidades
   const getSectorEstado = (sectorId: number): 'requiere' | 'en_proceso' | 'atendido' | 'sin_reportes' => {
@@ -145,6 +207,18 @@ export function useStore() {
     if (enProceso.length > 0) return 'en_proceso'
     return 'atendido'
   }
+
+  const dismissToast = useCallback((id: string) => {
+    cache = { ...cache, toasts: cache.toasts.filter(t => t.id !== id) }
+    emit()
+  }, [])
+
+  const markAllRead = useCallback(() => {
+    if (!cache.notificaciones.some(n => !n.leida)) return
+    cache = { ...cache, notificaciones: cache.notificaciones.map(n => ({ ...n, leida: true })) }
+    persistNotificaciones()
+    emit()
+  }, [])
 
   // ── CRUD (todo contra la API) ────────────────────────────────────────────
 
@@ -286,6 +360,7 @@ export function useStore() {
     addDano, updateDano, deleteDano,
     getSectorEstado,
     loginAdmin, logoutAdmin,
+    dismissToast, markAllRead,
   }
 }
 

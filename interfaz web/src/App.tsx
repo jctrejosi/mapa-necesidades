@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from './store'
 import Header from './components/Header'
 import Footer from './components/Footer'
+import NotificationToasts from './components/NotificationToasts'
 import MapPage from './pages/MapPage'
 import OfrecimientosPage from './pages/OfrecimientosPage'
 import MascotasPage from './pages/MascotasPage'
@@ -128,6 +129,10 @@ export default function App() {
             </div>
           </nav>
         </div>
+      )}
+      {/* Popups de notificaciones en tiempo real */}
+      {store.toasts.length > 0 && (
+        <NotificationToasts toasts={store.toasts} onDismiss={store.dismissToast} />
       )}
     </div>
   )

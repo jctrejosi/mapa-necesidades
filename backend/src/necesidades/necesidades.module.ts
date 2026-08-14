@@ -19,6 +19,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { necesidades, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 
@@ -109,6 +110,19 @@ class NecesidadesService {
         telefonoReporta: str(b.telefono_reporta) || null,
       })
       .returning();
+
+    const sectorRow = await this.db
+      .select({ ciudad: sectores.ciudad })
+      .from(sectores)
+      .where(eq(sectores.id, sectorId))
+      .limit(1);
+    emitAppEvent({
+      type: 'necesidad',
+      mensaje: `Nueva necesidad: ${tipo}`,
+      ciudad: sectorRow[0]?.ciudad ?? 'manizales',
+      item: { ...this.serialize(n), pin },
+      at: new Date().toISOString(),
+    });
     return { ...this.serialize(n), pin };
   }
 

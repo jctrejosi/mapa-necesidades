@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './db/database';
+import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
 import { SectoresModule } from './sectores/sectores.module';
 import { NecesidadesModule } from './necesidades/necesidades.module';
@@ -16,6 +17,7 @@ import { ExportModule } from './export/export.module';
 @Module({
   imports: [
     DatabaseModule,
+    EventsModule,
     AuthModule,
     SectoresModule,
     NecesidadesModule,

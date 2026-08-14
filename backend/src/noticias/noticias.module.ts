@@ -17,6 +17,7 @@ import { desc, eq, isNull, or } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { noticias } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate } from '../common/serialize';
 import { str, toDate, toInt, today } from '../common/util';
 
@@ -72,6 +73,13 @@ class NoticiasService {
         fecha: toDate(b.fecha) ?? today(),
       })
       .returning();
+    emitAppEvent({
+      type: 'noticia',
+      mensaje: `Nueva noticia: ${titulo}`,
+      ciudad: n.ciudad,
+      item: this.serialize(n),
+      at: new Date().toISOString(),
+    });
     return this.serialize(n);
   }
 

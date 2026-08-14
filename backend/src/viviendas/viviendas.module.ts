@@ -19,6 +19,7 @@ import { desc, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { viviendas } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 
@@ -99,6 +100,13 @@ class ViviendasService {
         fecha: today(),
       })
       .returning();
+    emitAppEvent({
+      type: 'vivienda',
+      mensaje: `Nueva oferta de vivienda (${v.tipo === 'alquiler' ? 'alquiler' : 'gratis'})`,
+      ciudad: v.ciudad,
+      item: { ...this.serialize(v), pin },
+      at: new Date().toISOString(),
+    });
     return { ...this.serialize(v), pin };
   }
 

@@ -19,6 +19,7 @@ import { desc, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { ofrecimientos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 
@@ -93,6 +94,13 @@ class OfrecimientosService {
         estado: b.estado === 'entregado' ? 'entregado' : 'disponible',
       })
       .returning();
+    emitAppEvent({
+      type: 'ofrecimiento',
+      mensaje: `Nuevo ofrecimiento: ${str(b.tipo)}`,
+      ciudad: o.ciudad,
+      item: { ...this.serialize(o), pin },
+      at: new Date().toISOString(),
+    });
     return { ...this.serialize(o), pin };
   }
 

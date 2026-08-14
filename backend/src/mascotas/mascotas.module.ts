@@ -19,6 +19,7 @@ import { desc, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { mascotasPerdidas } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
+import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, toNum, today } from '../common/util';
 
@@ -103,6 +104,13 @@ class MascotasService {
         telefonoReporta: str(b.telefono_reporta),
       })
       .returning();
+    emitAppEvent({
+      type: 'mascota',
+      mensaje: `Mascota reportada: ${str(b.nombre_mascota) || tipo}`,
+      ciudad: m.ciudad,
+      item: { ...this.serialize(m), pin },
+      at: new Date().toISOString(),
+    });
     return { ...this.serialize(m), pin };
   }
 
