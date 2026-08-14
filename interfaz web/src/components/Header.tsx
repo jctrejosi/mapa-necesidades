@@ -14,7 +14,7 @@ const NAV = [
   { id: 'noticias',      label: '📰 Noticias' },
   { id: 'vivienda',      label: '🏠 Vivienda' },
   { id: 'danos',         label: '🏚️ Daños' },
-  { id: 'dashboard',     label: '📊 Dashboard' },
+  { id: 'dashboard',     label: '📊 Estadísticas' },
   { id: 'ayuda',         label: '❓ Ayuda' },
 ]
 

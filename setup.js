@@ -215,8 +215,15 @@ async function up() {
     warn('Si los ocupan contenedores de una instancia anterior, se limpiarán automáticamente.');
   }
 
-  removeStaleContainers();
-removeStaleContainers(CONTAINERS);
+  // Si el stack de desarrollo está corriendo, detenerlo (mismos puertos 3000/8080/8081)
+  for (const name of DEV_CONTAINERS) {
+    if (containerRunning(name)) {
+      warn(`El contenedor de desarrollo "${name}" está corriendo; se detiene (mismos puertos).`);
+      run(['docker', 'stop', name]);
+    }
+  }
+
+  removeStaleContainers(CONTAINERS);
 
   info('Montando backend + interfaz web + panel admin (docker compose up -d --build)...');
   run(COMPOSE.concat(PROD, ['up', '-d', '--build']));

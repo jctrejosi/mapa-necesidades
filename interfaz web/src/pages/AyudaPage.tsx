@@ -58,8 +58,8 @@ export default function AyudaPage({ setPage }: Props) {
           <Step n={3} text="Cualquier persona puede coordinar/reservar tu ofrecimiento. Cuando se entregue, actualiza el estado con tu PIN." />
         </Block>
 
-        <Block icon="📊" title="Dashboard de avance">
-          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>Ve a "Dashboard" para ver estadísticas en tiempo real: porcentaje de necesidades atendidas, avance por tipo y por sector. Se actualiza automáticamente cada 30 segundos.</p>
+        <Block icon="📊" title="Estadísticas">
+          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>Ve a "Estadísticas" para ver los datos en tiempo real: porcentaje de necesidades atendidas, avance por tipo y por sector. Se actualiza automáticamente cada 30 segundos.</p>
         </Block>
 
         <Block icon="📸" title="Fotos en necesidades y ofrecimientos">
@@ -102,7 +102,7 @@ export default function AyudaPage({ setPage }: Props) {
             { icon: '🤝', label: 'Ver ofrecimientos', page: 'ofrecimientos' },
             { icon: '🐾', label: 'Ver mascotas', page: 'mascotas' },
             { icon: '🏚️', label: 'Reportar daño', page: 'danos' },
-            { icon: '📊', label: 'Ver dashboard', page: 'dashboard' },
+            { icon: '📊', label: 'Ver estadísticas', page: 'dashboard' },
           ].map(b => (
             <button key={b.page} className="btn btn-primary" onClick={() => setPage(b.page)}>
               {b.icon} {b.label}

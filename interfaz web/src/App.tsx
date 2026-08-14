@@ -30,7 +30,7 @@ const ALL_NAV = [
   { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'vivienda',      icon: '🏠', label: 'Vivienda' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
-  { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
+  { id: 'dashboard',     icon: '📊', label: 'Estadísticas' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
 ]
 
