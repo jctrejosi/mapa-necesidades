@@ -71,7 +71,6 @@ export default function MapPage({ store, setPage }: Props) {
   const [mapReady, setMapReady] = useState(false)
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
     ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
-    sin_reportes: true,
     centros: true,
     mascotas: false,
     danos: false,
@@ -79,7 +78,6 @@ export default function MapPage({ store, setPage }: Props) {
   const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
   // Mobile UX
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const [pickingLocation, setPickingLocation] = useState(false)
   const [pickedLatLng, setPickedLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [showReportModal, setShowReportModal] = useState(false)
@@ -155,12 +153,12 @@ export default function MapPage({ store, setPage }: Props) {
   const pickingLocationRef = useRef(false)
   useEffect(() => { pickingLocationRef.current = pickingLocation }, [pickingLocation])
 
-  // Invalidate map size after fullscreen toggle so tiles fill correctly
+  // Invalidate map size when the bottom sheet changes so tiles fill correctly
   useEffect(() => {
     if (mapInstance.current) {
       setTimeout(() => mapInstance.current?.invalidateSize(), 50)
     }
-  }, [isFullscreen])
+  }, [sheetState])
 
   const renderMarkers = useCallback(() => {
     if (!mapInstance.current) return
@@ -181,8 +179,10 @@ export default function MapPage({ store, setPage }: Props) {
         if (ua !== ub) return ua - ub
         return (prioridadOrder[a.prioridad] ?? 1) - (prioridadOrder[b.prioridad] ?? 1)
       })[0]
-      const emoji = primary ? needIcon(primary.tipo) : '📍'
-      const key = primary ? needKey(primary.tipo) : 'sin_reportes'
+      // Sin necesidades activas → sin marcador (se quitan los "sin reportes")
+      if (!primary) return
+      const emoji = needIcon(primary.tipo)
+      const key = needKey(primary.tipo)
       if (!layers[key]) return
       const icon = L.divIcon({
         className: '',
@@ -667,11 +667,10 @@ export default function MapPage({ store, setPage }: Props) {
   // Layer toggle buttons (shared between desktop and mobile)
   const LayerToggles = ({ bottomOffset = 60 }: { bottomOffset?: number }) => {
     const buttons = [
-      ...NEED_TYPES.map(t => ({ key: t.key, label: t.label, color: '#1f2430' })),
-      { key: 'sin_reportes', label: '📍 Sin reportes', color: '#9AA0AC' },
-      { key: 'centros', label: '📦 Centros', color: '#003893' },
-      { key: 'mascotas', label: '🐾 Mascotas perdidas', color: '#7C3AED' },
-      ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚️ Daños', color: '#CE1126' }] : []),
+      ...NEED_TYPES.filter(t => t.key !== 'mascotas').map(t => ({ key: t.key, label: t.label })),
+      { key: 'centros', label: '📦 Centros' },
+      { key: 'mascotas', label: '🐾 Mascotas perdidas' },
+      ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚️ Daños' }] : []),
     ]
     return (
       <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
@@ -680,9 +679,9 @@ export default function MapPage({ store, setPage }: Props) {
           return (
             <button key={btn.key} onClick={() => toggleLayer(btn.key)} style={{
               pointerEvents: 'auto',
-              background: active ? btn.color : 'rgba(255,255,255,0.92)',
+              background: active ? '#003893' : 'rgba(255,255,255,0.92)',
               color: active ? '#fff' : '#374151',
-              border: '1px solid ' + (active ? btn.color : '#d1d5db'),
+              border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
               borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
               fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
@@ -703,18 +702,15 @@ export default function MapPage({ store, setPage }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* Picking location banner */}
       {pickingLocation && (
-        <div style={{ background: '#003893', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, fontWeight: 600, flexShrink: 0, zIndex: isFullscreen ? 600 : 1 }}>
+        <div style={{ background: '#003893', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, fontWeight: 600, flexShrink: 0, zIndex: 1 }}>
           <span>📍</span>
           <span style={{ flex: 1 }}>Haz clic en el mapa donde está el sector afectado</span>
           <button onClick={cancelPick} className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}>Cancelar</button>
         </div>
       )}
 
-      {/* Fullscreen wrapper */}
-      <div style={isFullscreen
-        ? { position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', background: '#000', overflow: 'hidden' }
-        : { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }
-      }>
+      {/* Map wrapper */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
         <div className="map-layout">
           {/* ── Map ── */}
           <div className="map-container" style={{ position: 'relative' }}>
@@ -735,22 +731,6 @@ export default function MapPage({ store, setPage }: Props) {
             <div className="map-toggles-mobile">
               <LayerToggles bottomOffset={sheetState === 'collapsed' ? 68 : sheetState === 'peek' ? 8 : 8} />
             </div>
-
-            {/* Fullscreen toggle */}
-            <button
-              onClick={() => setIsFullscreen(v => !v)}
-              title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-              style={{
-                position: 'absolute', top: 10, right: 10, zIndex: 400,
-                background: 'rgba(255,255,255,0.92)', border: '1px solid #d1d5db',
-                borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
-                fontSize: 15,
-              }}
-            >
-              {isFullscreen ? '✕' : '⛶'}
-            </button>
 
             {/* Report button */}
             <button

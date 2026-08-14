@@ -14,8 +14,8 @@ Quedará corriendo:
 
 | Servicio | URL |
 |---|---|
-| Frontend (mapa público) | http://localhost:8080/index.html |
-| Panel admin | http://localhost:8080 (pestaña Administración, clave `admin123` por defecto) |
+| Frontend (cliente / mapa público) | http://localhost:8080 |
+| Panel admin (interfaz separada) | http://localhost:8081 (clave `admin123` por defecto) |
 | API | http://localhost:3000/api |
 | PostgreSQL | localhost:55432 (mapa_user / mapa_pass_local / mapa_necesidades) |
 
@@ -46,6 +46,7 @@ docker compose down -v             # detiene y borra la base de datos
 
 ## Desarrollo (sin Docker)
 
+- **Frontend (cliente)**: `cd "../interfaz web" && pnpm install && pnpm dev` (Vite proxya `/api` y `/uploads` a `localhost:3000`).
+- **Frontend (admin)**: `cd "../interfaz web admin" && npm install && npm run dev` (puerto 8444).
 - **Backend**: `cd ../backend && npm install && npm run start:dev` (requiere PostgreSQL en `localhost:55432`, o ajusta `DATABASE_URL`).
-- **Frontend**: `cd "../interfaz web" && pnpm install && pnpm dev` (Vite proxya `/api` y `/uploads` a `localhost:3000`).
 - Migraciones: `npm run db:generate` (tras tocar `src/db/schema.ts`) y `npm run db:migrate`.

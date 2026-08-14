@@ -52,6 +52,15 @@ services:
     ports:
       - "8080:80"
 
+  frontend-admin:
+    build: "../interfaz web admin"
+    container_name: redsolidaria-admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
 volumes:
   pg_data:
   uploads_data:

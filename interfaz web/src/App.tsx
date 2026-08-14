@@ -11,7 +11,6 @@ import ViviendaPage from './pages/ViviendaPage'
 import DanosPage from './pages/DanosPage'
 import DashboardPage from './pages/DashboardPage'
 import AyudaPage from './pages/AyudaPage'
-import AdminPage from './pages/AdminPage'
 
 const MAP_PAGES = new Set(['mapa'])
 
@@ -33,7 +32,6 @@ const ALL_NAV = [
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
   { id: 'dashboard',     icon: '📊', label: 'Dashboard' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
-  { id: 'admin',         icon: '🔑', label: 'Administración' },
 ]
 
 export default function App() {
@@ -67,7 +65,6 @@ export default function App() {
         {page === 'danos'         && <DanosPage store={store} />}
         {page === 'dashboard'     && <DashboardPage store={store} />}
         {page === 'ayuda'         && <AyudaPage setPage={setPage} />}
-        {page === 'admin'         && <AdminPage store={store} />}
       </main>
 
       {!isMapPage && <Footer />}

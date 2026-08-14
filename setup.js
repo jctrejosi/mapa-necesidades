@@ -22,11 +22,12 @@ const COMPOSE_FILE = path.join(ROOT, 'db', 'docker-compose.yml');
 const COMPOSE = ['docker', 'compose', '-p', 'db', '-f', COMPOSE_FILE];
 
 // Nombres reservados por docker-compose.yml (db/)
-const CONTAINERS = ['redsolidaria-db', 'redsolidaria-backend', 'redsolidaria-frontend'];
+const CONTAINERS = ['redsolidaria-db', 'redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin'];
 
 const WEB_URL = 'http://localhost:8080';
+const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
-const PORTS = [8080, 3000, 55432];
+const PORTS = [8080, 8081, 3000, 55432];
 
 const c = {
   reset: '\x1b[0m',
@@ -199,6 +200,7 @@ async function up() {
   // Los puertos que ocupan contenedores de ESTE proyecto no son un problema
   const ours = (p) =>
     (p === 8080 && containerRunning(CONTAINERS[2])) ||
+    (p === 8081 && containerRunning(CONTAINERS[3])) ||
     (p === 3000 && containerRunning(CONTAINERS[1])) ||
     (p === 55432 && containerRunning(CONTAINERS[0]));
   const foreign = busy.filter((p) => !ours(p));
@@ -252,7 +254,7 @@ function summary() {
 ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${c.reset}
 
   ${c.bold}Interfaz web${c.reset}    ${c.cyan}${WEB_URL}${c.reset}
-  ${c.bold}Panel admin${c.reset}     ${c.cyan}${WEB_URL}${c.reset}   (pestaña Administración — clave por defecto: admin123)
+  ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
   ${c.bold}PostgreSQL${c.reset}     localhost:55432  (mapa_user / mapa_pass_local / mapa_necesidades)
 

@@ -50,14 +50,6 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
         >
           {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-
-        <button
-          onClick={() => setPage('admin')}
-          className="btn btn-outline btn-sm hide-on-mobile"
-          style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}
-        >
-          🔑 Admin
-        </button>
       </div>
 
       {/* Desktop nav */}
