@@ -72,8 +72,8 @@ export default function MapPage({ store, setPage }: Props) {
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
     ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
     centros: true,
-    mascotas: false,
-    danos: false,
+    mascotas: true,
+    danos: true,
   }))
   const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
   // Mobile UX
@@ -672,8 +672,23 @@ export default function MapPage({ store, setPage }: Props) {
       { key: 'mascotas', label: '🐾 Mascotas perdidas' },
       ...(ciudad === 'Manizales' ? [{ key: 'danos', label: '🏚️ Daños' }] : []),
     ]
+    const allOn = buttons.every(b => layers[b.key])
     return (
       <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
+        <button
+          onClick={() => setLayers(prev => Object.fromEntries(Object.keys(prev).map(k => [k, true])))}
+          disabled={allOn}
+          style={{
+            pointerEvents: 'auto',
+            background: allOn ? '#e8eeff' : '#003893',
+            color: allOn ? '#9AA0AC' : '#fff',
+            border: '1px solid ' + (allOn ? '#c9d6f2' : '#003893'),
+            borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 800,
+            cursor: allOn ? 'default' : 'pointer',
+            boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
+            fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: allOn ? 0.6 : 1,
+          }}
+        >👁️ Ver todos</button>
         {buttons.map(btn => {
           const active = layers[btn.key]
           return (

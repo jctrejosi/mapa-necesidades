@@ -35,7 +35,10 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
-      FRONTEND_ORIGIN: http://localhost:8080
+      FRONTEND_ORIGIN: http://localhost:8080,http://localhost:8081
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
     ports:
       - "3000:3000"
     volumes:

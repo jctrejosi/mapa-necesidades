@@ -171,6 +171,11 @@ export const updateDanoAdmin = (id: number, b: Record<string, unknown>): Promise
 export const deleteDano = (id: number): Promise<{ ok: boolean }> =>
   request(`/danos/${id}`, { method: 'DELETE' })
 
+// ── Uploads (Cloudinary: solo se guarda la URL) ─────────────────────────────
+
+export const uploadImage = (imagen: string): Promise<{ path: string }> =>
+  request('/uploads', { method: 'POST', body: { imagen } })
+
 // ── Admin: PINs ─────────────────────────────────────────────────────────────
 
 export const verPin = (tabla: string, id: number): Promise<{ pin: string | null }> =>

@@ -153,6 +153,15 @@ async function mutate(fn: () => Promise<unknown>, ciudad: string): Promise<any> 
   }
 }
 
+/** Sube la imagen a Cloudinary (si viene en base64) y devuelve la URL. */
+async function withImage(img: string | null | undefined): Promise<string | null> {
+  if (typeof img === 'string' && img.startsWith('data:')) {
+    const { path } = await api.uploadImage(img)
+    return path
+  }
+  return img ?? null
+}
+
 // ── Suscripción única al stream de eventos del backend ─────────────────────
 
 const handleEvent = (e: AppEvent) => {
@@ -242,7 +251,7 @@ export function useStore() {
     mutate(() => api.deleteSector(id), ciudad)
 
   const addNecesidad = (n: Omit<Necesidad, 'id' | 'pin'>): Promise<string> =>
-    mutate(async () => (await api.createNecesidad(n)).pin, ciudad)
+    mutate(async () => (await api.createNecesidad({ ...n, imagen: await withImage(n.imagen) })).pin, ciudad)
 
   const updateNecesidad = (id: number, b: Partial<Necesidad> & { responsable?: { nombre: string; telefono: string } | null; pin?: string }): Promise<unknown> =>
     mutate(async () => {
@@ -258,7 +267,7 @@ export function useStore() {
     mutate(() => api.deleteNecesidad(id), ciudad)
 
   const addOfrecimiento = (o: Omit<Ofrecimiento, 'id' | 'pin'>): Promise<string> =>
-    mutate(async () => (await api.createOfrecimiento(o)).pin, ciudad)
+    mutate(async () => (await api.createOfrecimiento({ ...o, imagen: await withImage(o.imagen) })).pin, ciudad)
 
   const updateOfrecimiento = (id: number, b: Partial<Ofrecimiento> & { pin?: string }): Promise<unknown> =>
     mutate(async () => {
@@ -273,7 +282,7 @@ export function useStore() {
     mutate(() => api.deleteOfrecimiento(id), ciudad)
 
   const addMascota = (m: Omit<Mascota, 'id' | 'pin'>): Promise<string> =>
-    mutate(async () => (await api.createMascota(m)).pin, ciudad)
+    mutate(async () => (await api.createMascota({ ...m, imagen: await withImage(m.imagen) })).pin, ciudad)
 
   const updateMascota = (id: number, b: Partial<Mascota> & { pin?: string }): Promise<unknown> =>
     mutate(async () => {
@@ -288,7 +297,7 @@ export function useStore() {
     mutate(() => api.deleteMascota(id), ciudad)
 
   const addCentro = (c: Omit<CentroAcopio, 'id'>): Promise<unknown> =>
-    mutate(() => api.createCentro(c), ciudad)
+    mutate(async () => api.createCentro({ ...c, imagen: await withImage(c.imagen) }), ciudad)
 
   const updateCentro = (id: number, b: Partial<CentroAcopio>): Promise<unknown> =>
     mutate(() => api.updateCentro(id, b as Record<string, unknown>), ciudad)
@@ -297,7 +306,7 @@ export function useStore() {
     mutate(() => api.deleteCentro(id), ciudad)
 
   const addNoticia = (n: Omit<Noticia, 'id'>): Promise<unknown> =>
-    mutate(() => api.createNoticia(n), ciudad)
+    mutate(async () => api.createNoticia({ ...n, imagen: await withImage(n.imagen) }), ciudad)
 
   const updateNoticia = (id: number, b: Partial<Noticia>): Promise<unknown> =>
     mutate(() => api.updateNoticia(id, b as Record<string, unknown>), ciudad)
@@ -306,7 +315,7 @@ export function useStore() {
     mutate(() => api.deleteNoticia(id), ciudad)
 
   const addVivienda = (v: Omit<Vivienda, 'id' | 'pin'>): Promise<string> =>
-    mutate(async () => (await api.createVivienda(v)).pin, ciudad)
+    mutate(async () => (await api.createVivienda({ ...v, imagen: await withImage(v.imagen) })).pin, ciudad)
 
   const updateVivienda = (id: number, b: Partial<Vivienda> & { pin?: string }): Promise<unknown> =>
     mutate(async () => {
@@ -321,7 +330,7 @@ export function useStore() {
     mutate(() => api.deleteVivienda(id), ciudad)
 
   const addDano = (d: Omit<ReporteDano, 'id' | 'radicado'>): Promise<string> =>
-    mutate(async () => (await api.createDano(d)).radicado, ciudad)
+    mutate(async () => (await api.createDano({ ...d, imagen: await withImage(d.imagen) })).radicado, ciudad)
 
   const updateDano = (id: number, b: Partial<ReporteDano>): Promise<unknown> =>
     mutate(() => api.updateDanoAdmin(id, b as Record<string, unknown>), ciudad)
