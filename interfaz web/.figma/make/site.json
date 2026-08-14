@@ -1,7 +1,9 @@
 {
-  "description": "Offers a modern, intuitive, and user-friendly website design optimized for seamless viewing on both desktop and mobile devices.",
+  "title": "SolidaridadCO - Mapa de Sectores Afectados",
+  "description": "Mapa colaborativo de sectores afectados por el sismo en Manizales: reporta necesidades, ofrecimientos, mascotas perdidas, vivienda, daños y noticias en tiempo real.",
+  "language": "es",
   "robots": {
-    "index": false
+    "index": true
   },
   "accessibility": {
     "addBypassLinks": false,

@@ -8,7 +8,8 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      'postgres://mapa_user:mapa_pass_local@localhost:55432/mapa_necesidades',
+      'postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true',
+    ssl: process.env.DB_SSL === 'true',
   },
   strict: true,
   verbose: true,

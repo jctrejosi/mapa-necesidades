@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
+import type { PoolConfig } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -347,8 +348,12 @@ async function main() {
 
   const url =
     process.env.DATABASE_URL ??
-    'postgres://mapa_user:mapa_pass_local@localhost:55432/mapa_necesidades';
-  const pool = new Pool({ connectionString: url });
+    'postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true';
+  const pool = new Pool({
+    connectionString: url,
+    family: 4, // IPv4: el pooler de Supabase no expone IPv6 en este entorno
+    ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
+  } as PoolConfig);
   const db = drizzle(pool);
   const sqlText = fs.readFileSync(dumpPath, 'utf8');
 

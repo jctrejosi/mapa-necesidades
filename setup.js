@@ -17,17 +17,18 @@ const path = require('path');
 
 const ROOT = __dirname;
 const COMPOSE_FILE = path.join(ROOT, 'db', 'docker-compose.yml');
-// -p db: nombre de proyecto fijo (coincide con los volúmenes db_pg_data/db_uploads_data
-// y con ejecutar compose desde la carpeta db/), sin importar desde dónde se llame al script.
-const COMPOSE = ['docker', 'compose', '-p', 'db', '-f', COMPOSE_FILE];
+// -p redsolidaria: nombre de proyecto fijo y único (evita chocar con otros compose
+// que también viven en carpetas "db/", p. ej. mercaldas-ecommerce o tesis), sin
+// importar desde dónde se llame al script.
+const COMPOSE = ['docker', 'compose', '-p', 'redsolidaria', '-f', COMPOSE_FILE];
 
 // Nombres reservados por docker-compose.yml (db/)
-const CONTAINERS = ['redsolidaria-db', 'redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin'];
+const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin'];
 
 const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
-const PORTS = [8080, 8081, 3000, 55432];
+const PORTS = [8080, 8081, 3000];
 
 const c = {
   reset: '\x1b[0m',
@@ -42,7 +43,7 @@ const c = {
 function banner() {
   console.log(`
 ${c.cyan}${c.bold}  ███ SolidaridadCO — Mapa de Sectores Afectados ███${c.reset}
-  ${c.dim}Arranque local: PostgreSQL + API (NestJS/Drizzle) + Interfaz Web${c.reset}
+  ${c.dim}Arranque local: API (NestJS/Drizzle + PostgreSQL en Supabase) + Interfaz Web${c.reset}
 `);
 }
 
@@ -199,10 +200,9 @@ async function up() {
     .filter(Boolean);
   // Los puertos que ocupan contenedores de ESTE proyecto no son un problema
   const ours = (p) =>
-    (p === 8080 && containerRunning(CONTAINERS[2])) ||
-    (p === 8081 && containerRunning(CONTAINERS[3])) ||
-    (p === 3000 && containerRunning(CONTAINERS[1])) ||
-    (p === 55432 && containerRunning(CONTAINERS[0]));
+    (p === 8080 && containerRunning(CONTAINERS[1])) ||
+    (p === 8081 && containerRunning(CONTAINERS[2])) ||
+    (p === 3000 && containerRunning(CONTAINERS[0]));
   const foreign = busy.filter((p) => !ours(p));
   if (foreign.length) {
     warn(`Puerto${foreign.length > 1 ? 's' : ''} ${foreign.join(' y ')} en uso.`);
@@ -211,7 +211,7 @@ async function up() {
 
   removeStaleContainers();
 
-  info('Montando PostgreSQL + backend + interfaz web (docker compose up -d --build)...');
+  info('Montando backend + interfaz web + panel admin (docker compose up -d --build)...');
   run(COMPOSE.concat(['up', '-d', '--build']));
 
   await waitForApi();
@@ -256,7 +256,7 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
   ${c.bold}Interfaz web${c.reset}    ${c.cyan}${WEB_URL}${c.reset}
   ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
-  ${c.bold}PostgreSQL${c.reset}     localhost:55432  (mapa_user / mapa_pass_local / mapa_necesidades)
+  ${c.bold}PostgreSQL${c.reset}     Supabase (nube) — se migra con: node setup.js --import
 
   ${c.dim}Parar:  node setup.js --down${c.reset}
   ${c.dim}Reset:  node setup.js --reset${c.reset}

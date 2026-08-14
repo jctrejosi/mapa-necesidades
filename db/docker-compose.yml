@@ -1,37 +1,20 @@
-# SolidaridadCO — despliegue local completo:
-#   PostgreSQL + backend (NestJS/Drizzle) + frontend (Vite/nginx)
+# SolidaridadCO — despliegue local de la aplicación.
+# La base de datos vive en Supabase (nube); aquí solo corren backend y frontends.
 #
 #   docker compose up -d --build
 #
+# Nombre de proyecto único: evita colisionar con otros compose del equipo que
+# también se ejecutan desde una carpeta llamada "db" (mercaldas-ecommerce, tesis).
+name: redsolidaria
 services:
-  db:
-    image: postgres:17-alpine
-    container_name: redsolidaria-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: mapa_necesidades
-      POSTGRES_USER: mapa_user
-      POSTGRES_PASSWORD: mapa_pass_local
-    ports:
-      # 55432 en el host para no chocar con otros PostgreSQL locales
-      - "55432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mapa_user -d mapa_necesidades"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   backend:
     build: ../backend
     container_name: redsolidaria-backend
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://mapa_user:mapa_pass_local@db:5432/mapa_necesidades
+      # PostgreSQL alojado en Supabase (el password va URL-encoded: @ → %40)
+      DATABASE_URL: postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true
+      DB_SSL: "true"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
@@ -65,5 +48,4 @@ services:
       - "8081:80"
 
 volumes:
-  pg_data:
   uploads_data:
