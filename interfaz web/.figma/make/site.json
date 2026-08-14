@@ -1,0 +1,10 @@
+{
+  "description": "Offers a modern, intuitive, and user-friendly website design optimized for seamless viewing on both desktop and mobile devices.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

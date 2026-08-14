@@ -1,7 +1,0 @@
-# Evita que se ejecuten scripts dentro de la carpeta de imágenes subidas
-php_flag engine off
-Options -ExecCGI -Indexes
-AddHandler cgi-script .php .php3 .php4 .php5 .phtml .pl .py .cgi .asp .sh
-<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|cgi|sh|asp)$">
-  Require all denied
-</FilesMatch>

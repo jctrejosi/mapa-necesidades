@@ -1,0 +1,57 @@
+# SolidaridadCO — despliegue local completo:
+#   PostgreSQL + backend (NestJS/Drizzle) + frontend (Vite/nginx)
+#
+#   docker compose up -d --build
+#
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: redsolidaria-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mapa_necesidades
+      POSTGRES_USER: mapa_user
+      POSTGRES_PASSWORD: mapa_pass_local
+    ports:
+      # 55432 en el host para no chocar con otros PostgreSQL locales
+      - "55432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapa_user -d mapa_necesidades"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ../backend
+    container_name: redsolidaria-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mapa_user:mapa_pass_local@db:5432/mapa_necesidades
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      PORT: "3000"
+      UPLOAD_DIR: /app/uploads
+      FRONTEND_ORIGIN: http://localhost:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+      # Dump legado (MySQL) accesible para la migración de datos:
+      - ../backups:/app/legacy-backups:ro
+
+  frontend:
+    build: "../interfaz web"
+    container_name: redsolidaria-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pg_data:
+  uploads_data:

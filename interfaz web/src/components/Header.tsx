@@ -1,0 +1,86 @@
+import { CITIES } from '../data/mock'
+
+interface Props {
+  currentPage: string
+  setPage: (p: string) => void
+  ciudad: string
+  setCiudad: (c: string) => void
+}
+
+const NAV = [
+  { id: 'mapa',          label: '🗺️ Mapa' },
+  { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
+  { id: 'mascotas',      label: '🐾 Mascotas' },
+  { id: 'noticias',      label: '📰 Noticias' },
+  { id: 'vivienda',      label: '🏠 Vivienda' },
+  { id: 'danos',         label: '🏚️ Daños' },
+  { id: 'dashboard',     label: '📊 Dashboard' },
+  { id: 'ayuda',         label: '❓ Ayuda' },
+]
+
+export default function Header({ currentPage, setPage, ciudad, setCiudad }: Props) {
+  return (
+    <header style={{ background: '#fff', boxShadow: '0 1px 0 #e1e4e9', position: 'sticky', top: 0, zIndex: 200, flexShrink: 0 }}>
+      <div className="tricolor-band" />
+
+      {/* Top bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+        <button
+          onClick={() => setPage('mapa')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <span style={{ fontSize: 20 }}>🇨🇴</span>
+          <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 17, color: '#003893', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+            SolidaridadCO
+          </span>
+        </button>
+
+        <span className="hide-on-mobile" style={{ fontSize: 11, color: '#CE1126', fontWeight: 700, background: '#fde8eb', padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          ⚠️ Terremoto 10/08/26
+        </span>
+
+        <div style={{ flex: 1, minWidth: 0 }} />
+
+        <select
+          className="form-select"
+          style={{ width: 'auto', fontSize: 13, padding: '5px 8px', maxWidth: 130, flexShrink: 0 }}
+          value={ciudad}
+          onChange={e => setCiudad(e.target.value)}
+          aria-label="Ciudad"
+        >
+          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+
+        <button
+          onClick={() => setPage('admin')}
+          className="btn btn-outline btn-sm hide-on-mobile"
+          style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}
+        >
+          🔑 Admin
+        </button>
+      </div>
+
+      {/* Desktop nav */}
+      <nav className="nav-desktop" style={{ display: 'flex', gap: 2, padding: '0 12px 8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {NAV.map(n => (
+          <button
+            key={n.id}
+            onClick={() => setPage(n.id)}
+            style={{
+              background: currentPage === n.id ? '#003893' : 'none',
+              color: currentPage === n.id ? '#fff' : '#374151',
+              border: 'none', borderRadius: 6,
+              padding: '5px 10px', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: "'Nunito', sans-serif", whiteSpace: 'nowrap',
+              transition: 'background 0.12s, color 0.12s',
+            }}
+            onMouseEnter={e => { if (currentPage !== n.id) (e.currentTarget as HTMLButtonElement).style.background = '#f0f4ff' }}
+            onMouseLeave={e => { if (currentPage !== n.id) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            {n.label}
+          </button>
+        ))}
+      </nav>
+    </header>
+  )
+}
