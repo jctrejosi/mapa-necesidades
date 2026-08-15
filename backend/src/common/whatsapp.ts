@@ -42,6 +42,8 @@ export async function sendWhatsappText(to: string, body: string): Promise<boolea
           type: 'text',
           text: { body },
         }),
+        // Nunca bloquear el flujo: si la API de Meta tarda, se aborta y se omite.
+        signal: AbortSignal.timeout(10000),
       },
     );
     return res.ok;
