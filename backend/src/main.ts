@@ -20,10 +20,11 @@ async function bootstrap() {
   // real del cliente en X-Forwarded-For al registrar visitas.
   app.set('trust proxy', true);
 
-  // 3) CORS para el frontend de desarrollo
+  // 3) CORS para los frontends (lista separada por comas; se normaliza
+  //    quitando espacios y la barra final para evitar errores de origen).
   const origins = (process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173')
     .split(',')
-    .map((o) => o.trim())
+    .map((o) => o.trim().replace(/\/+$/, ''))
     .filter(Boolean);
   app.enableCors({ origin: origins.length ? origins : true });
 
