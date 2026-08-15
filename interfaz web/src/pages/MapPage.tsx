@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { Store } from '../store'
+import type { Store, Necesidad } from '../store'
 import { TIPOS_NECESIDAD } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
@@ -158,6 +158,16 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   const ciudadSectores = sectores.filter(s => matchesCiudad(s.ciudad) && s.estado === 'activo')
   const unreadCount = notificaciones.filter(n => !n.leida).length
+
+  // Los 5 reportes pendientes más recientes (necesidades sin responsable)
+  const pendingNeeds = necesidades
+    .filter(n => n.estado === 'requiere' && !n.responsable && ciudadSectores.some(s => s.id === n.sector_id))
+    .sort((a, b) => {
+      const ta = new Date(a.fecha || '').getTime() || 0
+      const tb = new Date(b.fecha || '').getTime() || 0
+      return tb - ta || b.id - a.id
+    })
+    .slice(0, 5)
 
   // Abre el modal de reportes cuando el navbar pide "Reportes"
   useEffect(() => {
@@ -579,6 +589,27 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     noticia: '📰', vivienda: '🏠', dano: '🏚️', centro: '📦',
   }
 
+  // Ítem de reporte pendiente reutilizable (notificaciones + centro de reportes)
+  const renderPendingItem = (n: Necesidad) => {
+    const sector = sectores.find(s => s.id === n.sector_id)
+    return (
+      <div key={n.id} onClick={() => openDetail({
+        titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+        detalle: n.descripcion || undefined,
+        ubicacion: sector?.nombre,
+        telefono: n.telefono_reporta,
+        lat: sector?.lat, lng: sector?.lng,
+      })} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}>
+        <span style={{ fontSize: 15 }}>🆘</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>📍 {sector?.nombre ?? 'Sector'}{n.fecha ? ` · ${timeAgo(n.fecha)}` : ''}</p>
+        </div>
+        <span className="tag tag-red" style={{ fontSize: 9, flexShrink: 0 }}>PENDIENTE</span>
+      </div>
+    )
+  }
+
   // Chips de filtro reutilizables dentro de cada sección del panel
   const Chips = ({ options, value, onChange }: { options: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) => (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 6px' }}>
@@ -663,6 +694,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         {/* 🔔 Actividad reciente — notificaciones en tiempo real */}
         <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={notificaciones.length}
           badge={unread > 0 ? <span className="tag tag-red" style={{ fontSize: 10 }}>{unread} nuevas</span> : null}>
+          {pendingNeeds.length > 0 && (
+            <>
+              <p style={{ fontSize: 11, fontWeight: 800, color: '#CE1126', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🆘 Últimos pendientes</p>
+              {pendingNeeds.map(n => renderPendingItem(n))}
+            </>
+          )}
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#003893', margin: '10px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🔔 Actividad reciente</p>
           {notificaciones.length === 0 ? (
             <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
               Sin actividad todavía. Cuando alguien reporte una necesidad, una mascota, un ofrecimiento,
@@ -1102,9 +1140,17 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 16px' }}>
+              <h3 style={{ fontSize: 12, fontWeight: 800, color: '#CE1126', margin: '10px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🆘 Últimos reportes pendientes</h3>
+              {pendingNeeds.length === 0 ? (
+                <p style={{ fontSize: 13, color: '#6b7280', padding: '8px 0' }}>No hay reportes pendientes.</p>
+              ) : (
+                pendingNeeds.map(n => renderPendingItem(n))
+              )}
+
+              <h3 style={{ fontSize: 12, fontWeight: 800, color: '#003893', margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🔔 Actividad reciente</h3>
               {notificaciones.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#6b7280', padding: '20px 0' }}>
-                  Sin notificaciones todavía. Cuando alguien reporte una necesidad, mascota, ofrecimiento,
+                <p style={{ fontSize: 13, color: '#6b7280', padding: '8px 0' }}>
+                  Sin actividad todavía. Cuando alguien reporte una necesidad, mascota, ofrecimiento,
                   vivienda o daño —o se publique una noticia— aparecerá aquí en tiempo real.
                 </p>
               ) : (
