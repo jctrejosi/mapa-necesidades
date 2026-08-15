@@ -434,7 +434,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .reportes-modal { border-radius: 16px 16px 0 0; max-height: 88vh; }
 }
 
-/* ── Chatbot Daisy ── */
+/* ── Chatbot Ibanaska ── */
 .bot-fab {
   position: fixed;
   bottom: 20px; right: 16px;
@@ -563,8 +563,8 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 
 /* Móvil: el chat ocupa toda la pantalla */
 @media (max-width: 720px) {
-  .bot-fab { bottom: 76px; right: 12px; }
-  .bot-hint { bottom: 140px; right: 12px; max-width: 240px; }
+  .bot-fab { bottom: 122px; right: 12px; }
+  .bot-hint { bottom: 186px; right: 12px; max-width: 240px; }
   .bot-overlay { align-items: stretch; justify-content: stretch; background: #fff; }
   .bot-panel {
     width: 100%;

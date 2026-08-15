@@ -24,8 +24,8 @@ export default function DanosPage({ store }: Props) {
     imagen: null as string | null,
   })
 
-  const isManizales = ciudad === 'Manizales'
-  const ciudadDanos = danos.filter(d => d.ciudad === ciudad)
+  const showDanos = ciudad === 'Colombia' || ciudad === 'Manizales'
+  const ciudadDanos = danos.filter(d => ciudad === 'Colombia' || d.ciudad === ciudad)
   const filtered = ciudadDanos
     .filter(d => filter === 'todos' || d.estado === filter)
     .sort((a, b) => {
@@ -60,7 +60,7 @@ export default function DanosPage({ store }: Props) {
     setConsultaResult(r)
   }
 
-  if (!isManizales) {
+  if (!showDanos) {
     return (
       <div style={{ background: '#f4f5f7', minHeight: '100%' }}>
         <div className="page-container" style={{ maxWidth: 600 }}>
@@ -89,7 +89,7 @@ export default function DanosPage({ store }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1f2430', margin: 0 }}>🏚️ Daños estructurales</h1>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b7280' }}>Manizales · Los marcadores aparecen en la capa Daños del Mapa principal</p>
+            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b7280' }}>{ciudad} · Los marcadores aparecen en la capa Daños del Mapa principal</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-outline btn-sm" onClick={() => setShowConsultar(true)}>🔎 Consultar radicado</button>

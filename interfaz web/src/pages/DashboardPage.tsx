@@ -7,6 +7,7 @@ interface Props { store: Store }
 
 export default function DashboardPage({ store }: Props) {
   const { ciudad, sectores, necesidades, ofrecimientos } = store
+  const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -14,9 +15,9 @@ export default function DashboardPage({ store }: Props) {
     return () => clearInterval(t)
   }, [])
 
-  const ciudadSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
+  const ciudadSectores = sectores.filter(s => matchesCiudad(s.ciudad) && s.estado === 'activo')
   const ciudadNecesidades = necesidades.filter(n => ciudadSectores.some(s => s.id === n.sector_id))
-  const ciudadOfrecimientos = ofrecimientos.filter(o => o.ciudad === ciudad && o.estado === 'disponible' && !o.reservado_por)
+  const ciudadOfrecimientos = ofrecimientos.filter(o => matchesCiudad(o.ciudad) && o.estado === 'disponible' && !o.reservado_por)
 
   const total = ciudadNecesidades.length
   const atendidas = ciudadNecesidades.filter(n => n.estado === 'atendida').length

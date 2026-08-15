@@ -10,6 +10,7 @@ interface Props { store: Store }
 
 export default function OfrecimientosPage({ store }: Props) {
   const { ciudad, ofrecimientos, addOfrecimiento, updateOfrecimiento } = store
+  const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [catFilter, setCatFilter] = useState('Todas')
   const [estadoFilter, setEstadoFilter] = useState('todos')
   const [search, setSearch] = useState('')
@@ -26,7 +27,7 @@ export default function OfrecimientosPage({ store }: Props) {
   const [uForm, setUForm] = useState<{ cantidad: string; descripcion: string; estado: 'disponible' | 'entregado'; pin: string; cancelReserva: boolean }>({ cantidad: '', descripcion: '', estado: 'disponible', pin: '', cancelReserva: false })
 
   const items = ofrecimientos
-    .filter(o => o.ciudad === ciudad)
+    .filter(o => matchesCiudad(o.ciudad))
     .filter(o => catFilter === 'Todas' || o.tipo === catFilter)
     .filter(o => {
       if (estadoFilter === 'todos') return true

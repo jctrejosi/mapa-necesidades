@@ -8,6 +8,7 @@ interface Props { store: Store }
 
 export default function ViviendaPage({ store }: Props) {
   const { ciudad, viviendas, addVivienda, updateVivienda } = store
+  const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [tipoFilter, setTipoFilter] = useState('todos')
   const [estadoFilter, setEstadoFilter] = useState('disponible')
   const [search, setSearch] = useState('')
@@ -29,7 +30,7 @@ export default function ViviendaPage({ store }: Props) {
   const [uForm, setUForm] = useState<{ estado: 'disponible' | 'ocupado'; pin: string }>({ estado: 'disponible', pin: '' })
 
   const items = viviendas
-    .filter(v => v.ciudad === ciudad)
+    .filter(v => matchesCiudad(v.ciudad))
     .filter(v => tipoFilter === 'todos' || v.tipo === tipoFilter)
     .filter(v => estadoFilter === 'todos' || v.estado === estadoFilter)
     .filter(v => !search || [v.sector_referencia, v.descripcion, v.nombre_ofrece].join(' ').toLowerCase().includes(search.toLowerCase()))

@@ -5,7 +5,8 @@ interface Props { store: Store }
 
 export default function NoticiasPage({ store }: Props) {
   const { ciudad, noticias } = store
-  const filtered = noticias.filter(n => n.ciudad === null || n.ciudad === ciudad)
+  const matchesCiudad = (c: string | null) => ciudad === 'Colombia' || c === ciudad
+  const filtered = noticias.filter(n => n.ciudad === null || matchesCiudad(n.ciudad))
 
   return (
     <div style={{ background: '#f4f5f7', minHeight: '100%' }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store } from '../store'
@@ -93,6 +94,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     notificaciones, markAllRead,
     addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado } = store
 
+  const isColombia = ciudad === 'Colombia'
+  const matchesCiudad = (c: string | null) => isColombia || c === ciudad
+
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -152,7 +156,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     imagen: null as string | null, pin: ''
   })
 
-  const ciudadSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
+  const ciudadSectores = sectores.filter(s => matchesCiudad(s.ciudad) && s.estado === 'activo')
   const unreadCount = notificaciones.filter(n => !n.leida).length
 
   // Abre el modal de reportes cuando el navbar pide "Reportes"
@@ -171,6 +175,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   // Default map center by city
   const cityCenter: Record<string, [number, number]> = {
+    'Colombia': [4.2, -74.0],
     'Manizales': [5.0703, -75.5138],
     'Pereira': [4.8133, -75.6961],
     'Cali': [3.4516, -76.5320],
@@ -179,10 +184,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     'Armenia': [4.5339, -75.6811],
   }
   const center = cityCenter[ciudad] || [4.8133, -75.6961]
+  const zoomForCiudad = isColombia ? 6 : 13
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return
-    const map = L.map(mapRef.current, { zoomControl: false }).setView(center, 13)
+    const map = L.map(mapRef.current, { zoomControl: false }).setView(center, zoomForCiudad)
     // Zoom (+/-) al lado derecho
     L.control.zoom({ position: 'topright' }).addTo(map)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -210,6 +216,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Al cambiar la ciudad (o elegir "Colombia") recentra y re-zoom el mapa.
+  useEffect(() => {
+    if (!mapInstance.current) return
+    const target = cityCenter[ciudad] || [4.8133, -75.6961]
+    mapInstance.current.setView(target, isColombia ? 6 : 13)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ciudad])
+
   const pickingLocationRef = useRef(false)
   useEffect(() => { pickingLocationRef.current = pickingLocation }, [pickingLocation])
 
@@ -226,7 +240,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     // — Sector markers (always shown)
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
-    const curSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
+    const curSectores = sectores.filter(s => matchesCiudad(s.ciudad) && s.estado === 'activo')
     curSectores.forEach(sector => {
       const estado = getSectorEstado(sector.id)
       const color = getStatusColor(estado)
@@ -285,7 +299,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     centroMarkersRef.current.forEach(m => m.remove())
     centroMarkersRef.current = []
     if (layers.centros) {
-      const curCentros = centros.filter(c => c.ciudad === ciudad)
+      const curCentros = centros.filter(c => matchesCiudad(c.ciudad))
       curCentros.forEach(c => {
         const emoji = c.es_sangre ? '🩸' : c.es_alojamiento ? '🏠' : '📦'
         const icon = L.divIcon({
@@ -313,7 +327,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     mascotaMarkersRef.current.forEach(m => m.remove())
     mascotaMarkersRef.current = []
     if (layers.mascotas) {
-      mascotas.filter(m => m.ciudad === ciudad && m.estado === 'perdido').forEach(m => {
+      mascotas.filter(m => matchesCiudad(m.ciudad) && m.estado === 'perdido').forEach(m => {
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:24px;height:24px;border-radius:50%;background:#7C3AED;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:13px">🐾</div>`,
@@ -338,7 +352,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     danoMarkersRef.current = []
     if (layers.danos) {
       const nivelColor: Record<string, string> = { leve: '#E08E00', moderado: '#CE1126', severo: '#7f1d1d', colapso: '#1f2430' }
-      danos.filter(d => d.ciudad === ciudad).forEach(d => {
+      danos.filter(d => matchesCiudad(d.ciudad)).forEach(d => {
         const color = nivelColor[d.nivel_percibido] || '#CE1126'
         const icon = L.divIcon({
           className: '',
@@ -619,7 +633,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       })
 
     const ofs = ofrecimientos
-      .filter(o => o.ciudad === ciudad)
+      .filter(o => matchesCiudad(o.ciudad))
       .filter(o =>
         oFilter === 'disponibles' ? (o.estado === 'disponible' && !o.reservado_por)
         : oFilter === 'reservados' ? (o.estado === 'disponible' && o.reservado_por)
@@ -627,11 +641,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         : true)
 
     const ms = mascotas
-      .filter(m => m.ciudad === ciudad)
+      .filter(m => matchesCiudad(m.ciudad))
       .filter(m => mFilter === 'perdidas' ? m.estado === 'perdido' : mFilter === 'encontradas' ? m.estado === 'encontrado' : true)
 
     const ds = danos
-      .filter(d => d.ciudad === ciudad)
+      .filter(d => matchesCiudad(d.ciudad))
       .filter(d =>
         dFilter === 'pendientes' ? d.estado === 'pendiente'
         : dFilter === 'visita' ? d.estado === 'visita_programada'
@@ -639,10 +653,10 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         : true)
 
     const vs = viviendas
-      .filter(v => v.ciudad === ciudad)
+      .filter(v => matchesCiudad(v.ciudad))
       .filter(v => vFilter === 'disponibles' ? v.estado === 'disponible' : vFilter === 'ocupadas' ? v.estado === 'ocupado' : true)
 
-    const nsNoticias = noticias.filter(n => n.ciudad === null || n.ciudad === ciudad)
+    const nsNoticias = noticias.filter(n => n.ciudad === null || matchesCiudad(n.ciudad))
 
     return (
       <div>
@@ -707,7 +721,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </ReportSection>
 
         {/* 🤝 Ofrecimientos */}
-        <ReportSection id="ofrecimientos" icon="🤝" title="Ofrecimientos" count={ofrecimientos.filter(o => o.ciudad === ciudad).length}>
+        <ReportSection id="ofrecimientos" icon="🤝" title="Ofrecimientos" count={ofrecimientos.filter(o => matchesCiudad(o.ciudad)).length}>
           <Chips value={oFilter} onChange={setOFilter} options={[
             { id: 'disponibles', label: '🟢 Disponibles' },
             { id: 'reservados', label: '🟠 Reservados' },
@@ -733,7 +747,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </ReportSection>
 
         {/* 🐾 Mascotas */}
-        <ReportSection id="mascotas" icon="🐾" title="Mascotas" count={mascotas.filter(m => m.ciudad === ciudad).length}>
+        <ReportSection id="mascotas" icon="🐾" title="Mascotas" count={mascotas.filter(m => matchesCiudad(m.ciudad)).length}>
           <Chips value={mFilter} onChange={setMFilter} options={[
             { id: 'perdidas', label: '🔴 Perdidas' },
             { id: 'encontradas', label: '✅ Encontradas' },
@@ -760,7 +774,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </ReportSection>
 
         {/* 🏠 Viviendas */}
-        <ReportSection id="viviendas" icon="🏠" title="Viviendas" count={viviendas.filter(v => v.ciudad === ciudad).length}>
+        <ReportSection id="viviendas" icon="🏠" title="Viviendas" count={viviendas.filter(v => matchesCiudad(v.ciudad)).length}>
           <Chips value={vFilter} onChange={setVFilter} options={[
             { id: 'disponibles', label: '🟢 Disponibles' },
             { id: 'ocupadas', label: '⚪ Ocupadas' },
@@ -784,9 +798,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ))}
         </ReportSection>
 
-        {/* 🏚️ Daños (solo Manizales) */}
-        {ciudad === 'Manizales' && (
-          <ReportSection id="danos" icon="🏚️" title="Daños estructurales" count={danos.filter(d => d.ciudad === ciudad).length}>
+        {/* 🏚️ Daños */}
+        {(isColombia || ciudad === 'Manizales') && (
+          <ReportSection id="danos" icon="🏚️" title="Daños estructurales" count={danos.filter(d => matchesCiudad(d.ciudad)).length}>
             <Chips value={dFilter} onChange={setDFilter} options={[
               { id: 'pendientes', label: '🔴 Pendientes' },
               { id: 'visita', label: '🟠 Con visita' },
@@ -843,7 +857,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     ]
     const allOn = buttons.every(b => layers[b.key])
 
-    const chipStyle = (active: boolean) => compact
+    const chipStyle = (active: boolean): CSSProperties => compact
       ? {
           pointerEvents: 'auto',
           background: active ? '#003893' : 'rgba(255,255,255,0.92)',
@@ -907,7 +921,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 title="Ver todos los reportes"
                 style={{
                   pointerEvents: 'auto',
-                  background: '#fff', color: '#003893', border: '1px solid #003893',
+                  background: '#FCD116', color: '#1f2430', border: '1px solid #E8B800',
                   borderRadius: 22, padding: '8px 14px', fontSize: 12, fontWeight: 800,
                   cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
                   fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', marginTop: 4,
@@ -931,13 +945,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
         {/* 📋 Ver reportes + 🆘 NECESITO AYUDA — desktop: a la derecha, bajo la campana */}
         {!compact && (
-          <>
+          <div style={{ position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400, display: 'flex', alignItems: 'flex-end', gap: 50, pointerEvents: 'none' }}>
             <button
               onClick={() => setReportesModalOpen(true)}
               title="Ver todos los reportes"
               style={{
-                position: 'absolute', bottom: bottomOffset, right: 175, zIndex: 400,
-                background: '#fff', color: '#003893', border: '1px solid #003893',
+                pointerEvents: 'auto',
+                background: '#FCD116', color: '#1f2430', border: '1px solid #E8B800',
                 borderRadius: 22, padding: '9px 14px', fontSize: 13, fontWeight: 800,
                 cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
                 fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap',
@@ -949,13 +963,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               onClick={handleNecesitoAyuda}
               className="necesito-ayuda"
               style={{
-                position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400,
+                pointerEvents: 'auto',
                 padding: '9px 16px', fontSize: 13,
               }}
             >
               🆘 NECESITO AYUDA
             </button>
-          </>
+          </div>
         )}
       </>
     )
@@ -1295,7 +1309,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
       {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
 
-      {/* Chatbot Daisy — popup flotante del bot (pantalla completa en móvil) */}
+      {/* Chatbot Ibanaska — popup flotante del bot (pantalla completa en móvil) */}
       <ChatbotWidget ciudad={ciudad} />
     </div>
   )

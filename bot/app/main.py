@@ -1,4 +1,4 @@
-"""API del bot Daisy de SolidaridadCO.
+"""API del bot Ibanaska de SolidaridadCO.
 
 Endpoints:
 - GET  /health  → estado del servicio
@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("bot.main")
 
 app = FastAPI(
-    title="SolidaridadCO Bot API (Daisy)",
+    title="SolidaridadCO Bot API (Ibanaska)",
     description="Chatbot solidario con DeepSeek function calling: realiza reportes y busca ayuda en la plataforma.",
     version="0.1.0",
 )

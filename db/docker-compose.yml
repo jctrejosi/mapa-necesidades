@@ -61,7 +61,7 @@ services:
     ports:
       - "8081:80"
 
-  # ── Chatbot Daisy (FastAPI + DeepSeek) — lo usa el frontend vía /bot/* ──
+  # ── Chatbot Ibanaska (FastAPI + DeepSeek) — lo usa el frontend vía /bot/* ──
   bot:
     build: ../bot
     container_name: redsolidaria-bot

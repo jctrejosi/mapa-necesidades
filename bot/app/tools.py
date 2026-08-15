@@ -63,7 +63,7 @@ async def _get_or_create_sector(
         "barrio": "",
         "lat": lat if lat is not None else center[0],
         "lng": lng if lng is not None else center[1],
-        "descripcion": "Reporte creado desde el chat (bot Daisy)",
+        "descripcion": "Reporte creado desde el chat (bot Ibanaska)",
         "nivel_afectacion": "leve",
         "estado": "activo",
     }

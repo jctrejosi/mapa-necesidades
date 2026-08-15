@@ -13,7 +13,7 @@ interface Props {
 }
 
 /**
- * Chatbot "Daisy" de SolidaridadCO.
+ * Chatbot "Ibanaska" de SolidaridadCO.
  * - Botón flotante con el ícono del bot sobre el mapa.
  * - En escritorio abre un panel flotante; en móvil el chat ocupa TODA la pantalla.
  * - El backend del bot tiene 2 funciones: realizar_reporte y buscar_ayuda.
@@ -31,7 +31,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
   // Bienvenida del bot al abrir por primera vez
   useEffect(() => {
     if (open && messages.length === 0) {
-      setMessages([{ role: 'assistant', content: '¡Hola! Soy Daisy, tu asistente solidaria 😊 ¿Necesitas reportar algo o buscas quién te ayude?' }])
+      setMessages([{ role: 'assistant', content: '¡Hola! Soy Ibanaska, tu asistente solidaria 😊 ¿Necesitas reportar algo o buscas quién te ayude?' }])
       historyRef.current = []
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,7 +86,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
         <button
           onClick={openWidget}
           className="bot-fab"
-          aria-label="Abrir chat con Daisy"
+          aria-label="Abrir chat con Ibanaska"
         >
           <span className="bot-fab-icon">🤖</span>
         </button>
@@ -95,7 +95,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
       {/* ── Burbuja de atención ── */}
       {showHint && !open && (
         <div className="bot-hint" onClick={openWidget}>
-          ¡Hola! Soy Daisy 😊 ¿Necesitas ayuda?
+          ¡Hola! Soy Ibanaska 😊 ¿Necesitas ayuda?
         </div>
       )}
 
@@ -107,7 +107,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 24 }}>🤖</span>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: '#003893' }}>Daisy</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: '#003893' }}>Ibanaska</div>
                   <div style={{ fontSize: 11, color: '#2E9E5B' }}>● En línea — SolidaridadCO</div>
                 </div>
               </div>

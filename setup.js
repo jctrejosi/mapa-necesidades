@@ -25,7 +25,7 @@ const COMPOSE_FILE = path.join(ROOT, 'db', 'docker-compose.yml');
 const COMPOSE = ['docker', 'compose', '-p', 'redsolidaria', '-f', COMPOSE_FILE];
 
 // Nombres reservados por docker-compose.yml (db/)
-const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin'];
+const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin', 'redsolidaria-bot'];
 const DEV_CONTAINERS = ['redsolidaria-backend-dev', 'redsolidaria-frontend-dev', 'redsolidaria-admin-dev'];
 // Perfiles compose: prod (build) y dev (hot reload)
 const PROD = ['--profile', 'prod'];
@@ -146,23 +146,10 @@ function removeStaleContainers(names) {
     if (owner === project) continue; // contenedor válido de este proyecto: compose lo reutiliza
 
     const state = quiet(['docker', 'inspect', '-f', '{{.State.Status}}', name]);
-    const image = quiet(['docker', 'inspect', '-f', '{{.Config.Image}}', name]);
     const isRunning = state === 'running' || state === 'restarting';
-    const looksOurs = /postgres|node|nginx|mysql|php|apache/i.test(image);
 
-    if (isRunning && !looksOurs) {
-      fail(
-        `El contenedor "${name}" está en ejecución y no parece ser una instancia previa de este ` +
-        `proyecto (imagen: ${image || 'desconocida'}). Detenlo manualmente: ` +
-        `docker stop ${name} && docker rm ${name}`
-      );
-    }
-
-    if (isRunning) {
-      warn(`El contenedor "${name}" es una instancia anterior que sigue en ejecución; se detendrá.`);
-      run(['docker', 'stop', name]);
-    }
-    warn(`El contenedor "${name}" sobra de una ejecución anterior; se elimina.`);
+    warn(`El contenedor "${name}" es de una ejecución anterior (proyecto: ${owner || 'desconocido'}); se detiene y elimina.`);
+    if (isRunning) run(['docker', 'stop', name]);
     run(['docker', 'rm', '-f', name]);
   }
 }
@@ -231,13 +218,14 @@ async function up() {
     .filter(Boolean);
   // Los puertos que ocupan contenedores de ESTE proyecto no son un problema
   const ours = (p) =>
-    (p === 8080 && containerRunning(CONTAINERS[1])) ||
-    (p === 8081 && containerRunning(CONTAINERS[2])) ||
-    (p === 3000 && containerRunning(CONTAINERS[0]));
+    (p === 8080 && containerRunning('redsolidaria-frontend')) ||
+    (p === 8081 && containerRunning('redsolidaria-admin')) ||
+    (p === 3000 && containerRunning('redsolidaria-backend')) ||
+    (p === 8000 && containerRunning('redsolidaria-bot'));
   const foreign = busy.filter((p) => !ours(p));
   if (foreign.length) {
     warn(`Puerto${foreign.length > 1 ? 's' : ''} ${foreign.join(' y ')} en uso.`);
-    warn('Si los ocupan contenedores de una instancia anterior, se limpiarán automáticamente.');
+    warn('Se liberarán los puertos ocupados por procesos ajenos al proyecto.');
   }
 
   // Si el stack de desarrollo está corriendo, detenerlo (mismos puertos 3000/8080/8081)
@@ -249,6 +237,15 @@ async function up() {
   }
 
   removeStaleContainers(CONTAINERS);
+
+  // Liberar los puertos que aún estén ocupados por procesos ajenos al proyecto.
+  for (const p of foreign) {
+    if (await portInUse(p)) {
+      warn(`Liberando el puerto ${p} (proceso ajeno)...`);
+      killPort(p);
+    }
+  }
+  if (foreign.length) await sleep(800);
 
   info('Montando backend + interfaz web + panel admin (docker compose up -d --build)...');
   run(COMPOSE.concat(PROD, ['up', '-d', '--build']));
@@ -362,7 +359,7 @@ ${c.green}${c.bold}  ✔ Servicios dev arriba${c.reset}
   ${c.bold}Interfaz web${c.reset}  ${c.cyan}http://localhost:8080${c.reset}
   ${c.bold}Panel admin${c.reset}   ${c.cyan}http://localhost:8081${c.reset}
   ${c.bold}API${c.reset}          ${c.cyan}http://localhost:3000/api${c.reset}
-  ${c.bold}Bot Daisy${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
+  ${c.bold}Bot Ibanaska${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
 
   ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 4 servicios.${c.reset}
 `);

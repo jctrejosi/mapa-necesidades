@@ -15,6 +15,7 @@ const CITY_CENTER: Record<string, [number, number]> = {
 
 export default function MascotasPage({ store }: Props) {
   const { ciudad, mascotas, addMascota, updateMascota } = store
+  const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [filter, setFilter] = useState('todos')
   const [search, setSearch] = useState('')
   const [showReportarModal, setShowReportarModal] = useState(false)
@@ -32,7 +33,7 @@ export default function MascotasPage({ store }: Props) {
     nombre: '', senas: '', estado: 'perdido', pin: '', imagen: null,
   })
 
-  const ciudadMascotas = mascotas.filter(m => m.ciudad === ciudad)
+  const ciudadMascotas = mascotas.filter(m => matchesCiudad(m.ciudad))
   const filtered = ciudadMascotas
     .filter(m => filter === 'todos' || m.estado === filter)
     .filter(m => !search || [m.nombre, m.tipo_animal, m.senas, m.lugar_visto].join(' ').toLowerCase().includes(search.toLowerCase()))

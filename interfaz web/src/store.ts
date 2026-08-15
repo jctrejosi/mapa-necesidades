@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import * as api from './api'
 import { getAdminPass, imgUrl, setAdminPass } from './api/client'
-import { cityLabel } from './api'
+import { cityLabel, CITIES as API_CITIES } from './api'
 import { subscribeEvents, type AppEvent } from './api/events'
 import type {
   CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
@@ -104,6 +104,13 @@ const persistNotificaciones = () => {
   try { localStorage.setItem('cr_notificaciones', JSON.stringify(cache.notificaciones)) } catch { /* noop */ }
 }
 
+const CIUDAD_LABELS = API_CITIES.map(c => c.label)
+
+const uniqById = <T extends { id: number }>(rows: T[]): T[] => {
+  const seen = new Set<number>()
+  return rows.filter(r => !seen.has(r.id) && seen.add(r.id))
+}
+
 let currentCiudad = 'Manizales'
 
 const mapItem = (x: any) => ({
@@ -115,16 +122,21 @@ const mapItem = (x: any) => ({
 /** Carga todos los listados (admin ve sectores cerrados y campos completos). */
 async function refresh(ciudad: string): Promise<void> {
   const isAdmin = !!getAdminPass()
+  // "Colombia" carga y combina los datos de todas las ciudades para ver el mapa completo.
+  const targets = ciudad === 'Colombia' ? CIUDAD_LABELS : [ciudad]
+  const load = <T>(fn: (c: string) => Promise<T[]>) =>
+    Promise.all(targets.map(fn)).then(rows => rows.flat())
+
   const [sectores, necesidades, ofrecimientos, mascotas, centros, noticias, viviendas, danos] =
     await Promise.all([
-      api.listSectores(ciudad, isAdmin),
-      api.listNecesidades(ciudad),
-      api.listOfrecimientos(ciudad),
-      api.listMascotas(ciudad),
-      api.listCentros(ciudad),
-      api.listNoticias(ciudad),
-      api.listViviendas(ciudad),
-      api.listDanos(ciudad, isAdmin),
+      load(c => api.listSectores(c, isAdmin)),
+      load(api.listNecesidades),
+      load(api.listOfrecimientos),
+      load(api.listMascotas),
+      load(api.listCentros),
+      load(api.listNoticias),
+      load(api.listViviendas),
+      load(c => api.listDanos(c, isAdmin)),
     ])
 
   cache = {
@@ -134,7 +146,7 @@ async function refresh(ciudad: string): Promise<void> {
     ofrecimientos: ofrecimientos.map(mapItem),
     mascotas: mascotas.map(mapItem),
     centros: centros.map(mapItem),
-    noticias: noticias.map(mapItem),
+    noticias: uniqById(noticias).map(mapItem),
     viviendas: viviendas.map(mapItem),
     danos: danos.map(mapItem),
   }
