@@ -38,6 +38,7 @@ type ViviendaBody = {
   nombre_ofrece?: string;
   telefono_ofrece?: string;
   interesado?: { nombre?: string; telefono?: string } | null;
+  visitor_id?: string;
 };
 
 @Injectable()
@@ -99,6 +100,7 @@ class ViviendasService {
         nombreOfrece,
         telefonoOfrece: str(b.telefono_ofrece),
         fecha: today(),
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
     emitAppEvent({

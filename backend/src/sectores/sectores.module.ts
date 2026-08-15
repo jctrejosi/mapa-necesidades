@@ -47,6 +47,7 @@ type SectorBody = {
   detalles?: string;
   reportado_por?: string;
   telefono?: string;
+  visitor_id?: string;
 };
 
 type ContactoBody = { nombre?: string; telefono?: string; rol?: string };
@@ -129,6 +130,7 @@ class SectoresService {
         descripcion: str(b.descripcion) || null,
         nivelAfectacion: b.nivel_afectacion === 'leve' || b.nivel_afectacion === 'severo' ? b.nivel_afectacion : 'moderado',
         estado: b.estado === 'cerrado' ? 'cerrado' : 'activo',
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
 

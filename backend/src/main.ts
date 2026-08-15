@@ -16,6 +16,10 @@ async function bootstrap() {
   // 2) API bajo /api
   app.setGlobalPrefix('api');
 
+  // Confiar en el proxy (nginx local / proxy de Render) para capturar la IP
+  // real del cliente en X-Forwarded-For al registrar visitas.
+  app.set('trust proxy', true);
+
   // 3) CORS para el frontend de desarrollo
   const origins = (process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173')
     .split(',')

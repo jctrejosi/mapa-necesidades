@@ -14,6 +14,7 @@ import { StatsModule } from './stats/stats.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ExportModule } from './export/export.module';
 import { BotModule } from './bot/bot.module';
+import { VisitasModule } from './visitas/visitas.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { BotModule } from './bot/bot.module';
     UploadsModule,
     ExportModule,
     BotModule,
+    VisitasModule,
   ],
 })
 export class AppModule {}

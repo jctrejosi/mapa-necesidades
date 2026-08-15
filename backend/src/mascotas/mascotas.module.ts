@@ -38,6 +38,7 @@ type MascotaBody = {
   estado?: 'perdido' | 'encontrado';
   nombre_reporta?: string;
   telefono_reporta?: string;
+  visitor_id?: string;
 };
 
 @Injectable()
@@ -103,6 +104,7 @@ class MascotasService {
         estado: b.estado === 'encontrado' ? 'encontrado' : 'perdido',
         nombreReporta: str(b.nombre_reporta),
         telefonoReporta: str(b.telefono_reporta),
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
     emitAppEvent({

@@ -45,6 +45,7 @@ type DanoBody = {
   fecha_visita?: string;
   resultado_visita?: string;
   notas_admin?: string;
+  visitor_id?: string;
 };
 
 @Injectable()
@@ -150,6 +151,7 @@ class DanosService {
         cedulaReporta: str(b.cedula) || null,
         estado: 'pendiente',
         fecha: today(),
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
     emitAppEvent({

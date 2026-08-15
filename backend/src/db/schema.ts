@@ -42,6 +42,7 @@ export const sectores = pgTable(
     descripcion: text('descripcion'),
     nivelAfectacion: nivelAfectacion('nivel_afectacion').notNull().default('moderado'),
     estado: estadoSector('estado').notNull().default('activo'),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_sectores_ciudad').on(t.ciudad)],
@@ -82,6 +83,7 @@ export const necesidades = pgTable(
     fechaCompromiso: date('fecha_compromiso'),
     reportadoPor: varchar('reportado_por', { length: 150 }),
     telefonoReporta: varchar('telefono_reporta', { length: 50 }),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_necesidades_sector').on(t.sectorId)],
@@ -104,6 +106,7 @@ export const ofrecimientos = pgTable(
     reservadoPorNombre: varchar('reservado_por_nombre', { length: 150 }),
     reservadoPorTelefono: varchar('reservado_por_telefono', { length: 50 }),
     fechaReserva: date('fecha_reserva'),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_ofrecimientos_ciudad').on(t.ciudad)],
@@ -129,6 +132,7 @@ export const mascotasPerdidas = pgTable(
     avistadoPorNombre: varchar('avistado_por_nombre', { length: 150 }),
     avistadoPorTelefono: varchar('avistado_por_telefono', { length: 50 }),
     fechaAvistamiento: date('fecha_avistamiento'),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_mascotas_ciudad').on(t.ciudad)],
@@ -193,6 +197,7 @@ export const viviendas = pgTable(
     interesadoTelefono: varchar('interesado_telefono', { length: 50 }),
     fechaInteres: date('fecha_interes'),
     fecha: date('fecha').notNull(),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_viviendas_ciudad').on(t.ciudad)],
@@ -220,6 +225,7 @@ export const reportesDanos = pgTable(
     resultadoVisita: varchar('resultado_visita', { length: 150 }),
     notasAdmin: text('notas_admin'),
     fecha: date('fecha').notNull(),
+    visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -237,3 +243,26 @@ export type CentroAcopio = typeof centrosAcopio.$inferSelect;
 export type Noticia = typeof noticias.$inferSelect;
 export type Vivienda = typeof viviendas.$inferSelect;
 export type ReporteDano = typeof reportesDanos.$inferSelect;
+
+// ── Visitas al sitio (analítica anónima sin permisos) ─────────────────────
+
+export const visitas = pgTable(
+  'visitas',
+  {
+    id: serial('id').primaryKey(),
+    visitorId: varchar('visitor_id', { length: 64 }).notNull(),
+    ip: varchar('ip', { length: 45 }),
+    userAgent: text('user_agent'),
+    referrer: text('referrer'),
+    path: varchar('path', { length: 200 }),
+    ciudad: varchar('ciudad', { length: 50 }),
+    lang: varchar('lang', { length: 20 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_visitas_visitor').on(t.visitorId),
+    index('idx_visitas_created').on(t.createdAt),
+  ],
+);
+
+export type Visita = typeof visitas.$inferSelect;

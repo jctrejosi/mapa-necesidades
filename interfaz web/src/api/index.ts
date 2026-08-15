@@ -3,7 +3,7 @@
  * La UI trabaja con nombres de ciudad ('Manizales'); aquí se convierten
  * a los ids que espera la API ('manizales').
  */
-import { request } from './client'
+import { getVisitorId, request } from './client'
 import type {
   CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
   ReporteDano, Sector, Vivienda,
@@ -31,6 +31,11 @@ export const cityLabel = (id: string): string => BY_ID.get(id) ?? id
 export const verifyAdmin = (admin_password: string): Promise<{ ok: boolean }> =>
   request('/auth/verify', { method: 'POST', body: { admin_password } })
 
+// ── Visitas (analítica anónima: IP, user-agent, referrer, path) ────────────
+
+export const recordVisita = (b: { visitor_id?: string; path?: string; ciudad?: string; lang?: string }): Promise<{ ok: boolean; id: number }> =>
+  request('/visitas', { method: 'POST', body: b })
+
 // ── Sectores / contactos ────────────────────────────────────────────────────
 
 export const listSectores = (ciudadLabel: string, admin = false): Promise<Sector[]> =>
@@ -41,7 +46,7 @@ export const createSector = (b: {
   descripcion: string; nivel_afectacion: string
   contacto_nombre?: string; contacto_telefono?: string
 }): Promise<Sector> =>
-  request('/sectores', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad) } })
+  request('/sectores', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad), visitor_id: getVisitorId() } })
 
 export const updateSector = (id: number, b: Record<string, unknown>): Promise<Sector> =>
   request(`/sectores/${id}`, { method: 'PATCH', body: b })
@@ -58,7 +63,7 @@ export const listNecesidades = (ciudadLabel: string): Promise<Necesidad[]> =>
   request(`/necesidades?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
 
 export const createNecesidad = (b: Partial<Necesidad> & { sector_id: number; tipo: string }): Promise<Necesidad & { pin: string }> =>
-  request('/necesidades', { method: 'POST', body: b })
+  request('/necesidades', { method: 'POST', body: { ...b, visitor_id: getVisitorId() } })
 
 export const updateNecesidad = (id: number, b: Record<string, unknown>): Promise<Necesidad> =>
   request(`/necesidades/${id}`, { method: 'PATCH', body: b })
@@ -85,7 +90,7 @@ export const listOfrecimientos = (ciudadLabel: string): Promise<Ofrecimiento[]> 
   request(`/ofrecimientos?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
 
 export const createOfrecimiento = (b: Partial<Ofrecimiento>): Promise<Ofrecimiento & { pin: string }> =>
-  request('/ofrecimientos', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales') } })
+  request('/ofrecimientos', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales'), visitor_id: getVisitorId() } })
 
 export const updateOfrecimiento = (id: number, b: Record<string, unknown>): Promise<Ofrecimiento> =>
   request(`/ofrecimientos/${id}`, { method: 'PATCH', body: b })
@@ -105,7 +110,7 @@ export const listMascotas = (ciudadLabel: string): Promise<Mascota[]> =>
   request(`/mascotas?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
 
 export const createMascota = (b: Partial<Mascota>): Promise<Mascota & { pin: string }> =>
-  request('/mascotas', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales') } })
+  request('/mascotas', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales'), visitor_id: getVisitorId() } })
 
 export const updateMascota = (id: number, b: Record<string, unknown>): Promise<Mascota> =>
   request(`/mascotas/${id}`, { method: 'PATCH', body: b })
@@ -150,7 +155,7 @@ export const listViviendas = (ciudadLabel: string): Promise<Vivienda[]> =>
   request(`/viviendas?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
 
 export const createVivienda = (b: Partial<Vivienda>): Promise<Vivienda & { pin: string }> =>
-  request('/viviendas', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales') } })
+  request('/viviendas', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales'), visitor_id: getVisitorId() } })
 
 export const updateVivienda = (id: number, b: Record<string, unknown>): Promise<Vivienda> =>
   request(`/viviendas/${id}`, { method: 'PATCH', body: b })
@@ -167,7 +172,7 @@ export const listDanos = (ciudadLabel: string, admin = false): Promise<ReporteDa
   request(`/danos${admin ? '/admin' : ''}?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
 
 export const createDano = (b: Partial<ReporteDano>): Promise<ReporteDano & { radicado: string }> =>
-  request('/danos', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales') } })
+  request('/danos', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales'), visitor_id: getVisitorId() } })
 
 export const updateDanoAdmin = (id: number, b: Record<string, unknown>): Promise<ReporteDano> =>
   request(`/danos/${id}`, { method: 'PATCH', body: b })

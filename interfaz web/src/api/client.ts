@@ -27,6 +27,20 @@ export function setAdminPass(pass: string | null) {
   else sessionStorage.removeItem('cr_admin_pass')
 }
 
+/** ID anónimo del visitante (persistente en localStorage) para asociar visitas y reportes. */
+export function getVisitorId(): string {
+  try {
+    let v = localStorage.getItem('cr_visitor_id')
+    if (!v) {
+      v = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
+      localStorage.setItem('cr_visitor_id', v)
+    }
+    return v
+  } catch {
+    return ''
+  }
+}
+
 export class ApiError extends Error {
   status: number
   constructor(message: string, status: number) {

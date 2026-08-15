@@ -36,6 +36,7 @@ type OfrecimientoBody = {
   telefono_ofrece?: string;
   estado?: 'disponible' | 'entregado';
   reservado_por?: { nombre?: string; telefono?: string } | null;
+  visitor_id?: string;
 };
 
 @Injectable()
@@ -93,6 +94,7 @@ class OfrecimientosService {
         nombreOfrece,
         telefonoOfrece: str(b.telefono_ofrece) || null,
         estado: b.estado === 'entregado' ? 'entregado' : 'disponible',
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
     emitAppEvent({

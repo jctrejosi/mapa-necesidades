@@ -40,6 +40,7 @@ type NecesidadBody = {
   responsable_nombre?: string;
   responsable_telefono?: string;
   fecha_compromiso?: string;
+  visitor_id?: string;
 };
 
 @Injectable()
@@ -109,6 +110,7 @@ class NecesidadesService {
         estado: b.estado === 'atendida' ? 'atendida' : 'requiere',
         reportadoPor: str(b.reportado_por) || null,
         telefonoReporta: str(b.telefono_reporta) || null,
+        visitorId: str(b.visitor_id)?.slice(0, 64) || null,
       })
       .returning();
 
