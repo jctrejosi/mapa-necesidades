@@ -860,9 +860,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     const chipStyle = (active: boolean): CSSProperties => compact
       ? {
           pointerEvents: 'auto',
-          background: active ? '#003893' : '#FDE68A',
-          color: active ? '#fff' : '#374151',
-          border: '1px solid ' + (active ? '#003893' : '#FCD116'),
+          background: active ? '#FDE68A' : '#E5E7EB',
+          color: active ? '#1f2430' : '#6B7280',
+          border: '1px solid ' + (active ? '#FCD116' : '#D1D5DB'),
           borderRadius: 18, width: 34, height: 34, padding: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 16, lineHeight: 1, cursor: 'pointer',
@@ -871,9 +871,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         }
       : {
           pointerEvents: 'auto',
-          background: active ? '#003893' : '#FDE68A',
-          color: active ? '#fff' : '#374151',
-          border: '1px solid ' + (active ? '#003893' : '#FCD116'),
+          background: active ? '#FDE68A' : '#E5E7EB',
+          color: active ? '#1f2430' : '#6B7280',
+          border: '1px solid ' + (active ? '#FCD116' : '#D1D5DB'),
           borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
           cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
           fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
@@ -890,9 +890,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             title={allOn ? 'Ocultar todas las capas' : 'Mostrar todas las capas'}
             style={{
               pointerEvents: 'auto',
-              background: allOn ? '#003893' : '#FDE68A',
-              color: allOn ? '#fff' : '#374151',
-              border: '1px solid ' + (allOn ? '#003893' : '#FCD116'),
+              background: allOn ? '#FDE68A' : '#E5E7EB',
+              color: allOn ? '#1f2430' : '#6B7280',
+              border: '1px solid ' + (allOn ? '#FCD116' : '#D1D5DB'),
               borderRadius: compact ? 18 : 20,
               width: compact ? 34 : undefined, height: compact ? 34 : undefined, padding: compact ? 0 : '4px 10px',
               display: compact ? 'flex' : undefined, alignItems: compact ? 'center' : undefined, justifyContent: compact ? 'center' : undefined,

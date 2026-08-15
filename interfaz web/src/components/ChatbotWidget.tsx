@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import botImg from '../../assets/bot.png'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -88,7 +89,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
           className="bot-fab"
           aria-label="Abrir chat con Ibanaska"
         >
-          <span className="bot-fab-icon">🤖</span>
+          <img src={botImg} alt="Ibanaska" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
         </button>
       )}
 
@@ -105,7 +106,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
           <div className="bot-panel" onClick={e => e.stopPropagation()}>
             <div className="bot-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 24 }}>🤖</span>
+                <img src={botImg} alt="Ibanaska" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 15, color: '#003893' }}>Ibanaska</div>
                   <div style={{ fontSize: 11, color: '#2E9E5B' }}>● En línea — SolidaridadCO</div>
