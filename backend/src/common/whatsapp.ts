@@ -65,7 +65,7 @@ export function notifyReporteWhatsapp(
   if (!to) return;
   const web = process.env.FRONTEND_URL ?? 'http://localhost:8080';
   const body = [
-    `🇨🇴 SolidaridadCO — tu ${tipo} quedó registrado ✔`,
+    `🇨🇴 todos ayudamos — tu ${tipo} quedó registrado ✔`,
     `Código: ${codigo}`,
     `Usa ese código en la página para editar o confirmar tu reporte: ${web}`,
     detalle,

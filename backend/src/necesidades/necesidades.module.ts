@@ -224,7 +224,7 @@ class NecesidadesService {
 
     const maps = sector ? `https://maps.google.com/?q=${sector.lat},${sector.lng}` : null;
     const cuerpo = [
-      '🇨🇴 SolidaridadCO — ¡Gracias por ayudar!',
+      '🇨🇴 todos ayudamos — ¡Gracias por ayudar!',
       `Información de quien necesita ayuda (${row.tipo}):`,
       row.telefonoReporta ? `📞 Teléfono: ${row.telefonoReporta}` : null,
       sector ? `📍 Ubicación: ${sector.nombre}` : null,
