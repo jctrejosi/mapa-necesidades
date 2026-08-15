@@ -13,6 +13,7 @@ import { DanosModule } from './danos/danos.module';
 import { StatsModule } from './stats/stats.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ExportModule } from './export/export.module';
+import { BotModule } from './bot/bot.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ExportModule } from './export/export.module';
     StatsModule,
     UploadsModule,
     ExportModule,
+    BotModule,
   ],
 })
 export class AppModule {}

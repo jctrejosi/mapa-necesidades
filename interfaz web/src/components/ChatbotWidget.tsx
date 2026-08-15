@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import botImg from '../../assets/bot.png'
+import { request } from '../api/client'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
-
-const BOT_URL = (import.meta.env.VITE_BOT_API_URL as string) || '/bot'
 
 function getSessionId(): string {
   return `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -50,18 +49,15 @@ export default function ChatbotWidget({ ciudad }: Props) {
     historyRef.current.push({ role: 'user', content: text })
     setLoading(true)
     try {
-      const res = await fetch(`${BOT_URL}/chat`, {
+      const data = await request<{ reply: string; session_id?: string; payload?: unknown }>('/bot/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           message: text,
           session_id: sessionRef.current,
           history: historyRef.current.slice(-12),
           contexto: { ciudad },
-        }),
+        },
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
       if (data.session_id) sessionRef.current = data.session_id
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
       historyRef.current.push({ role: 'assistant', content: data.reply })

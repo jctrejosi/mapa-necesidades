@@ -138,7 +138,7 @@ export default function App() {
           <nav className="nav-drawer" onClick={e => e.stopPropagation()}>
             <div style={{ padding: '20px 20px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 16, color: '#003893' }}>🇨🇴 SolidaridadCO</div>
+                <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 16, color: '#003893' }}>🇨🇴 todos ayudamos</div>
                 <div style={{ fontSize: 11, color: '#9AA0AC', marginTop: 2 }}>Ciudad: {store.ciudad}</div>
               </div>
               <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6 }} aria-label="Cerrar">

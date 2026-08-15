@@ -34,6 +34,8 @@ services:
       WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      # El backend es el único que habla con el chatbot (FastAPI)
+      BOT_SERVICE_URL: http://bot:8000
     ports:
       - "3000:3000"
     volumes:
@@ -101,6 +103,8 @@ services:
       WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      # El backend es el único que habla con el chatbot (FastAPI)
+      BOT_SERVICE_URL: http://bot:8000
     ports:
       - "3000:3000"
     command: npm run start:dev

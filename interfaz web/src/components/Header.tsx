@@ -32,7 +32,7 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
         >
           <span style={{ fontSize: 20 }}>🇨🇴</span>
           <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 17, color: '#003893', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
-            SolidaridadCO
+            todos ayudamos
           </span>
         </button>
 
