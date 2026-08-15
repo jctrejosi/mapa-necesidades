@@ -860,9 +860,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     const chipStyle = (active: boolean): CSSProperties => compact
       ? {
           pointerEvents: 'auto',
-          background: active ? '#003893' : 'rgba(255,255,255,0.92)',
+          background: active ? '#003893' : '#FDE68A',
           color: active ? '#fff' : '#374151',
-          border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
+          border: '1px solid ' + (active ? '#003893' : '#FCD116'),
           borderRadius: 18, width: 34, height: 34, padding: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 16, lineHeight: 1, cursor: 'pointer',
@@ -871,9 +871,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         }
       : {
           pointerEvents: 'auto',
-          background: active ? '#003893' : 'rgba(255,255,255,0.92)',
+          background: active ? '#003893' : '#FDE68A',
           color: active ? '#fff' : '#374151',
-          border: '1px solid ' + (active ? '#003893' : '#d1d5db'),
+          border: '1px solid ' + (active ? '#003893' : '#FCD116'),
           borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
           cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
           fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
@@ -890,9 +890,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             title={allOn ? 'Ocultar todas las capas' : 'Mostrar todas las capas'}
             style={{
               pointerEvents: 'auto',
-              background: allOn ? '#003893' : 'rgba(255,255,255,0.92)',
+              background: allOn ? '#003893' : '#FDE68A',
               color: allOn ? '#fff' : '#374151',
-              border: '1px solid ' + (allOn ? '#003893' : '#d1d5db'),
+              border: '1px solid ' + (allOn ? '#003893' : '#FCD116'),
               borderRadius: compact ? 18 : 20,
               width: compact ? 34 : undefined, height: compact ? 34 : undefined, padding: compact ? 0 : '4px 10px',
               display: compact ? 'flex' : undefined, alignItems: compact ? 'center' : undefined, justifyContent: compact ? 'center' : undefined,
@@ -919,15 +919,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               <button
                 onClick={() => setReportesModalOpen(true)}
                 title="Ver todos los reportes"
+                className="ver-reportes"
                 style={{
                   pointerEvents: 'auto',
-                  background: '#FCD116', color: '#1f2430', border: '1px solid #E8B800',
-                  borderRadius: 22, padding: '8px 14px', fontSize: 12, fontWeight: 800,
-                  cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
-                  fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', marginTop: 4,
+                  padding: '8px 14px', fontSize: 12, marginTop: 4,
                 }}
               >
-                📋 Ver reportes
+                📋 VER REPORTES
               </button>
               <button
                 onClick={handleNecesitoAyuda}
@@ -945,19 +943,17 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
         {/* 📋 Ver reportes + 🆘 NECESITO AYUDA — desktop: a la derecha, bajo la campana */}
         {!compact && (
-          <div style={{ position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400, display: 'flex', alignItems: 'flex-end', gap: 50, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400, display: 'flex', alignItems: 'flex-end', gap: 20, pointerEvents: 'none' }}>
             <button
               onClick={() => setReportesModalOpen(true)}
               title="Ver todos los reportes"
+              className="ver-reportes"
               style={{
                 pointerEvents: 'auto',
-                background: '#FCD116', color: '#1f2430', border: '1px solid #E8B800',
-                borderRadius: 22, padding: '9px 14px', fontSize: 13, fontWeight: 800,
-                cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
-                fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap',
+                padding: '9px 14px', fontSize: 13,
               }}
             >
-              📋 Ver reportes
+              📋 VER REPORTES
             </button>
             <button
               onClick={handleNecesitoAyuda}
