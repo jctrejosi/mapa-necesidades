@@ -72,6 +72,10 @@ export const setNecesidadEstado = (id: number, estado: 'requiere' | 'atendida'):
 export const setResponsable = (id: number, nombre: string, telefono: string): Promise<Necesidad> =>
   request(`/necesidades/${id}/responsable`, { method: 'POST', body: { nombre, telefono } })
 
+/** "Yo puedo ayudar": solo teléfono; el backend envía por WhatsApp los datos de quien necesita. */
+export const ayudarNecesidad = (id: number, telefono: string): Promise<{ ok: boolean; whatsapp: boolean }> =>
+  request(`/necesidades/${id}/ayudar`, { method: 'POST', body: { telefono } })
+
 export const deleteNecesidad = (id: number): Promise<{ ok: boolean }> =>
   request(`/necesidades/${id}`, { method: 'DELETE' })
 

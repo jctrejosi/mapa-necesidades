@@ -22,6 +22,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
+import { notifyReporteWhatsapp } from '../common/whatsapp';
 
 type ViviendaBody = {
   pin?: string;
@@ -107,6 +108,7 @@ class ViviendasService {
       item: { ...this.serialize(v), pin },
       at: new Date().toISOString(),
     });
+    notifyReporteWhatsapp(b.telefono_ofrece, 'oferta de vivienda', pin, `Detalle: ${v.tipo === 'alquiler' ? 'Alquiler' : 'Gratis'}`);
     return { ...this.serialize(v), pin };
   }
 

@@ -22,6 +22,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
+import { notifyReporteWhatsapp } from '../common/whatsapp';
 
 type OfrecimientoBody = {
   pin?: string;
@@ -101,6 +102,7 @@ class OfrecimientosService {
       item: { ...this.serialize(o), pin },
       at: new Date().toISOString(),
     });
+    notifyReporteWhatsapp(b.telefono_ofrece, 'ofrecimiento', pin, `Detalle: ${str(b.tipo)}`);
     return { ...this.serialize(o), pin };
   }
 

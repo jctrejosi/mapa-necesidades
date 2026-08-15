@@ -30,6 +30,10 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      # WhatsApp Business Cloud API — confirmaciones de reportes por WhatsApp
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     ports:
       - "3000:3000"
     volumes:
@@ -78,6 +82,10 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      # WhatsApp Business Cloud API — confirmaciones de reportes por WhatsApp
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     ports:
       - "3000:3000"
     command: npm run start:dev

@@ -23,6 +23,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum } from '../common/serialize';
 import { genRadicado, str, toDate, toInt, toNum, today } from '../common/util';
+import { notifyReporteWhatsapp } from '../common/whatsapp';
 
 // Ciudades con convenio para visita técnica (coincide con la app anterior)
 const CIUDADES_REPORTE_DANOS = ['manizales'];
@@ -158,6 +159,7 @@ class DanosService {
       item: { ...this.serializePublic(d), radicado },
       at: new Date().toISOString(),
     });
+    notifyReporteWhatsapp(b.telefono_reportante, 'reporte de daños', radicado, `Detalle: ${tipoInmueble} — ${direccion}`);
     return { ...this.serializePublic(d), radicado };
   }
 

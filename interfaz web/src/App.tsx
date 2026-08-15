@@ -46,6 +46,7 @@ const BOTTOM_TABS = [
 
 const ALL_NAV = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
+  { id: 'reportes',      icon: '📋', label: 'Reportes' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
   { id: 'mascotas',      icon: '🐾', label: 'Mascotas' },
   { id: 'noticias',      icon: '📰', label: 'Noticias' },
@@ -58,11 +59,21 @@ const ALL_NAV = [
 export default function App() {
   const [page, setPage] = useState(() => pathToPage(window.location.pathname))
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reportesSignal, setReportesSignal] = useState(0)
   const store = useStore()
   const isMapPage = MAP_PAGES.has(page)
 
   const navigate = (id: string) => {
     if (id === '__more__') { setDrawerOpen(true); return }
+    if (id === 'reportes') {
+      // Va al mapa y abre el modal de reportes
+      setPage('mapa')
+      setDrawerOpen(false)
+      window.scrollTo(0, 0)
+      setReportesSignal(s => s + 1)
+      if (window.location.pathname !== '/mapa') window.history.pushState(null, '', '/mapa')
+      return
+    }
     setPage(id)
     setDrawerOpen(false)
     window.scrollTo(0, 0)
@@ -90,7 +101,7 @@ export default function App() {
         minHeight: 0,
         overflow: isMapPage ? 'hidden' : 'auto',
       }}>
-        {page === 'mapa'          && <MapPage store={store} setPage={navigate} />}
+        {page === 'mapa'          && <MapPage store={store} setPage={navigate} reportesSignal={reportesSignal} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
         {page === 'noticias'      && <NoticiasPage store={store} />}

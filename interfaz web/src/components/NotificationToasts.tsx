@@ -23,7 +23,7 @@ interface Props {
  */
 export default function NotificationToasts({ toasts, onDismiss }: Props) {
   return (
-    <div style={{
+    <div className="notif-toasts" style={{
       position: 'fixed', bottom: 16, right: 16, zIndex: 1000,
       display: 'flex', flexDirection: 'column', gap: 8,
       maxWidth: 340, width: 'calc(100% - 32px)', pointerEvents: 'none',

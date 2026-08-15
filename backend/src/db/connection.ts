@@ -11,6 +11,16 @@
  * copiado del dashboard de Supabase.
  */
 
+import * as net from 'net';
+
+// Node 20+ activa Happy Eyeballs (autoSelectFamily) por defecto e ignora
+// `family` en net.connect, intentando IPv6 e IPv4 a la vez. El pooler de
+// Supabase solo nos interesa por IPv4: desactivamos el auto-familia para que
+// `family: 4` del pool se respete (sin ruido ENETUNREACH de IPv6).
+if (typeof net.setDefaultAutoSelectFamily === 'function') {
+  net.setDefaultAutoSelectFamily(false);
+}
+
 const DEFAULT_DATABASE_URL =
   'postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true';
 
@@ -53,10 +63,11 @@ export function resolveDbUrl(): string {
   return provided;
 }
 
-/** Opciones del Pool: forzar IPv4 y SSL cuando apunta a Supabase (DB_SSL=true). */
-export function poolOptions(): { family?: number; ssl?: { rejectUnauthorized: boolean } } {
+/** Opciones del Pool: forzar IPv4, SSL y timeout de conexión acotado. */
+export function poolOptions(): { family?: number; connectionTimeoutMillis?: number; ssl?: { rejectUnauthorized: boolean } } {
   return {
     family: 4,
+    connectionTimeoutMillis: 8000,
     ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
   };
 }

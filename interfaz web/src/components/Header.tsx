@@ -9,6 +9,7 @@ interface Props {
 
 const NAV = [
   { id: 'mapa',          label: '🗺️ Mapa' },
+  { id: 'reportes',      label: '📋 Reportes' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
   { id: 'mascotas',      label: '🐾 Mascotas' },
   { id: 'noticias',      label: '📰 Noticias' },

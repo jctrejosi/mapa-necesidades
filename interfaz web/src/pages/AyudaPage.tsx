@@ -41,14 +41,14 @@ export default function AyudaPage({ setPage }: Props) {
         </Block>
 
         <Block icon="➕" title="Reportar una necesidad">
-          <Step n={1} text='Toca el botón "+ Reportar necesidad" en el mapa.' />
+          <Step n={1} text='Toca el botón "🆘 NECESITO AYUDA" en el mapa.' />
           <Step n={2} text="Haz clic en el mapa sobre la ubicación del sector afectado." />
           <Step n={3} text="Completa el formulario con el tipo de necesidad, cantidad y tu información de contacto. Se generará un código PIN." />
         </Block>
 
         <Block icon="🙋" title="Ayudar con una necesidad">
           <Step n={1} text='Abre el popup del sector y haz clic en "Yo puedo ayudar con esto" en la necesidad que quieres atender.' />
-          <Step n={2} text="Ingresa tu nombre y teléfono. Quedarán visibles para coordinar." />
+          <Step n={2} text="Ingresa tu teléfono y te enviaremos por WhatsApp la información de quien necesita ayuda (su teléfono y la ubicación)." />
           <div className="alert-yellow" style={{ marginTop: 10 }}>⚠️ Importante: cuando la necesidad sea resuelta, actualízala a "Ya fue atendida" para liberar el registro.</div>
         </Block>
 

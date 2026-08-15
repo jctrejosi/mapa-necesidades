@@ -315,6 +315,17 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   /* Hide admin + emergency badge on mobile header (in drawer instead) */
   .hide-on-mobile { display: none !important; }
   .nav-desktop { display: none !important; }
+
+  /* Notificaciones en móvil: arriba (debajo del header), siempre visibles,
+     sin quedar detrás de la barra de tabs ni del sheet del mapa */
+  .notif-toasts {
+    top: 72px !important;
+    bottom: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: none !important;
+  }
 }
 
 .news-banner {
@@ -341,6 +352,87 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 
 .page-container { max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; width: 100%; }
 .page-container-wide { max-width: 1040px; margin: 0 auto; padding: 24px 16px 80px; width: 100%; }
+
+/* Keyframes de las notificaciones flotantes (faltaba definirlos) */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Botón NECESITO AYUDA: llamativo, con gradiente y pulso */
+@keyframes ayuda-pulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(206,17,38,0.45); }
+  50%      { box-shadow: 0 2px 18px rgba(206,17,38,0.85); }
+}
+.necesito-ayuda {
+  background: linear-gradient(135deg, #8f0d1c, #CE1126 55%, #ff3b3b);
+  color: #fff;
+  border: 1px solid #CE1126;
+  border-radius: 22px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  animation: ayuda-pulse 1.8s ease-in-out infinite;
+}
+
+/* Panel de notificaciones desplegable desde arriba (móvil) */
+.notif-top-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 900;
+  animation: fadeIn 0.18s ease;
+}
+.notif-top-panel {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  max-height: 70vh;
+  background: #fff;
+  z-index: 950;
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  animation: notif-slide-down 0.25s cubic-bezier(.32,.72,0,1);
+}
+@media (min-width: 721px) {
+  .notif-top-panel, .notif-top-backdrop { display: none !important; }
+}
+@keyframes notif-slide-down {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Modal de reportes (todos los reportes por secciones) */
+.reportes-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 960;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.18s ease;
+}
+.reportes-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.28);
+  animation: toast-in 0.2s ease;
+}
+@media (max-width: 720px) {
+  .reportes-overlay { padding: 0; align-items: flex-end; }
+  .reportes-modal { border-radius: 16px 16px 0 0; max-height: 88vh; }
+}
 
 /* Card hover effect */
 .card-hover { transition: box-shadow 0.15s, transform 0.15s; }

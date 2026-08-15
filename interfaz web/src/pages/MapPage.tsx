@@ -15,7 +15,37 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-interface Props { store: Store; setPage: (p: string) => void }
+interface Props { store: Store; setPage: (p: string) => void; reportesSignal?: number }
+
+/**
+ * Geocodificación inversa: lat/lng → dirección legible (para que el usuario
+ * la pueda editar en el formulario). Primero BigDataCloud (sin API key) y
+ * si falla, Nominatim/OpenStreetMap.
+ */
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
+    )
+    if (res.ok) {
+      const d = await res.json()
+      const parts = [d.locality || d.city, d.principalSubdivision, d.countryName].filter(Boolean)
+      if (parts.length) return parts.join(', ')
+    }
+  } catch { /* probar fallback */ }
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=es`
+    )
+    if (res.ok) {
+      const d = await res.json()
+      const a = d.address ?? {}
+      const parts = [a.road, a.neighbourhood || a.suburb, a.city || a.town || a.village, a.state, a.country].filter(Boolean)
+      if (parts.length) return parts.join(', ')
+    }
+  } catch { /* sin conexión */ }
+  return null
+}
 
 function getStatusColor(estado: string) {
   if (estado === 'requiere') return '#CE1126'
@@ -57,10 +87,10 @@ function needIcon(tipo: string) {
 }
 
 
-export default function MapPage({ store, setPage }: Props) {
+export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
-    addSector, addNecesidad, updateNecesidad, getSectorEstado } = store
+    addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado } = store
 
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
@@ -78,7 +108,13 @@ export default function MapPage({ store, setPage }: Props) {
   const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
   // Mobile UX
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false)
+  const [reportesModalOpen, setReportesModalOpen] = useState(false)
   const [pickingLocation, setPickingLocation] = useState(false)
+  // Intentos fallidos de ubicación (tras 3 se muestra el modal de aviso)
+  const [locationAttempts, setLocationAttempts] = useState(0)
+  const locationAttemptsRef = useRef(0)
+  const [showLocationWarning, setShowLocationWarning] = useState(false)
   const [pickedLatLng, setPickedLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showNeedModal, setShowNeedModal] = useState<number | null>(null) // sector_id
@@ -105,8 +141,8 @@ export default function MapPage({ store, setPage }: Props) {
     tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const,
     detalles: '', reportado_por: '', telefono: '', imagen: null as string | null
   })
-  // Help form
-  const [hForm, setHForm] = useState({ nombre: '', telefono: '' })
+  // Help form — solo teléfono (el backend envía por WhatsApp los datos de quien necesita)
+  const [hForm, setHForm] = useState({ telefono: '' })
   // Update form
   const [uForm, setUForm] = useState({
     cantidad: '', prioridad: 'alta' as const, detalles: '', estado: 'requiere' as const,
@@ -115,6 +151,19 @@ export default function MapPage({ store, setPage }: Props) {
 
   const ciudadSectores = sectores.filter(s => s.ciudad === ciudad && s.estado === 'activo')
   const unreadCount = notificaciones.filter(n => !n.leida).length
+
+  // Abre el modal de reportes cuando el navbar pide "Reportes"
+  useEffect(() => {
+    if (reportesSignal > 0) {
+      setNotifPanelOpen(false)
+      setReportesModalOpen(true)
+    }
+  }, [reportesSignal])
+
+  // En móvil, el popup de notificaciones (últimos reportes) se abre al cargar la página
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 720px)').matches) setNotifPanelOpen(true)
+  }, [])
 
 
   // Default map center by city
@@ -138,9 +187,15 @@ export default function MapPage({ store, setPage }: Props) {
     }).addTo(map)
     map.on('click', (e: any) => {
       if (pickingLocationRef.current) {
-        setPickedLatLng({ lat: e.latlng.lat, lng: e.latlng.lng })
+        const lat = e.latlng.lat
+        const lng = e.latlng.lng
+        setPickedLatLng({ lat, lng })
         setPickingLocation(false)
         setShowReportModal(true)
+        // Rellena la dirección si el campo está vacío
+        reverseGeocode(lat, lng).then(addr => {
+          if (addr) setRForm(p => (p.nombre.trim() ? p : { ...p, nombre: addr }))
+        })
       }
     })
     mapInstance.current = map
@@ -331,23 +386,83 @@ export default function MapPage({ store, setPage }: Props) {
     if (mapInstance.current) mapInstance.current.getContainer().style.cursor = ''
   }
 
+  /**
+   * Cuenta un intento fallido de obtener la ubicación. Al llegar a 3
+   * muestra el modal de aviso sobre el permiso del navegador.
+   */
+  const registerLocationFailure = () => {
+    locationAttemptsRef.current += 1
+    setLocationAttempts(locationAttemptsRef.current)
+    if (locationAttemptsRef.current >= 3) setShowLocationWarning(true)
+  }
+
+  /**
+   * Obtiene la ubicación pidiéndosela directamente al navegador (sin confirm
+   * propio: el prompt nativo ES el permiso). En éxito rellena coordenadas +
+   * dirección y, si `openOnSuccess`, abre el modal de reporte.
+   * Tras 3 fallos seguidos muestra un modal de aviso sobre el permiso.
+   */
+  const geolocate = (openOnSuccess = false) => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      registerLocationFailure()
+      return
+    }
+
+    const onOk = (pos: GeolocationPosition) => {
+      locationAttemptsRef.current = 0
+      setLocationAttempts(0)
+      const lat = pos.coords.latitude
+      const lng = pos.coords.longitude
+      setPickedLatLng({ lat, lng })
+      setRForm(p => (p.nombre.trim() ? p : { ...p, nombre: 'Obteniendo dirección...' }))
+      reverseGeocode(lat, lng).then(addr => {
+        setRForm(p => (p.nombre === 'Obteniendo dirección...' ? { ...p, nombre: addr ?? '' } : p))
+      })
+      if (openOnSuccess) setShowReportModal(true)
+    }
+
+    const opts: PositionOptions = { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    const permissions = (navigator as unknown as { permissions?: { query?: (d: { name: string }) => Promise<{ state: string }> } }).permissions
+    if (permissions?.query) {
+      permissions
+        .query({ name: 'geolocation' })
+        .then(p => {
+          if (p && p.state === 'denied') {
+            // Bloqueado permanentemente: el navegador ya no volverá a preguntar
+            registerLocationFailure()
+            return
+          }
+          navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts)
+        })
+        .catch(() => navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts))
+    } else {
+      navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts)
+    }
+  }
+
+  /** 🆘 NECESITO AYUDA: pide la ubicación al navegador; el modal abre solo si hay permiso. */
+  const handleNecesitoAyuda = () => {
+    geolocate(true)
+  }
+
   const submitReport = async () => {
-    if (!pickedLatLng) return
-    if (!rForm.nombre.trim()) { alert('El nombre del sector es obligatorio'); return }
-    if (!rForm.contactoNombre.trim()) { alert('El nombre del contacto es obligatorio'); return }
-    if (!rForm.tipo.trim()) { alert('El tipo de necesidad es obligatorio'); return }
+    if (!pickedLatLng) { alert('Necesitamos tu ubicación: usa "📍 Usar mi ubicación" o "🗺️ Marcar en el mapa".'); return }
+    if (!rForm.detalles.trim()) { alert('La descripción es obligatoria'); return }
+    if (!rForm.contactoTel.trim()) { alert('Tu teléfono es obligatorio'); return }
 
     const sector = await addSector({
-      ciudad, nombre: rForm.nombre, barrio: rForm.barrio,
+      ciudad,
+      nombre: rForm.nombre.trim() || 'Reporte de ayuda',
+      barrio: '',
       lat: pickedLatLng.lat, lng: pickedLatLng.lng,
-      descripcion: rForm.descripcion, nivel_afectacion: rForm.nivel, estado: 'activo',
-      contactos: rForm.contactoNombre ? [{ id: 0, nombre: rForm.contactoNombre, telefono: rForm.contactoTel, rol: 'Coordinador' }] : []
+      descripcion: rForm.detalles, nivel_afectacion: 'leve', estado: 'activo',
+      contactos: [{ id: 0, nombre: 'Persona que reporta', telefono: rForm.contactoTel, rol: 'Coordinador' }]
     })
     if (!sector) return
     const pin = await addNecesidad({
-      sector_id: sector.id, tipo: rForm.tipo, descripcion: rForm.detalles,
-      cantidad: rForm.cantidad, prioridad: rForm.prioridad, estado: 'requiere',
-      responsable: null, reportado_por: rForm.contactoNombre,
+      sector_id: sector.id, tipo: 'Otro', descripcion: rForm.detalles,
+      cantidad: '', prioridad: 'alta', estado: 'requiere',
+      responsable: null, reportado_por: 'Persona que reporta',
       telefono_reporta: rForm.contactoTel, fecha: new Date().toISOString(), imagen: rForm.imagen
     })
     if (!pin) return
@@ -373,15 +488,14 @@ export default function MapPage({ store, setPage }: Props) {
 
   const submitHelp = async () => {
     if (!showHelpModal) return
-    if (!hForm.nombre.trim()) { alert('Tu nombre es obligatorio'); return }
     if (!hForm.telefono.trim()) { alert('Tu teléfono es obligatorio'); return }
-    const r = await updateNecesidad(showHelpModal, {
-      responsable: { nombre: hForm.nombre, telefono: hForm.telefono, fecha: new Date().toISOString() }
-    })
+    const r = await ayudarNecesidad(showHelpModal, hForm.telefono.trim())
     if (!r) return
     setShowHelpModal(null)
-    setHForm({ nombre: '', telefono: '' })
-    alert('¡Gracias! Quedaste registrado como responsable de esta necesidad.')
+    setHForm({ telefono: '' })
+    alert(r.whatsapp
+      ? '¡Gracias! Te enviamos por WhatsApp la información de quien necesita ayuda (teléfono y ubicación).'
+      : '¡Gracias! Quedaste registrado. (El envío por WhatsApp aún no está configurado.)')
   }
 
   const submitUpdate = async () => {
@@ -412,6 +526,7 @@ export default function MapPage({ store, setPage }: Props) {
 
   const centerOn = (lat: number, lng: number) => {
     if (!mapInstance.current) return
+    setReportesModalOpen(false)
     mapInstance.current.setView([lat, lng], 15)
     if (sheetState === 'full') setSheetState('peek')
   }
@@ -707,24 +822,26 @@ export default function MapPage({ store, setPage }: Props) {
       <>
         <div style={{ position: 'absolute', bottom: bottomOffset, left: 10, zIndex: 400, display: 'flex', flexDirection: 'column', gap: compact ? 4 : 5, maxHeight: 'calc(100% - 90px)', overflowY: 'auto', paddingRight: 2, pointerEvents: 'none' }}>
           <button
-            onClick={() => setLayers(prev => Object.fromEntries(Object.keys(prev).map(k => [k, true])))}
-            disabled={allOn}
-            title="Mostrar todas las capas"
+            onClick={() => setLayers(prev => {
+              const next = !allOn
+              return Object.fromEntries(Object.keys(prev).map(k => [k, next]))
+            })}
+            title={allOn ? 'Ocultar todas las capas' : 'Mostrar todas las capas'}
             style={{
               pointerEvents: 'auto',
-              background: allOn ? '#e8eeff' : '#003893',
-              color: allOn ? '#9AA0AC' : '#fff',
-              border: '1px solid ' + (allOn ? '#c9d6f2' : '#003893'),
+              background: allOn ? '#003893' : 'rgba(255,255,255,0.92)',
+              color: allOn ? '#fff' : '#374151',
+              border: '1px solid ' + (allOn ? '#003893' : '#d1d5db'),
               borderRadius: compact ? 18 : 20,
               width: compact ? 34 : undefined, height: compact ? 34 : undefined, padding: compact ? 0 : '4px 10px',
               display: compact ? 'flex' : undefined, alignItems: compact ? 'center' : undefined, justifyContent: compact ? 'center' : undefined,
               fontSize: compact ? 16 : 11, lineHeight: compact ? 1 : undefined, fontWeight: 800,
-              cursor: allOn ? 'default' : 'pointer',
+              cursor: 'pointer',
               boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
-              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: allOn ? 0.6 : 1,
+              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: 1,
             }}
           >
-            {compact ? '👁️' : '👁️ Ver todos'}
+            {compact ? (allOn ? '🙈' : '👁️') : (allOn ? '🙈 Ocultar todos' : '👁️ Ver todos')}
           </button>
           {buttons.map(btn => {
             const active = layers[btn.key]
@@ -735,40 +852,63 @@ export default function MapPage({ store, setPage }: Props) {
             )
           })}
 
-          {/* + Reportar necesidad — móvil: dentro de la columna, debajo de las capas */}
+          {/* 📋 Ver reportes + 🆘 NECESITO AYUDA — móvil: dentro de la columna, debajo de las capas */}
           {compact && (
-            <button
-              onClick={handlePickLocation}
-              style={{
-                pointerEvents: 'auto',
-                background: '#CE1126',
-                color: '#fff',
-                border: '1px solid #CE1126',
-                borderRadius: 20, padding: '7px 12px', fontSize: 11, fontWeight: 800,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(206,17,38,0.45)', backdropFilter: 'blur(4px)',
-                fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', marginTop: 4,
-              }}
-            >
-              + Reportar necesidad
-            </button>
+            <>
+              <button
+                onClick={() => setReportesModalOpen(true)}
+                title="Ver todos los reportes"
+                style={{
+                  pointerEvents: 'auto',
+                  background: '#fff', color: '#003893', border: '1px solid #003893',
+                  borderRadius: 22, padding: '8px 14px', fontSize: 12, fontWeight: 800,
+                  cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
+                  fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', marginTop: 4,
+                }}
+              >
+                📋 Ver reportes
+              </button>
+              <button
+                onClick={handleNecesitoAyuda}
+                className="necesito-ayuda"
+                style={{
+                  pointerEvents: 'auto',
+                  padding: '8px 14px', fontSize: 12, marginTop: 4,
+                }}
+              >
+                🆘 NECESITO AYUDA
+              </button>
+            </>
           )}
         </div>
 
-        {/* + Reportar necesidad — desktop: a la derecha, bajo la campana y al mismo nivel que las capas */}
+        {/* 📋 Ver reportes + 🆘 NECESITO AYUDA — desktop: a la derecha, bajo la campana */}
         {!compact && (
-          <button
-            onClick={handlePickLocation}
-            style={{
-              position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400,
-              background: '#CE1126', color: '#fff', border: '1px solid #CE1126',
-              borderRadius: 20, padding: '8px 14px', fontSize: 12, fontWeight: 800,
-              cursor: 'pointer', boxShadow: '0 2px 8px rgba(206,17,38,0.45)', backdropFilter: 'blur(4px)',
-              fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap',
-            }}
-          >
-            + Reportar necesidad
-          </button>
+          <>
+            <button
+              onClick={() => setReportesModalOpen(true)}
+              title="Ver todos los reportes"
+              style={{
+                position: 'absolute', bottom: bottomOffset, right: 175, zIndex: 400,
+                background: '#fff', color: '#003893', border: '1px solid #003893',
+                borderRadius: 22, padding: '9px 14px', fontSize: 13, fontWeight: 800,
+                cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
+                fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap',
+              }}
+            >
+              📋 Ver reportes
+            </button>
+            <button
+              onClick={handleNecesitoAyuda}
+              className="necesito-ayuda"
+              style={{
+                position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400,
+                padding: '9px 16px', fontSize: 13,
+              }}
+            >
+              🆘 NECESITO AYUDA
+            </button>
+          </>
         )}
       </>
     )
@@ -818,7 +958,14 @@ export default function MapPage({ store, setPage }: Props) {
 
             {/* Centro de notificaciones */}
             <button
-              onClick={() => { setOpenSection('actividad'); markAllRead(); setSheetState('full') }}
+              onClick={() => {
+                markAllRead()
+                if (window.matchMedia('(max-width: 720px)').matches) {
+                  setNotifPanelOpen(true)
+                } else {
+                  setOpenSection('actividad')
+                }
+              }}
               title="Centro de notificaciones"
               className="notif-bell"
               style={{
@@ -884,49 +1031,108 @@ export default function MapPage({ store, setPage }: Props) {
         </div>
       </div>
 
-      {/* Report sector + need modal */}
+      {/* ── Notificaciones (móvil): panel desplegable desde arriba ── */}
+      {notifPanelOpen && (
+        <>
+          <div className="notif-top-backdrop" onClick={() => setNotifPanelOpen(false)} />
+          <div className="notif-top-panel">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e1e4e9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#1f2430' }}>🔔 Notificaciones</h2>
+              <button onClick={() => setNotifPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6 }} aria-label="Cerrar">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round">
+                  <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 16px' }}>
+              {notificaciones.length === 0 ? (
+                <p style={{ fontSize: 13, color: '#6b7280', padding: '20px 0' }}>
+                  Sin notificaciones todavía. Cuando alguien reporte una necesidad, mascota, ofrecimiento,
+                  vivienda o daño —o se publique una noticia— aparecerá aquí en tiempo real.
+                </p>
+              ) : (
+                notificaciones.slice(0, 20).map(n => (
+                  <div key={n.id} style={{ display: 'flex', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>{n.ciudad ?? 'Todas las ciudades'} · {timeAgo(n.at)}</p>
+                    </div>
+                    {!n.leida && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#CE1126', flexShrink: 0, marginTop: 4 }} />}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal de reportes: todos los reportes por secciones ── */}
+      {reportesModalOpen && (
+        <div className="reportes-overlay" onClick={() => setReportesModalOpen(false)}>
+          <div className="reportes-modal" onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e1e4e9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#1f2430' }}>
+                📋 Reportes
+                {unreadCount > 0 && <span className="tag tag-red" style={{ fontSize: 10, marginLeft: 8 }}>{unreadCount} nuevas</span>}
+              </h2>
+              <button onClick={() => setReportesModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6 }} aria-label="Cerrar">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round">
+                  <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
+              <ReportesPanel />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: tras 3 intentos fallidos de ubicación */}
+      {showLocationWarning && (
+        <Modal
+          title="📍 Permiso de ubicación necesario"
+          onClose={() => setShowLocationWarning(false)}
+          onConfirm={() => { setShowLocationWarning(false); geolocate(true) }}
+          confirmLabel="Reintentar"
+          hideCancel
+        >
+          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
+            Para realizar un reporte necesitamos tu ubicación y el navegador no la ha podido obtener.
+          </p>
+          <div className="alert-yellow" style={{ marginTop: 12 }}>
+            Debes <strong>aceptar el permiso de ubicación</strong> en el navegador. Si lo bloqueaste antes, actívalo:
+            toca el candado 🔒 en la barra de direcciones → <strong>Permisos → Ubicación → Permitir</strong>,
+            y vuelve a intentar.
+          </div>
+        </Modal>
+      )}
+
+      {/* Realizar reporte: modal simplificado (descripción + teléfono + foto) */}
       {showReportModal && (
-        <Modal title="📍 Reportar sector y necesidad" onClose={() => setShowReportModal(false)} onConfirm={submitReport} confirmLabel="Publicar y generar código">
-          <div className="alert-yellow" style={{ marginBottom: 16 }}>
-            Ubicación marcada en el mapa. Completa la información del sector.
+        <Modal title="Realizar reporte" onClose={() => setShowReportModal(false)} onConfirm={submitReport} confirmLabel="Publicar" hideCancel>
+          {pickedLatLng ? (
+            <p style={{ fontSize: 12.5, color: '#2E9E5B', fontWeight: 700, margin: '0 0 12px' }}>
+              📍 Ubicación lista {rForm.nombre && <span style={{ color: '#6b7280', fontWeight: 500 }}>· {rForm.nombre}</span>}
+            </p>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <button type="button" onClick={() => geolocate(false)} className="btn btn-sm btn-outline">📍 Usar mi ubicación</button>
+              <button type="button" onClick={() => { setShowReportModal(false); handlePickLocation() }} className="btn btn-sm btn-outline">🗺️ Marcar en el mapa</button>
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">¿Qué necesitas? <span className="req">*</span></label>
+            <textarea className="form-input" rows={3} value={rForm.detalles} onChange={e => setRForm(p => ({ ...p, detalles: e.target.value }))} placeholder="Describe tu situación, por ejemplo: se nos acabó el agua potable..." />
           </div>
           <div className="form-group">
-            <label className="form-label">Nombre del sector <span className="req">*</span></label>
-            <input className="form-input" value={rForm.nombre} onChange={e => setRForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. Barrio La Enea" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Tipo de necesidad <span className="req">*</span></label>
-            <select className="form-select" value={rForm.tipo} onChange={e => setRForm(p => ({ ...p, tipo: e.target.value }))}>
-              {TIPOS_NECESIDAD.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Cantidad estimada</label>
-            <input className="form-input" value={rForm.cantidad} onChange={e => setRForm(p => ({ ...p, cantidad: e.target.value }))} placeholder="Ej. 50 familias" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Prioridad</label>
-            <select className="form-select" value={rForm.prioridad} onChange={e => setRForm(p => ({ ...p, prioridad: e.target.value as any }))}>
-              <option value="alta">🔴 Alta</option>
-              <option value="media">🟡 Media</option>
-              <option value="baja">🟢 Baja</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Descripción / detalles</label>
-            <textarea className="form-input" value={rForm.detalles} onChange={e => setRForm(p => ({ ...p, detalles: e.target.value }))} placeholder="Describe la situación..." />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Persona para coordinar <span className="req">*</span></label>
-            <input className="form-input" value={rForm.contactoNombre} onChange={e => setRForm(p => ({ ...p, contactoNombre: e.target.value }))} placeholder="Tu nombre" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Teléfono</label>
+            <label className="form-label">Tu teléfono <span className="req">*</span></label>
             <input className="form-input" type="tel" value={rForm.contactoTel} onChange={e => setRForm(p => ({ ...p, contactoTel: e.target.value }))} placeholder="300 123 4567" />
           </div>
           <div className="form-group">
             <label className="form-label">Foto (opcional)</label>
-            <ImageInput value={rForm.imagen ?? undefined} onChange={v => setRForm(p => ({ ...p, imagen: v ?? null }))} />
+            <ImageInput capture value={rForm.imagen ?? undefined} onChange={v => setRForm(p => ({ ...p, imagen: v ?? null }))} />
           </div>
         </Modal>
       )}
@@ -977,15 +1183,12 @@ export default function MapPage({ store, setPage }: Props) {
           <Modal title="🙋 Yo puedo ayudar con esto" onClose={() => setShowHelpModal(null)} onConfirm={submitHelp} confirmLabel="Confirmar">
             <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
               <strong>{need.tipo}</strong> — {need.cantidad}<br />
-              Tu nombre y teléfono quedarán visibles para coordinar la ayuda.
+              Solo necesitamos tu teléfono: te enviaremos por WhatsApp la información de quien necesita ayuda
+              (su teléfono y la ubicación).
             </p>
             <div className="form-group">
-              <label className="form-label">Tu nombre <span className="req">*</span></label>
-              <input className="form-input" value={hForm.nombre} onChange={e => setHForm(p => ({ ...p, nombre: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Tu teléfono <span className="req">*</span></label>
-              <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} />
+              <label className="form-label">Tu teléfono (WhatsApp) <span className="req">*</span></label>
+              <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
             </div>
           </Modal>
         )

@@ -43,6 +43,9 @@ export default function PinModal({ pin, radicado, onClose }: Props) {
               </div>
             </>
           )}
+          <p style={{ fontSize: 12, color: '#9AA0AC', margin: '-4px 0 16px' }}>
+            📲 Si registraste tu teléfono, también te enviamos el código por WhatsApp para que edites o confirmes tu reporte.
+          </p>
           <button onClick={onClose} className="btn btn-primary" style={{ width: '100%' }}>Entendido, ya lo guardé</button>
         </div>
       </div>

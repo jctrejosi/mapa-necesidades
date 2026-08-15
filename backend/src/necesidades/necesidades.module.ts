@@ -22,6 +22,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
+import { notifyReporteWhatsapp, sendWhatsappText, toWhatsappNumber, whatsappConfigured } from '../common/whatsapp';
 
 type NecesidadBody = {
   pin?: string;
@@ -123,6 +124,8 @@ class NecesidadesService {
       item: { ...this.serialize(n), pin },
       at: new Date().toISOString(),
     });
+    // Confirmación por WhatsApp con el código de edición
+    notifyReporteWhatsapp(b.telefono_reporta, 'reporte de necesidad', pin, `Detalle: ${tipo}`);
     return { ...this.serialize(n), pin };
   }
 
@@ -191,7 +194,56 @@ class NecesidadesService {
       .set({ responsableNombre: n, responsableTelefono: str(telefono) || null, fechaCompromiso: today() })
       .where(eq(necesidades.id, id))
       .returning();
-    return this.serialize(row);
+    return row ? this.serialize(row) : null;
+  }
+
+  /**
+   * "Yo puedo ayudar": solo pide el teléfono del voluntario y le envía por
+   * WhatsApp los datos de quien necesita ayuda (teléfono + ubicación).
+   */
+  async ayudar(id: number, telefono: unknown) {
+    const tel = str(telefono);
+    const to = toWhatsappNumber(tel);
+    if (!to) throw new BadRequestException({ error: 'Teléfono inválido: usa un número de 10 dígitos' });
+
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
+
+    const sectorRows = await this.db
+      .select({ nombre: sectores.nombre, ciudad: sectores.ciudad, lat: sectores.lat, lng: sectores.lng })
+      .from(sectores)
+      .where(eq(sectores.id, row.sectorId))
+      .limit(1);
+    const sector = sectorRows[0];
+
+    // Registra al voluntario como responsable (sin pedirle su nombre)
+    await this.db
+      .update(necesidades)
+      .set({ responsableNombre: 'Voluntario', responsableTelefono: tel, fechaCompromiso: today() })
+      .where(eq(necesidades.id, id));
+
+    const maps = sector ? `https://maps.google.com/?q=${sector.lat},${sector.lng}` : null;
+    const cuerpo = [
+      '🇨🇴 SolidaridadCO — ¡Gracias por ayudar!',
+      `Información de quien necesita ayuda (${row.tipo}):`,
+      row.telefonoReporta ? `📞 Teléfono: ${row.telefonoReporta}` : null,
+      sector ? `📍 Ubicación: ${sector.nombre}` : null,
+      maps ? `🗺️ Mapa: ${maps}` : null,
+      'Coordina la entrega de la ayuda por WhatsApp o llamada.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const enviado = whatsappConfigured() ? await sendWhatsappText(to, cuerpo) : false;
+
+    emitAppEvent({
+      type: 'necesidad',
+      mensaje: `Alguien va a ayudar: ${row.tipo}`,
+      ciudad: sector?.ciudad ?? 'manizales',
+      at: new Date().toISOString(),
+    });
+
+    return { ok: true, whatsapp: enviado };
   }
 
   async clearResponsable(id: number) {
@@ -244,6 +296,12 @@ export class NecesidadesController {
   @Post(':id/responsable')
   setResponsable(@Param('id') id: string, @Body() b: { nombre?: string; telefono?: string }) {
     return this.svc.setResponsable(toInt(id), b?.nombre, b?.telefono);
+  }
+
+  /** "Yo puedo ayudar": solo teléfono del voluntario + WhatsApp con los datos de quien necesita. */
+  @Post(':id/ayudar')
+  ayudar(@Param('id') id: string, @Body() b: { telefono?: string }) {
+    return this.svc.ayudar(toInt(id), b?.telefono);
   }
 
   @Delete(':id/responsable')

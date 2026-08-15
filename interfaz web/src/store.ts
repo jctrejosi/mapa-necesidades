@@ -263,6 +263,10 @@ export function useStore() {
       return api.updateNecesidad(id, b as Record<string, unknown>)
     }, ciudad)
 
+  /** "Yo puedo ayudar": solo teléfono + WhatsApp con los datos de quien necesita. */
+  const ayudarNecesidad = (id: number, telefono: string): Promise<{ ok: boolean; whatsapp: boolean } | undefined> =>
+    mutate(() => api.ayudarNecesidad(id, telefono), ciudad)
+
   const deleteNecesidad = (id: number): Promise<unknown> =>
     mutate(() => api.deleteNecesidad(id), ciudad)
 
@@ -361,7 +365,7 @@ export function useStore() {
     ...data,
     setSectores,
     addSector, updateSector, deleteSector,
-    addNecesidad, updateNecesidad, deleteNecesidad,
+    addNecesidad, updateNecesidad, deleteNecesidad, ayudarNecesidad,
     addOfrecimiento, updateOfrecimiento, deleteOfrecimiento,
     addMascota, updateMascota, deleteMascota,
     addCentro, updateCentro, deleteCentro,

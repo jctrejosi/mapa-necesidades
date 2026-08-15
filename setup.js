@@ -383,6 +383,20 @@ async function forceImport() {
   ok('Importación completada.');
 }
 
+/** Detecta la IP de la red local (excluye redes Docker 172.x y loopback). */
+function lanUrl() {
+  try {
+    const out = execFileSync('hostname', ['-I'], { stdio: ['pipe', 'pipe', 'ignore'] }).toString().trim();
+    const ip = out.split(/\s+/).find((i) => {
+      if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(i)) return false;
+      if (i.startsWith('127.') || i.startsWith('169.254.')) return false;
+      if (i.startsWith('172.')) return false; // redes Docker
+      return true;
+    });
+    return ip ? `http://${ip}` : null;
+  } catch { return null }
+}
+
 function summary(dev = false) {
   console.log(`
 ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${c.reset}
@@ -393,6 +407,8 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
   ${c.bold}PostgreSQL${c.reset}     Supabase (nube) — se migra con: node setup.js --import
 ${dev ? `
   ${c.dim}Modo DEV: hot reload activo — backend (nest --watch) y frontends (Vite HMR)${c.reset}
+` : ''}
+${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.reset} (web) · ${c.cyan}${lanUrl()}:8081${c.reset} (admin)
 ` : ''}
   ${c.dim}Parar:  node setup.js --down${c.reset}
   ${c.dim}Reset:  node setup.js --reset${c.reset}

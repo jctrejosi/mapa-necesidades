@@ -4,9 +4,11 @@ import { compressImage } from "../store"
 interface ImageInputProps {
   value?: string
   onChange: (b64: string | undefined) => void
+  /** En móvil abre la cámara directamente (capture=environment). */
+  capture?: boolean
 }
 
-export default function ImageInput({ value, onChange }: ImageInputProps) {
+export default function ImageInput({ value, onChange, capture }: ImageInputProps) {
   const ref = useRef<HTMLInputElement>(null)
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -38,11 +40,11 @@ export default function ImageInput({ value, onChange }: ImageInputProps) {
           onMouseEnter={e => (e.currentTarget.style.borderColor = "#003893")}
           onMouseLeave={e => (e.currentTarget.style.borderColor = "#e1e4e9")}
         >
-          📷 Agregar foto (opcional)
+          📷 {capture ? 'Tomar foto o subir imagen' : 'Agregar foto (opcional)'}
           <div style={{ fontSize: "0.75rem", marginTop: 4 }}>JPG, PNG, WEBP · máx. 4MB</div>
         </div>
       )}
-      <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handleFile} />
+      <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" capture={capture ? 'environment' : undefined} style={{ display: "none" }} onChange={handleFile} />
     </div>
   )
 }

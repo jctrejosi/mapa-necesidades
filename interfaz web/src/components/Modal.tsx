@@ -8,9 +8,10 @@ interface Props {
   confirmClass?: string
   children: ReactNode
   wide?: boolean
+  hideCancel?: boolean
 }
 
-export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guardar', confirmClass = 'btn btn-primary', children, wide }: Props) {
+export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guardar', confirmClass = 'btn btn-primary', children, wide, hideCancel }: Props) {
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-box" style={{ maxWidth: wide ? 600 : 460 }}>
@@ -21,7 +22,7 @@ export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guard
         <div className="modal-body">{children}</div>
         {onConfirm && (
           <div className="modal-footer">
-            <button onClick={onClose} className="btn btn-outline">Cancelar</button>
+            {!hideCancel && <button onClick={onClose} className="btn btn-outline">Cancelar</button>}
             <button onClick={onConfirm} className={confirmClass}>{confirmLabel}</button>
           </div>
         )}
