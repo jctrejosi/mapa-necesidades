@@ -61,6 +61,21 @@ services:
     ports:
       - "8081:80"
 
+  # ── Chatbot Daisy (FastAPI + DeepSeek) — lo usa el frontend vía /bot/* ──
+  bot:
+    build: ../bot
+    container_name: redsolidaria-bot
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      BACKEND_URL: http://backend:3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081,http://localhost:8443}
+    ports:
+      - "8000:8000"
+
   # ── Desarrollo local (hot reload) ────────────────────────────────────
   # Usan la etapa "build" de cada Dockerfile (con node_modules completos) y
   # montan el código fuente como volumen: NestJS reinicia con --watch y Vite

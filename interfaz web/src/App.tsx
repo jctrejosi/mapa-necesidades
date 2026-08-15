@@ -111,8 +111,8 @@ export default function App() {
         {page === 'ayuda'         && <AyudaPage setPage={navigate} />}
       </main>
 
-      {/* Footer visible en todas las pestañas, incluido el mapa */}
-      <Footer />
+      {/* Footer solo en la página de ayuda */}
+      {page === 'ayuda' && <Footer />}
 
       {/* ── Mobile bottom tab bar ── */}
       <nav className="bottom-tab-bar">

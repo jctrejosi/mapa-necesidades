@@ -6,6 +6,7 @@ import { TIPOS_NECESIDAD } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
+import ChatbotWidget from '../components/ChatbotWidget'
 
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -110,6 +111,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
   const [notifPanelOpen, setNotifPanelOpen] = useState(false)
   const [reportesModalOpen, setReportesModalOpen] = useState(false)
+  // Detalle del reporte seleccionado (se abre al hacer click en un ítem)
+  const [detailItem, setDetailItem] = useState<any | null>(null)
   const [pickingLocation, setPickingLocation] = useState(false)
   // Intentos fallidos de ubicación (tras 3 se muestra el modal de aviso)
   const [locationAttempts, setLocationAttempts] = useState(0)
@@ -160,9 +163,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     }
   }, [reportesSignal])
 
-  // En móvil, el popup de notificaciones (últimos reportes) se abre al cargar la página
+  // En móvil, el popup de reportes (incluye la actividad reciente) se abre al cargar la página
   useEffect(() => {
-    if (window.matchMedia('(max-width: 720px)').matches) setNotifPanelOpen(true)
+    if (window.matchMedia('(max-width: 720px)').matches) setReportesModalOpen(true)
   }, [])
 
 
@@ -531,6 +534,24 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     if (sheetState === 'full') setSheetState('peek')
   }
 
+  /** Normaliza un teléfono para el enlace wa.me (código de país +57). */
+  const waNumber = (tel?: string | null) => {
+    const d = (tel || '').replace(/\D/g, '')
+    if (d.length === 10) return `57${d}`
+    if (d.startsWith('57') && d.length === 12) return d
+    return d
+  }
+
+  /** Abre el detalle de un reporte y centra el mapa en su ubicación (si tiene). */
+  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number }) => {
+    setReportesModalOpen(false)
+    setDetailItem(item)
+    if (item.lat != null && item.lng != null && mapInstance.current) {
+      mapInstance.current.setView([item.lat, item.lng], 15)
+      if (sheetState === 'full') setSheetState('peek')
+    }
+  }
+
   const timeAgo = (iso: string) => {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
     if (s < 60) return 'ahora'
@@ -662,7 +683,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             const sector = sectores.find(s => s.id === n.sector_id)
             const urgente = n.estado === 'requiere' && !n.responsable
             return (
-              <div key={n.id} onClick={() => sector && centerOnSector(sector.id)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+              <div key={n.id} onClick={() => openDetail({
+                titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+                detalle: n.descripcion || undefined,
+                ubicacion: sector?.nombre,
+                telefono: n.telefono_reporta,
+                lat: sector?.lat, lng: sector?.lng,
+              })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
                   <span className={urgente ? 'tag tag-red' : n.estado === 'atendida' ? 'tag tag-green' : 'tag tag-orange'} style={{ fontSize: 10, flexShrink: 0 }}>
@@ -689,7 +716,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ]} />
           {ofs.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin ofrecimientos con este filtro.</p>}
           {ofs.map(o => (
-            <div key={o.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+            <div key={o.id} onClick={() => openDetail({
+              titulo: `🤝 ${o.tipo}`,
+              detalle: o.descripcion || undefined,
+              telefono: o.telefono_ofrece,
+            })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{o.tipo}{o.cantidad ? ` — ${o.cantidad}` : ''}</span>
                 <span className={o.estado === 'entregado' ? 'tag tag-gray' : o.reservado_por ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
@@ -710,7 +741,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ]} />
           {ms.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin mascotas con este filtro.</p>}
           {ms.map(m => (
-            <div key={m.id} onClick={() => centerOn(m.lat, m.lng)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+            <div key={m.id} onClick={() => openDetail({
+              titulo: `🐾 ${m.nombre || m.tipo_animal}`,
+              detalle: m.senas || undefined,
+              ubicacion: m.lugar_visto || undefined,
+              telefono: m.telefono_reporta,
+              lat: m.lat, lng: m.lng,
+            })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{m.nombre || m.tipo_animal}</span>
                 <span className={m.estado === 'perdido' ? 'tag tag-red' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
@@ -731,7 +768,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ]} />
           {vs.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin ofertas con este filtro.</p>}
           {vs.map(v => (
-            <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+            <div key={v.id} onClick={() => openDetail({
+              titulo: `🏠 ${v.sector_referencia || 'Vivienda'}`,
+              detalle: v.descripcion || undefined,
+              telefono: v.telefono_ofrece,
+            })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{v.sector_referencia || 'Vivienda'}</span>
                 <span className={v.estado === 'ocupado' ? 'tag tag-gray' : v.tipo === 'alquiler' ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
@@ -754,7 +795,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             ]} />
             {ds.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin reportes con este filtro.</p>}
             {ds.map(d => (
-              <div key={d.id} onClick={() => centerOn(d.lat, d.lng)} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+              <div key={d.id} onClick={() => openDetail({
+                titulo: `🏚️ ${d.tipo_inmueble} — ${d.direccion}`,
+                detalle: d.descripcion || undefined,
+                ubicacion: d.direccion,
+                telefono: d.telefono_reportante,
+                lat: d.lat, lng: d.lng,
+              })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{d.tipo_inmueble} — {d.direccion}</span>
                   <span className={d.estado === 'pendiente' ? 'tag tag-red' : d.estado === 'visita_programada' ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
@@ -1089,6 +1136,30 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </div>
       )}
 
+      {/* Detalle del reporte seleccionado */}
+      {detailItem && (
+        <Modal title={detailItem.titulo} onClose={() => setDetailItem(null)} hideCancel>
+          {detailItem.detalle && <p style={{ fontSize: 14, color: '#1f2430', margin: '0 0 8px' }}>{detailItem.detalle}</p>}
+          {detailItem.ubicacion && <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>📍 {detailItem.ubicacion}</p>}
+          {detailItem.telefono ? (
+            <a
+              href={`https://wa.me/${waNumber(detailItem.telefono)}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: '#25D366', color: '#fff', padding: '10px 18px',
+                borderRadius: 999, textDecoration: 'none', fontWeight: 800, fontSize: 14,
+              }}
+            >
+              📞 Llamar por WhatsApp
+            </a>
+          ) : (
+            <p style={{ fontSize: 12.5, color: '#9AA0AC', margin: 0 }}>No hay teléfono registrado para este reporte.</p>
+          )}
+        </Modal>
+      )}
+
       {/* Aviso: tras 3 intentos fallidos de ubicación */}
       {showLocationWarning && (
         <Modal
@@ -1223,6 +1294,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       })()}
 
       {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
+
+      {/* Chatbot Daisy — popup flotante del bot (pantalla completa en móvil) */}
+      <ChatbotWidget ciudad={ciudad} />
     </div>
   )
 }

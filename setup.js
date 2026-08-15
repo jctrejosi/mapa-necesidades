@@ -35,7 +35,7 @@ const ALL = ['--profile', 'prod', '--profile', 'dev'];
 const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
-const PORTS = [8080, 8081, 3000];
+const PORTS = [8080, 8081, 3000, 8000];
 
 // ── Modo desarrollo: servicios directos en el host (como dev.js de mercaldas) ──
 // Cada servicio corre en su carpeta con sus propias dependencias; los logs se
@@ -53,6 +53,10 @@ const DEV_SERVICES = [
   {
     name: 'ADMIN', dir: 'interfaz web admin', cmd: ['npm', 'run', 'dev'],
     env: { PORT: '8081' }, port: 8081, url: 'http://localhost:8081', color: '\x1b[34m',
+  },
+  {
+    name: 'BOT', dir: 'bot', cmd: ['bash', 'dev.sh'],
+    env: {}, port: 8000, url: 'http://localhost:8000', color: '\x1b[36m',
   },
 ];
 const devChildren = [];
@@ -335,7 +339,18 @@ async function devUp() {
   }
 
   info('Preparando servicios dev en el host (hot reload: nest --watch + Vite HMR)...');
-  for (const svc of DEV_SERVICES) ensureDeps(svc);
+  for (const svc of DEV_SERVICES) {
+    if (svc.dir !== 'bot') ensureDeps(svc);
+  }
+
+  // Bot (Python): crear venv e instalar dependencias si falta
+  const botDir = path.join(ROOT, 'bot');
+  const botPython = path.join(botDir, '.venv', 'bin', 'python');
+  if (!require('fs').existsSync(botPython)) {
+    info('Preparando el bot (venv + dependencias de Python)...');
+    run(['python3', '-m', 'venv', '.venv'], botDir);
+    run([botPython, '-m', 'pip', 'install', '-r', 'requirements.txt'], botDir);
+  }
 
   console.log(`
 ${c.bold}  Levantando ${DEV_SERVICES.length} servicios — logs en vivo:${c.reset}
@@ -347,8 +362,9 @@ ${c.green}${c.bold}  ✔ Servicios dev arriba${c.reset}
   ${c.bold}Interfaz web${c.reset}  ${c.cyan}http://localhost:8080${c.reset}
   ${c.bold}Panel admin${c.reset}   ${c.cyan}http://localhost:8081${c.reset}
   ${c.bold}API${c.reset}          ${c.cyan}http://localhost:3000/api${c.reset}
+  ${c.bold}Bot Daisy${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
 
-  ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 3 servicios.${c.reset}
+  ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 4 servicios.${c.reset}
 `);
 
   // El script se queda vivo hasta Ctrl+C (manejado abajo).
