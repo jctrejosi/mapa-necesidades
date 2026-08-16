@@ -281,7 +281,7 @@ export function useStore() {
         if (b.reservado_por) return api.reservarOfrecimiento(id, b.reservado_por.nombre, b.reservado_por.telefono)
         return api.liberarReserva(id)
       }
-      return api.updateOfrecimiento(id, b as Record<string, unknown>)
+      return api.updateOfrecimientoAdmin(id, b as Record<string, unknown>)
     }, ciudad)
 
   const deleteOfrecimiento = (id: number): Promise<unknown> =>
@@ -294,9 +294,9 @@ export function useStore() {
     mutate(async () => {
       if (b.avistado_por !== undefined) {
         if (b.avistado_por) return api.avistarMascota(id, b.avistado_por.nombre, b.avistado_por.telefono)
-        return api.updateMascota(id, { avistado_por: null } as unknown as Record<string, unknown>)
+        return api.updateMascotaAdmin(id, { avistado_por: null } as unknown as Record<string, unknown>)
       }
-      return api.updateMascota(id, b as Record<string, unknown>)
+      return api.updateMascotaAdmin(id, b as Record<string, unknown>)
     }, ciudad)
 
   const deleteMascota = (id: number): Promise<unknown> =>
@@ -315,7 +315,11 @@ export function useStore() {
     mutate(async () => api.createPuntoApoyo({ ...p, imagen: await withImage(p.imagen) }), ciudad)
 
   const updatePuntoApoyo = (id: number, b: Partial<PuntoApoyo>): Promise<unknown> =>
-    mutate(async () => api.updatePuntoApoyo(id, { ...b, imagen: await withImage(b.imagen) }), ciudad)
+    mutate(async () => api.updatePuntoApoyo(id, {
+      ...b,
+      // Solo envía la imagen si viene en el body (un cambio de tipo no debe borrarla)
+      ...(b.imagen !== undefined ? { imagen: await withImage(b.imagen) } : {}),
+    }), ciudad)
 
   const deletePuntoApoyo = (id: number): Promise<unknown> =>
     mutate(() => api.deletePuntoApoyo(id), ciudad)

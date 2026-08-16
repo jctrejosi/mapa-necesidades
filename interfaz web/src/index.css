@@ -732,3 +732,12 @@ button:active { opacity: 0.8; }
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   z-index: 3;
 }
+
+/* ── Buscador sobre el mapa (PIN/teléfono) ─────────────────────────────── */
+.map-search { width: min(360px, calc(100% - 24px)); }
+.map-search-input { padding: 9px 16px; font-size: 13.5px; }
+/* Responsive: más pequeño y centrado, sin tapar marcadores ni el zoom */
+@media (max-width: 720px) {
+  .map-search { width: min(228px, calc(100% - 96px)); }
+  .map-search-input { padding: 7px 12px; font-size: 12px; }
+}

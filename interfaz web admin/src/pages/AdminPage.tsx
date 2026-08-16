@@ -63,6 +63,18 @@ const TIPOS_PUNTO_APOYO = [
   'Fundación', 'Centro de acopio', 'Líder de barrio', 'Hospital', 'ONG', 'Otro',
 ]
 
+const TIPOS_NECESIDAD = [
+  'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
+  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otro',
+]
+
+const CATEGORIAS_OFRECIMIENTO = [
+  'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
+  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otros',
+]
+
+const TIPOS_ANIMAL = ['Perro', 'Gato', 'Ave', 'Conejo', 'Equino', 'Bovino', 'Cerdo', 'Otro']
+
 /** ISO → valor para <input type="datetime-local">. */
 const toLocalInput = (iso: string | null) => {
   if (!iso) return ''
@@ -159,6 +171,19 @@ const Th = ({ children }: { children: React.ReactNode }) => (
 
 const Empty = ({ text }: { text: string }) => (
   <tr><td colSpan={99} style={{ padding: '28px 16px', textAlign: 'center', color: '#9AA0AC', fontSize: 13 }}>{text}</td></tr>
+)
+
+/** Select inline para cambiar el tipo de un reporte desde la tabla (con confirmación). */
+const TipoSelect = ({ value, options, onPick }: { value: string; options: string[]; onPick: (v: string) => void }) => (
+  <select
+    className="form-select"
+    value={value}
+    onChange={e => { if (window.confirm(`¿Cambiar el tipo a "${e.target.value}"?`)) onPick(e.target.value) }}
+    style={{ padding: '3px 6px', fontSize: 12, fontWeight: 700, width: 'auto', maxWidth: 190, display: 'inline-block' }}
+  >
+    {!options.includes(value) && <option value={value}>{value}</option>}
+    {options.map(t => <option key={t} value={t}>{t}</option>)}
+  </select>
 )
 
 // ── Página ───────────────────────────────────────────────────────────────────
@@ -595,7 +620,11 @@ export default function AdminPage({ store }: Props) {
               {needsRows.map((n: Necesidad) => (
                 <tr key={n.id} className="row-hover">
                   <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(n.fecha)}</Td>
-                  <Td><span style={{ fontWeight: 600 }}>{n.tipo}</span>{n.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{n.cantidad}</span></>}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.descripcion?.slice(0, 90)}</span></Td>
+                  <Td>
+                    <TipoSelect value={n.tipo} options={TIPOS_NECESIDAD} onPick={v => updateNecesidad(n.id, { tipo: v })} />
+                    {n.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{n.cantidad}</span></>}
+                    <br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.descripcion?.slice(0, 90)}</span>
+                  </Td>
                   <Td>{n.responsable ? <StatusTag v="en_proceso" /> : n.estado === 'atendida' ? <StatusTag v="atendida" /> : <StatusTag v="urgente" />}</Td>
                   <Td><span className={`tag ${n.prioridad === 'alta' ? 'tag-red' : n.prioridad === 'media' ? 'tag-orange' : 'tag-gray'}`}>{n.prioridad}</span></Td>
                   <Td>{n.reportado_por}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.telefono_reporta}</span></Td>
@@ -642,7 +671,11 @@ export default function AdminPage({ store }: Props) {
                 <tr key={o.id} className="row-hover">
                   <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(o.fecha)}</Td>
                   <Td>{o.estado === 'entregado' ? <StatusTag v="entregado" /> : o.reservado_por ? <StatusTag v="reservado" /> : <StatusTag v="disponible" />}</Td>
-                  <Td><span style={{ fontWeight: 600 }}>{o.tipo}</span>{o.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.cantidad}</span></>}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{o.descripcion?.slice(0, 80)}</span></Td>
+                  <Td>
+                    <TipoSelect value={o.tipo} options={CATEGORIAS_OFRECIMIENTO} onPick={v => updateOfrecimiento(o.id, { tipo: v })} />
+                    {o.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.cantidad}</span></>}
+                    <br /><span style={{ fontSize: 12, color: '#6b7280' }}>{o.descripcion?.slice(0, 80)}</span>
+                  </Td>
                   <Td>{o.nombre_ofrece}<br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.telefono_ofrece}</span></Td>
                   <Td>{o.reservado_por ? <span>{o.reservado_por.nombre}<br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.reservado_por.telefono}</span></span> : '—'}</Td>
                   <Td>
@@ -797,7 +830,9 @@ export default function AdminPage({ store }: Props) {
                 <tr key={m.id} className="row-hover">
                   <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(m.fecha_visto)}</Td>
                   <Td><StatusTag v={m.estado} /></Td>
-                  <Td><span style={{ fontWeight: 600 }}>{m.nombre || 'S/N'}</span> · {m.tipo_animal}</Td>
+                  <Td><span style={{ fontWeight: 600 }}>{m.nombre || 'S/N'}</span> ·{' '}
+                    <TipoSelect value={m.tipo_animal} options={TIPOS_ANIMAL} onPick={v => updateMascota(m.id, { tipo_animal: v })} />
+                  </Td>
                   <Td style={{ maxWidth: 180 }}><span style={{ fontSize: 12, color: '#6b7280' }}>{m.senas.slice(0, 60)}</span></Td>
                   <Td>{m.nombre_reporta}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{m.telefono_reporta}</span></Td>
                   <Td>{m.avistado_por ? `${m.avistado_por.nombre}` : '—'}</Td>
@@ -924,7 +959,9 @@ export default function AdminPage({ store }: Props) {
                       : <span style={{ fontSize: 22 }}>🏪</span>}
                   </Td>
                   <Td><span style={{ fontWeight: 600 }}>{p.nombre}</span></Td>
-                  <Td><span className="tag tag-blue" style={{ fontSize: 11 }}>{p.tipo || 'Otro'}</span></Td>
+                  <Td>
+                    <TipoSelect value={p.tipo || 'Otro'} options={TIPOS_PUNTO_APOYO} onPick={v => updatePuntoApoyo(p.id, { tipo: v })} />
+                  </Td>
                   <Td style={{ fontSize: 12.5 }}>{p.direccion}</Td>
                   <Td style={{ fontSize: 12.5 }}>{p.telefono || '—'}</Td>
                   <Td>

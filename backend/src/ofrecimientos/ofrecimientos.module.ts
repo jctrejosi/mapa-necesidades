@@ -122,6 +122,28 @@ class OfrecimientosService {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
+    const nuevo = await this.patch(id, b);
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
+    });
+    return nuevo;
+  }
+
+  /** Edición con la llave general de Admin (sin PIN). */
+  async adminUpdate(id: number, b: OfrecimientoBody) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Ofrecimiento no encontrado' });
+    const previo = this.serialize(row);
+    const nuevo = await this.patch(id, b);
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'admin', codigo: 'llave-admin',
+    });
+    return nuevo;
+  }
+
+  private async patch(id: number, b: OfrecimientoBody) {
     const set: Partial<typeof ofrecimientos.$inferInsert> = {};
     if (b.tipo !== undefined) set.tipo = str(b.tipo);
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
@@ -130,12 +152,7 @@ class OfrecimientosService {
     if (b.fecha !== undefined) set.fecha = toDate(b.fecha) ?? today();
     if (b.estado !== undefined) set.estado = b.estado === 'entregado' ? 'entregado' : 'disponible';
     const [o] = await this.db.update(ofrecimientos).set(set).where(eq(ofrecimientos.id, id)).returning();
-    const nuevo = this.serialize(o);
-    await registrarAuditoria(this.db, {
-      tabla: 'ofrecimientos', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
-    });
-    return nuevo;
+    return this.serialize(o);
   }
 
   async reservar(id: number, nombre: unknown, telefono: unknown) {
@@ -203,6 +220,13 @@ export class OfrecimientosController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() b: OfrecimientoBody) {
     return this.svc.updatePublic(toInt(id), b);
+  }
+
+  /** Edición con la llave general de Admin. */
+  @Patch(':id/admin')
+  @UseGuards(AdminGuard)
+  adminUpdate(@Param('id') id: string, @Body() b: OfrecimientoBody) {
+    return this.svc.adminUpdate(toInt(id), b);
   }
 
   @Post(':id/reserva')

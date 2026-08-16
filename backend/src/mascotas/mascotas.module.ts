@@ -132,6 +132,28 @@ class MascotasService {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
+    const nuevo = await this.patch(id, b);
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
+    });
+    return nuevo;
+  }
+
+  /** Edición con la llave general de Admin (sin PIN). */
+  async adminUpdate(id: number, b: MascotaBody) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Mascota no encontrada' });
+    const previo = this.serialize(row);
+    const nuevo = await this.patch(id, b);
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'admin', codigo: 'llave-admin',
+    });
+    return nuevo;
+  }
+
+  private async patch(id: number, b: MascotaBody) {
     const set: Partial<typeof mascotasPerdidas.$inferInsert> = {};
     if (b.nombre_mascota !== undefined) set.nombreMascota = str(b.nombre_mascota) || null;
     if (b.tipo_animal !== undefined) set.tipoAnimal = str(b.tipo_animal);
@@ -141,12 +163,7 @@ class MascotasService {
     if (b.fecha_visto !== undefined) set.fechaVisto = toDate(b.fecha_visto) ?? today();
     if (b.estado !== undefined) set.estado = b.estado === 'encontrado' ? 'encontrado' : 'perdido';
     const [m] = await this.db.update(mascotasPerdidas).set(set).where(eq(mascotasPerdidas.id, id)).returning();
-    const nuevo = this.serialize(m);
-    await registrarAuditoria(this.db, {
-      tabla: 'mascotas_perdidas', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
-    });
-    return nuevo;
+    return this.serialize(m);
   }
 
   async avistar(id: number, nombre: unknown, telefono: unknown) {
@@ -220,6 +237,13 @@ export class MascotasController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() b: MascotaBody) {
     return this.svc.updatePublic(toInt(id), b);
+  }
+
+  /** Edición con la llave general de Admin. */
+  @Patch(':id/admin')
+  @UseGuards(AdminGuard)
+  adminUpdate(@Param('id') id: string, @Body() b: MascotaBody) {
+    return this.svc.adminUpdate(toInt(id), b);
   }
 
   @Post(':id/avistamiento')

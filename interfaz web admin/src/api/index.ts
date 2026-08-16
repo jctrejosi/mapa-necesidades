@@ -86,6 +86,9 @@ export const createOfrecimiento = (b: Partial<Ofrecimiento>): Promise<Ofrecimien
 export const updateOfrecimiento = (id: number, b: Record<string, unknown>): Promise<Ofrecimiento> =>
   request(`/ofrecimientos/${id}`, { method: 'PATCH', body: b })
 
+export const updateOfrecimientoAdmin = (id: number, b: Record<string, unknown>): Promise<Ofrecimiento> =>
+  request(`/ofrecimientos/${id}/admin`, { method: 'PATCH', body: b })
+
 export const reservarOfrecimiento = (id: number, nombre: string, telefono: string): Promise<Ofrecimiento> =>
   request(`/ofrecimientos/${id}/reserva`, { method: 'POST', body: { nombre, telefono } })
 
@@ -105,6 +108,9 @@ export const createMascota = (b: Partial<Mascota>): Promise<Mascota & { pin: str
 
 export const updateMascota = (id: number, b: Record<string, unknown>): Promise<Mascota> =>
   request(`/mascotas/${id}`, { method: 'PATCH', body: b })
+
+export const updateMascotaAdmin = (id: number, b: Record<string, unknown>): Promise<Mascota> =>
+  request(`/mascotas/${id}/admin`, { method: 'PATCH', body: b })
 
 export const avistarMascota = (id: number, nombre: string, telefono: string): Promise<Mascota> =>
   request(`/mascotas/${id}/avistamiento`, { method: 'POST', body: { nombre, telefono } })

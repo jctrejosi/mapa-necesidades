@@ -1578,10 +1578,10 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
 
             {/* 🔍 Buscador de reportes por PIN o teléfono */}
-            <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 500, width: 'min(360px, calc(100% - 24px))' }}>
+            <div className="map-search" style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 500 }}>
               <input
-                className="form-input"
-                placeholder="🔍 Buscar reporte por PIN o teléfono…"
+                className="form-input map-search-input"
+                placeholder="🔍 Buscar por PIN o teléfono…"
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
                 onFocus={() => setSearchOpen(true)}
@@ -1589,7 +1589,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 style={{
                   background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(4px)',
                   boxShadow: '0 2px 10px rgba(0,0,0,0.2)', borderRadius: 999,
-                  padding: '9px 16px', border: '1px solid #d1d5db', fontSize: 13.5,
+                  border: '1px solid #d1d5db',
                 }}
               />
               {searchOpen && searchQ.trim().length >= 3 && (
