@@ -89,3 +89,9 @@ export interface ReporteDano {
   fecha: string; fecha_visita: string | null
   resultado_visita: string | null; notas_admin: string | null
 }
+
+export interface Voluntario {
+  id: number; tabla: string; registro_id: number
+  nombre: string; telefono: string; mensaje: string
+  fecha: string
+}

@@ -6,7 +6,7 @@
 import { getVisitorId, request } from './client'
 import type {
   CentroAcopio, Evento, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
-  ReporteDano, Sector, Vivienda,
+  ReporteDano, Sector, Vivienda, Voluntario,
 } from './types'
 
 // ── Ciudades ────────────────────────────────────────────────────────────────
@@ -188,6 +188,26 @@ export const deleteEvento = (id: number): Promise<{ ok: boolean }> =>
 /** Borrado público con el PIN que se le dio al usuario al publicar. */
 export const eliminarEvento = (id: number, pin: string): Promise<{ ok: boolean }> =>
   request(`/eventos/${id}/eliminar`, { method: 'POST', body: { pin } })
+
+// ── Voluntarios ("Yo te ayudo" en el detalle de cualquier reporte) ──────────
+
+export const listVoluntarios = (tabla: string, registroId: number): Promise<Voluntario[]> =>
+  request(`/voluntarios?tabla=${encodeURIComponent(tabla)}&registro_id=${registroId}`)
+
+export const registrarVoluntario = (b: { tabla: string; registro_id: number; nombre: string; telefono: string; mensaje?: string }): Promise<{ ok: boolean; id: number; whatsapp: boolean }> =>
+  request('/voluntarios', { method: 'POST', body: { ...b, visitor_id: getVisitorId() } })
+
+// ── Buscador (PIN o teléfono) ─────────────────────────────────────────────
+
+export interface ResultadoBusqueda {
+  tipo: string; tabla: string; id: number
+  titulo: string; detalle: string; telefono: string; ciudad: string
+  lat: number | null; lng: number | null; imagen: string | null
+  coincidencia: 'pin' | 'telefono'
+}
+
+export const buscarReportes = (q: string): Promise<ResultadoBusqueda[]> =>
+  request(`/buscar?q=${encodeURIComponent(q)}`)
 
 // ── Noticias ────────────────────────────────────────────────────────────────
 

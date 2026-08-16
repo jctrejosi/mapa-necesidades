@@ -377,6 +377,10 @@ export function useStore() {
   const eliminarEvento = (id: number, pin: string): Promise<unknown> =>
     mutate(() => api.eliminarEvento(id, pin), ciudad)
 
+  /** "Yo te ayudo": registra al voluntario y el backend actualiza el estado del reporte. */
+  const registrarVoluntario = (b: { tabla: string; registro_id: number; nombre: string; telefono: string; mensaje?: string }): Promise<unknown> =>
+    mutate(() => api.registrarVoluntario(b), ciudad)
+
   const addNoticia = (n: Omit<Noticia, 'id'>): Promise<unknown> =>
     mutate(async () => api.createNoticia({ ...n, imagen: await withImage(n.imagen) }), ciudad)
 
@@ -451,6 +455,7 @@ export function useStore() {
     addCentro, updateCentro, deleteCentro,
     addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo, eliminarPuntoApoyo,
     addEvento, updateEvento, deleteEvento, eliminarEvento,
+    registrarVoluntario,
     addNoticia, updateNoticia, deleteNoticia,
     addVivienda, updateVivienda, deleteVivienda, eliminarVivienda,
     addDano, updateDano, editarDano, deleteDano, eliminarDano,

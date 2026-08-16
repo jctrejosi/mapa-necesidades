@@ -18,6 +18,8 @@ import { VisitasModule } from './visitas/visitas.module';
 import { AuditoriaModule } from './audit/audit.module';
 import { PuntosApoyoModule } from './puntos-apoyo/puntos-apoyo.module';
 import { EventosModule } from './eventos/eventos.module';
+import { VoluntariosModule } from './voluntarios/voluntarios.module';
+import { BuscarModule } from './buscar/buscar.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { EventosModule } from './eventos/eventos.module';
     AuditoriaModule,
     PuntosApoyoModule,
     EventosModule,
+    VoluntariosModule,
+    BuscarModule,
   ],
 })
 export class AppModule {}

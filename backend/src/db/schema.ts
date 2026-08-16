@@ -351,3 +351,24 @@ export const eventos = pgTable(
 );
 
 export type Evento = typeof eventos.$inferSelect;
+
+// ── Voluntarios (registro de quién va a ayudar a cada reporte) ─────────────
+// Cada registro queda asociado a un reporte (tabla + id) y el backend
+// actualiza el estado del reporte (responsable / reserva / avistamiento / etc.).
+
+export const voluntarios = pgTable(
+  'voluntarios',
+  {
+    id: serial('id').primaryKey(),
+    tabla: varchar('tabla', { length: 30 }).notNull(),
+    registroId: integer('registro_id').notNull(),
+    nombre: varchar('nombre', { length: 150 }).notNull(),
+    telefono: varchar('telefono', { length: 50 }).notNull(),
+    mensaje: text('mensaje'),
+    visitorId: varchar('visitor_id', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_voluntarios_tabla_registro').on(t.tabla, t.registroId)],
+);
+
+export type Voluntario = typeof voluntarios.$inferSelect;

@@ -8,7 +8,7 @@ import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
 import ChatbotWidget from '../components/ChatbotWidget'
-import { uploadImage } from '../api'
+import { uploadImage, listVoluntarios, buscarReportes } from '../api'
 
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -17,6 +17,28 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
+
+/** Tipo de reporte (frontend) → nombre de tabla (backend) para "Yo te ayudo". */
+const tablaDeTipo: Record<string, string> = {
+  necesidad: 'necesidades',
+  ofrecimiento: 'ofrecimientos',
+  mascota: 'mascotas_perdidas',
+  vivienda: 'viviendas',
+  dano: 'reportes_danos',
+  evento: 'eventos',
+  punto: 'puntos_apoyo',
+}
+
+/** Íconos del buscador según el tipo de resultado. */
+const RESULT_ICONS: Record<string, string> = {
+  necesidad: '🆘',
+  ofrecimiento: '🤝',
+  mascota: '🐾',
+  vivienda: '🏠',
+  dano: '🏚️',
+  evento: '📅',
+  punto: '🏪',
+}
 
 interface Props { store: Store; setPage: (p: string) => void; reportesSignal?: number }
 
@@ -152,7 +174,7 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const { ciudad, sectores, necesidades, puntosApoyo, eventos, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
-    addSector, addNecesidad, addMascota, addDano, updateNecesidad, ayudarNecesidad, getSectorEstado,
+    addSector, addNecesidad, addMascota, addDano, updateNecesidad, registrarVoluntario, getSectorEstado,
     eliminarNecesidad, updateOfrecimiento, eliminarOfrecimiento, updateMascota, eliminarMascota,
     updateVivienda, eliminarVivienda, editarDano, eliminarDano, updateEvento, eliminarEvento } = store
 
@@ -184,6 +206,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [reportesModalOpen, setReportesModalOpen] = useState(false)
   // Detalle del reporte seleccionado (se abre al hacer click en un ítem)
   const [detailItem, setDetailItem] = useState<any | null>(null)
+  // Voluntarios registrados para el reporte del detalle abierto
+  const [detailHelpers, setDetailHelpers] = useState<any[]>([])
+  // 🔍 Buscador de reportes por PIN o teléfono
+  const [searchQ, setSearchQ] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchTimer = useRef<number | null>(null)
   // Intentos fallidos de ubicación (tras 3 se muestra el modal de aviso)
   const [locationAttempts, setLocationAttempts] = useState(0)
   const locationAttemptsRef = useRef(0)
@@ -192,7 +221,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [showReportModal, setShowReportModal] = useState(false)
   const geoAddrTimer = useRef<number | null>(null)
   const [showNeedModal, setShowNeedModal] = useState<number | null>(null) // sector_id
-  const [showHelpModal, setShowHelpModal] = useState<number | null>(null) // need_id
+  const [helpTarget, setHelpTarget] = useState<{ tabla: string; id: number; titulo: string } | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null) // need_id
   // Editar/eliminar cualquier reporte público con el código (PIN/radicado)
   const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string; sectorId?: number } | null>(null)
@@ -230,8 +259,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     tipo: 'Comida y agua', cantidad: '', prioridad: 'alta' as const,
     detalles: '', reportado_por: '', telefono: '', imagen: null as string | null
   })
-  // Help form — solo teléfono (el backend envía por WhatsApp los datos de quien necesita)
-  const [hForm, setHForm] = useState({ telefono: '' })
+  // Help form — nombre + teléfono del voluntario (se registra en /voluntarios)
+  const [hForm, setHForm] = useState({ nombre: '', telefono: '' })
   // Update form
   const [uForm, setUForm] = useState({
     cantidad: '', prioridad: 'alta' as const, detalles: '', estado: 'requiere' as const,
@@ -581,6 +610,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           telefono: p.telefono || undefined,
           lat: p.lat, lng: p.lng,
           imagenes: p.imagen ? [p.imagen] : undefined,
+          ayuda: { tabla: 'puntos_apoyo', id: p.id },
         }
         mk.bindPopup(`
           <div style="min-width:200px">
@@ -653,7 +683,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   // Wire global callbacks for popup buttons
   useEffect(() => {
     (window as any).__helpNeed = (needId: string) => {
-      setShowHelpModal(Number(needId))
+      const n = necesidades.find(x => x.id === Number(needId))
+      setHelpTarget({ tabla: 'necesidades', id: Number(needId), titulo: n?.tipo ?? 'Necesidad' })
       if (mapInstance.current) mapInstance.current.closePopup()
     }
     ;(window as any).__openDetail = (key: string) => openDetailRef.current(key)
@@ -852,15 +883,23 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   }
 
   const submitHelp = async () => {
-    if (!showHelpModal) return
+    if (!helpTarget) return
+    if (!hForm.nombre.trim()) { alert('Tu nombre es obligatorio'); return }
     if (!hForm.telefono.trim()) { alert('Tu teléfono es obligatorio'); return }
-    const r = await ayudarNecesidad(showHelpModal, hForm.telefono.trim())
+    const r = await registrarVoluntario({
+      tabla: helpTarget.tabla, registro_id: helpTarget.id,
+      nombre: hForm.nombre.trim(), telefono: hForm.telefono.trim(),
+    })
     if (!r) return
-    setShowHelpModal(null)
-    setHForm({ telefono: '' })
-    alert(r.whatsapp
-      ? '¡Gracias! Te enviamos por WhatsApp la información de quien necesita ayuda (teléfono y ubicación).'
-      : '¡Gracias! Quedaste registrado. (El envío por WhatsApp aún no está configurado.)')
+    setHelpTarget(null)
+    setHForm({ nombre: '', telefono: '' })
+    showToast('✅ ¡Gracias! Quedaste registrado como voluntario y el reporte cambió de estado.')
+    // Refresca la lista de voluntarios del detalle abierto
+    if (detailItem) {
+      const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
+      const id = detailItem.ayuda?.id ?? detailItem.editable?.id
+      if (tabla && id) listVoluntarios(tabla, id).then(setDetailHelpers).catch(() => setDetailHelpers([]))
+    }
   }
 
   const submitUpdate = async () => {
@@ -1030,6 +1069,46 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       }
     }
   })
+
+  // Carga la lista de voluntarios del detalle abierto
+  useEffect(() => {
+    const tabla = detailItem?.ayuda?.tabla ?? (detailItem?.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
+    const id = detailItem?.ayuda?.id ?? detailItem?.editable?.id
+    if (!tabla || !id) { setDetailHelpers([]); return }
+    listVoluntarios(tabla, id).then(setDetailHelpers).catch(() => setDetailHelpers([]))
+  }, [detailItem])
+
+  // 🔍 Búsqueda con retardo (300ms) mientras se escribe
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    const q = searchQ.trim()
+    if (q.length < 3) { setSearchResults([]); return }
+    searchTimer.current = window.setTimeout(() => {
+      buscarReportes(q).then(setSearchResults).catch(() => setSearchResults([]))
+    }, 300)
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [searchQ])
+
+  /** Abre un resultado del buscador: centra el mapa y muestra el detalle. */
+  const openSearchResult = (r: any) => {
+    if (r.lat != null && r.lng != null && mapInstance.current) {
+      mapInstance.current.setView([r.lat, r.lng], 15)
+      if (sheetState === 'full') setSheetState('peek')
+    }
+    const icon = r.tipo === 'necesidad' ? needIcon(r.titulo) : (RESULT_ICONS[r.tipo] ?? '🔍')
+    const payload: any = {
+      titulo: `${icon} ${r.titulo}`,
+      detalle: r.detalle || undefined,
+      ubicacion: r.coincidencia === 'pin' ? `Coincidencia por PIN · ${r.ciudad}` : `Coincidencia por teléfono · ${r.ciudad}`,
+      telefono: r.telefono || undefined,
+      lat: r.lat ?? undefined, lng: r.lng ?? undefined,
+      imagenes: r.imagen ? [r.imagen] : undefined,
+    }
+    if (r.tipo === 'punto') payload.ayuda = { tabla: 'puntos_apoyo', id: r.id }
+    else payload.editable = { tipo: r.tipo, id: r.id }
+    openDetail(payload)
+    setSearchOpen(false)
+  }
 
   const timeAgo = (iso: string) => {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -1214,7 +1293,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 </div>
                 <p style={{ margin: '2px 0', fontSize: 11.5, color: '#6b7280' }}>📍 {sector?.nombre ?? 'Sector'}</p>
                 {urgente && (
-                  <button onClick={(e) => { e.stopPropagation(); setShowHelpModal(n.id) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
+                  <button onClick={(e) => { e.stopPropagation(); setHelpTarget({ tabla: 'necesidades', id: n.id, titulo: n.tipo }) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
                 )}
                 {n.responsable && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>}
               </div>
@@ -1498,6 +1577,68 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           <div className="map-container" style={{ position: 'relative' }}>
             <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
 
+            {/* 🔍 Buscador de reportes por PIN o teléfono */}
+            <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 500, width: 'min(360px, calc(100% - 24px))' }}>
+              <input
+                className="form-input"
+                placeholder="🔍 Buscar reporte por PIN o teléfono…"
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 250)}
+                style={{
+                  background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(4px)',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.2)', borderRadius: 999,
+                  padding: '9px 16px', border: '1px solid #d1d5db', fontSize: 13.5,
+                }}
+              />
+              {searchOpen && searchQ.trim().length >= 3 && (
+                <div
+                  onMouseDown={e => e.preventDefault()}
+                  style={{
+                    marginTop: 6, background: '#fff', borderRadius: 12,
+                    boxShadow: '0 6px 24px rgba(0,0,0,0.18)', border: '1px solid #e1e4e9',
+                    maxHeight: 320, overflowY: 'auto', textAlign: 'left',
+                  }}
+                >
+                  {searchResults.length === 0 ? (
+                    <p style={{ padding: '14px 16px', margin: 0, fontSize: 13, color: '#6b7280' }}>Sin resultados para “{searchQ.trim()}”</p>
+                  ) : (
+                    searchResults.map((r, i) => (
+                      <button
+                        key={`${r.tabla}-${r.id}-${i}`}
+                        onClick={() => openSearchResult(r)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                          background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0',
+                          padding: '10px 14px', cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
+                        }}
+                      >
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>{r.tipo === 'necesidad' ? needIcon(r.titulo) : (RESULT_ICONS[r.tipo] ?? '🔍')}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1f2430', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.titulo}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.detalle || r.ciudad}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            flexShrink: 0, fontSize: 10.5, fontWeight: 800, borderRadius: 999,
+                            padding: '3px 8px', color: r.coincidencia === 'pin' ? '#003893' : '#166534',
+                            background: r.coincidencia === 'pin' ? '#e8eeff' : '#e6f5ec',
+                          }}
+                        >
+                          {r.coincidencia === 'pin' ? '🔑 PIN' : '📞 Teléfono'}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
             {!mapReady && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f5f7' }}>
                 <span style={{ color: '#003893', fontWeight: 600 }}>Cargando mapa...</span>
@@ -1685,6 +1826,45 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ) : (
             <p style={{ fontSize: 12.5, color: '#9AA0AC', margin: 0 }}>No hay teléfono registrado para este reporte.</p>
           )}
+          {(() => {
+            const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
+            if (!tabla) return null
+            const id = detailItem.ayuda?.id ?? detailItem.editable!.id
+            return (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ padding: '10px 12px', background: '#f0fdf4', border: '1px solid #d1fae5', borderRadius: 10 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#166534' }}>
+                    🤝 {detailHelpers.length > 0
+                      ? `${detailHelpers.length} ${detailHelpers.length === 1 ? 'persona va' : 'personas van'} a ayudar`
+                      : 'Nadie se ha ofrecido a ayudar todavía'}
+                  </p>
+                  {detailHelpers.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {detailHelpers.slice(0, 5).map((h: any) => (
+                        <div key={h.id} style={{ fontSize: 12, color: '#166534' }}>
+                          🙋 {h.nombre} ·{' '}
+                          <a href={`https://wa.me/${waNumber(h.telefono)}`} target="_blank" rel="noreferrer" style={{ color: '#166534', fontWeight: 700 }}>
+                            {h.telefono}
+                          </a>
+                        </div>
+                      ))}
+                      {detailHelpers.length > 5 && <span style={{ fontSize: 11, color: '#6b7280' }}>y {detailHelpers.length - 5} más…</span>}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setHForm({ nombre: '', telefono: '' }); setHelpTarget({ tabla, id, titulo: detailItem.titulo }) }}
+                  style={{
+                    width: '100%', marginTop: 8, background: '#2E9E5B', color: '#fff',
+                    border: 'none', borderRadius: 10, padding: '11px 16px',
+                    fontWeight: 800, fontSize: 14.5, cursor: 'pointer', fontFamily: "'Nunito', sans-serif",
+                  }}
+                >
+                  🤝 Yo te ayudo
+                </button>
+              </div>
+            )
+          })()}
           {detailItem.editable && (
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', borderTop: '1px solid #f0f0f0', paddingTop: 14 }}>
               <button className="btn btn-outline btn-sm" onClick={() => openEdit(detailItem.editable!)}>✎ Editar reporte</button>
@@ -1883,23 +2063,23 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </Modal>
       )}
 
-      {/* Help modal */}
-      {showHelpModal && (() => {
-        const need = necesidades.find(n => n.id === showHelpModal)!
-        return (
-          <Modal title="🙋 Yo puedo ayudar con esto" onClose={() => setShowHelpModal(null)} onConfirm={submitHelp} confirmLabel="Confirmar">
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
-              <strong>{need.tipo}</strong> — {need.cantidad}<br />
-              Solo necesitamos tu teléfono: te enviaremos por WhatsApp la información de quien necesita ayuda
-              (su teléfono y la ubicación).
-            </p>
-            <div className="form-group">
-              <label className="form-label">Tu teléfono (WhatsApp) <span className="req">*</span></label>
-              <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
-            </div>
-          </Modal>
-        )
-      })()}
+      {/* Help modal: registro de voluntario para cualquier reporte */}
+      {helpTarget && (
+        <Modal title={`🤝 Yo te ayudo: ${helpTarget.titulo}`} onClose={() => setHelpTarget(null)} onConfirm={submitHelp} confirmLabel="Confirmar ayuda">
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
+            Déjanos tu nombre y teléfono: quedará registrado que vas a ayudar y quien publicó
+            el reporte recibirá tu contacto por WhatsApp para coordinar.
+          </p>
+          <div className="form-group">
+            <label className="form-label">Tu nombre <span className="req">*</span></label>
+            <input className="form-input" value={hForm.nombre} onChange={e => setHForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. María Pérez" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Tu teléfono (WhatsApp) <span className="req">*</span></label>
+            <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
+          </div>
+        </Modal>
+      )}
 
       {/* Update need modal */}
       {showUpdateModal && (() => {
