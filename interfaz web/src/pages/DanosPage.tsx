@@ -133,7 +133,6 @@ export default function DanosPage({ store }: Props) {
                   {d.habitado === 'si' ? '🏠 Habitado' : d.habitado === 'evacuado' ? '⚠️ Evacuado' : '🔒 Desocupado'} · {fmtFecha(d.fecha)}
                 </p>
                 {d.descripcion && <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>{d.descripcion}</p>}
-                <p style={{ fontSize: 12, color: '#9AA0AC', margin: '0 0 4px' }}>Radicado: <strong style={{ color: '#003893', fontFamily: 'monospace' }}>{d.radicado}</strong></p>
                 {d.resultado_visita && (
                   <p style={{ fontSize: 12, color: '#2E9E5B', margin: '4px 0 0' }}>✅ {d.resultado_visita}</p>
                 )}

@@ -14,6 +14,7 @@
  */
 
 const { execFileSync, spawn } = require('child_process');
+const fs = require('fs');
 const net = require('net');
 const path = require('path');
 
@@ -39,8 +40,8 @@ const PORTS = [8080, 8081, 3000, 8000];
 
 // ── Modo desarrollo: servicios directos en el host (como dev.js de mercaldas) ──
 // Cada servicio corre en su carpeta con sus propias dependencias; los logs se
-// muestran en vivo con prefijo de color y Ctrl+C los detiene (la BD Supabase
-// queda intacta, no hay contenedores).
+// muestran en vivo con prefijo de color y Ctrl+C los detiene. La base de datos
+// local (PostgreSQL) corre en Docker y queda intacta.
 const DEV_SERVICES = [
   {
     name: 'BACKEND', dir: 'backend', cmd: ['npm', 'run', 'start:dev'],
@@ -74,7 +75,7 @@ const c = {
 function banner() {
   console.log(`
 ${c.cyan}${c.bold}  ███ SolidaridadCO — Mapa de Sectores Afectados ███${c.reset}
-  ${c.dim}Arranque local: API (NestJS/Drizzle + PostgreSQL en Supabase) + Interfaz Web${c.reset}
+  ${c.dim}Arranque local: API (NestJS/Drizzle + PostgreSQL local en Docker) + Interfaz Web${c.reset}
 `);
 }
 
@@ -182,7 +183,7 @@ async function waitForWeb(timeoutMs = 60000) {
   fail(`La interfaz web no respondió en ${timeoutMs / 1000}s. Revisa: docker compose logs frontend`);
 }
 
-/** Importa los datos de producción (dump MySQL) si la DB está vacía. */
+/** Importa datos a la base local (Postgres) si está vacía. */
 async function importLegacyIfNeeded(force = false, devMode = false) {
   let totalSectores = 0;
   try {
@@ -196,12 +197,19 @@ async function importLegacyIfNeeded(force = false, devMode = false) {
     return;
   }
 
-  if (!force) {
-    info('La base de datos está vacía; importando los datos del backup de producción...');
+  const backend = devMode ? 'backend-dev' : 'backend';
+  const bkPath = path.join(ROOT, 'backups', 'bk.sql');
+  if (fs.existsSync(bkPath)) {
+    info(force
+      ? 'Sembrando la base local desde bk.sql (merge idempotente)...'
+      : 'La base local está vacía; sembrando desde bk.sql (merge idempotente)...');
+    run(COMPOSE.concat(['exec', '-T', backend, 'npm', 'run', 'db:seed-bk']));
   } else {
-    info('Importando los datos del backup de producción...');
+    info(force
+      ? 'Importando los datos del backup de producción (legacy)...'
+      : 'La base local está vacía; importando el backup de producción (legacy)...');
+    run(COMPOSE.concat(['exec', '-T', backend, 'npm', 'run', 'db:import-legacy']));
   }
-  run(COMPOSE.concat(['exec', '-T', devMode ? 'backend-dev' : 'backend', 'npm', 'run', 'db:import-legacy']));
 }
 
 async function up() {
@@ -327,6 +335,13 @@ function killDevChildren() {
 async function devUp() {
   banner();
 
+  // La base de datos local (PostgreSQL) se levanta con Docker
+  info('Levantando PostgreSQL local (docker compose up -d db)...');
+  run(COMPOSE.concat(['up', '-d', 'db']));
+  if (!(await waitForPort(5434, 60000))) {
+    warn('No se detectó PostgreSQL local en :5434; el backend reintentará la conexión al arrancar.');
+  }
+
   // El modo dev usa los mismos puertos (3000/8080/8081): detener contenedores del proyecto
   for (const name of CONTAINERS.concat(DEV_CONTAINERS)) {
     if (containerRunning(name)) {
@@ -417,7 +432,7 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
   ${c.bold}Interfaz web${c.reset}    ${c.cyan}${WEB_URL}${c.reset}
   ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
-  ${c.bold}PostgreSQL${c.reset}     Supabase (nube) — se migra con: node setup.js --import
+  ${c.bold}PostgreSQL${c.reset}     Local (Docker) — semilla desde backups/bk.sql; producción usa Supabase
 ${dev ? `
   ${c.dim}Modo DEV: hot reload activo — backend (nest --watch) y frontends (Vite HMR)${c.reset}
 ` : ''}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from './store'
 import Header from './components/Header'
 import Footer from './components/Footer'
@@ -13,27 +13,6 @@ import DashboardPage from './pages/DashboardPage'
 import AyudaPage from './pages/AyudaPage'
 
 const MAP_PAGES = new Set(['mapa'])
-
-// Ruta por tab. `dashboard` usa `/estadisticas`; `/dashboard` queda como alias.
-const PAGE_ROUTES: Record<string, string> = {
-  mapa: '/mapa',
-  ofrecimientos: '/ofrecimientos',
-  mascotas: '/mascotas',
-  noticias: '/noticias',
-  vivienda: '/vivienda',
-  danos: '/danos',
-  dashboard: '/estadisticas',
-  ayuda: '/ayuda',
-}
-const ROUTE_TO_PAGE: Record<string, string> = Object.fromEntries(
-  Object.entries(PAGE_ROUTES).map(([page, route]) => [route, page]),
-)
-
-function pathToPage(pathname: string): string {
-  if (ROUTE_TO_PAGE[pathname]) return ROUTE_TO_PAGE[pathname]
-  if (pathname === '/dashboard') return 'dashboard' // alias del nombre anterior
-  return 'mapa'
-}
 
 // Bottom tabs shown on mobile
 const BOTTOM_TABS = [
@@ -57,7 +36,7 @@ const ALL_NAV = [
 ]
 
 export default function App() {
-  const [page, setPage] = useState(() => pathToPage(window.location.pathname))
+  const [page, setPage] = useState('mapa')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [reportesSignal, setReportesSignal] = useState(0)
   const store = useStore()
@@ -71,24 +50,12 @@ export default function App() {
       setDrawerOpen(false)
       window.scrollTo(0, 0)
       setReportesSignal(s => s + 1)
-      if (window.location.pathname !== '/mapa') window.history.pushState(null, '', '/mapa')
       return
     }
     setPage(id)
     setDrawerOpen(false)
     window.scrollTo(0, 0)
-    const route = PAGE_ROUTES[id] ?? '/mapa'
-    if (window.location.pathname !== route) {
-      window.history.pushState(null, '', route)
-    }
   }
-
-  // Navegar con los botones atrás/adelante del navegador
-  useEffect(() => {
-    const onPop = () => setPage(pathToPage(window.location.pathname))
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100svh', background: '#f4f5f7' }}>

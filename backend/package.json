@@ -9,7 +9,8 @@
     "start:dev": "nest start --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:import-legacy": "node dist/scripts/import-legacy.js"
+    "db:import-legacy": "node dist/scripts/import-legacy.js",
+    "db:seed-bk": "node dist/scripts/merge-bk.js /app/legacy-backups/bk.sql"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.3",

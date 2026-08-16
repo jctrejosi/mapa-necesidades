@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -20,11 +20,24 @@ L.Icon.Default.mergeOptions({
 interface Props { store: Store; setPage: (p: string) => void; reportesSignal?: number }
 
 /**
- * Geocodificación inversa: lat/lng → dirección legible (para que el usuario
- * la pueda editar en el formulario). Primero BigDataCloud (sin API key) y
- * si falla, Nominatim/OpenStreetMap.
+ * Geocodificación inversa: lat/lng → dirección legible (calle/carrera/número,
+ * barrio, ciudad). Prioriza Nominatim porque da el detalle de vía y número;
+ * BigDataCloud queda como respaldo (sin API key).
  */
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=es&addressdetails=1`
+    )
+    if (res.ok) {
+      const d = await res.json()
+      if (d.display_name) return d.display_name
+      const a = d.address ?? {}
+      const street = [a.road, a.house_number].filter(Boolean).join(' ')
+      const parts = [street, a.neighbourhood || a.suburb, a.city || a.town || a.village, a.state, a.country].filter(Boolean)
+      if (parts.length) return parts.join(', ')
+    }
+  } catch { /* probar fallback */ }
   try {
     const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
@@ -32,17 +45,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
     if (res.ok) {
       const d = await res.json()
       const parts = [d.locality || d.city, d.principalSubdivision, d.countryName].filter(Boolean)
-      if (parts.length) return parts.join(', ')
-    }
-  } catch { /* probar fallback */ }
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=es`
-    )
-    if (res.ok) {
-      const d = await res.json()
-      const a = d.address ?? {}
-      const parts = [a.road, a.neighbourhood || a.suburb, a.city || a.town || a.village, a.state, a.country].filter(Boolean)
       if (parts.length) return parts.join(', ')
     }
   } catch { /* sin conexión */ }
@@ -86,6 +88,47 @@ function needKey(tipo: string) {
 /** Ícono según el tipo de necesidad reportada. */
 function needIcon(tipo: string) {
   return NEED_TYPES.find(t => t.key === needKey(tipo))?.icon ?? '🆘'
+}
+
+/** Carousel simple para mostrar las imágenes del detalle de un reporte. */
+function DetailImageCarousel({ images }: { images: string[] }) {
+  const [idx, setIdx] = useState(0)
+  if (images.length === 0) return null
+  const current = images[Math.min(idx, images.length - 1)]
+  return (
+    <div style={{ margin: '0 0 12px' }}>
+      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#f4f5f7' }}>
+        <img src={current} alt="Imagen del reporte" style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }} />
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setIdx(i => (i === 0 ? images.length - 1 : i - 1))}
+              style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: 999, background: 'rgba(0,0,0,0.45)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+              aria-label="Anterior"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setIdx(i => (i === images.length - 1 ? 0 : i + 1))}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: 999, background: 'rgba(0,0,0,0.45)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+              aria-label="Siguiente"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 6 }}>
+          {images.map((_, i) => (
+            <span key={i} style={{ width: 6, height: 6, borderRadius: 999, background: i === idx ? '#003893' : '#D1D5DB' }} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 
@@ -169,6 +212,51 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     })
     .slice(0, 5)
 
+  // Actividad reciente derivada de los datos reales de la API. No filtra por
+  // antigüedad: muestra los últimos reportes disponibles de todas las entidades.
+  const reciente = useMemo(() => {
+    const ts = (iso?: string | null) => {
+      if (!iso) return 0
+      const t = new Date(iso.length <= 10 ? `${iso}T00:00:00Z` : iso).getTime()
+      return Number.isFinite(t) ? t : 0
+    }
+    const items: Array<{ key: string; type: string; mensaje: string; ciudad: string | null; at: string; ts: number }> = []
+
+    necesidades.forEach(n => {
+      const s = sectores.find(x => x.id === n.sector_id)
+      items.push({
+        key: `n${n.id}`,
+        type: 'necesidad',
+        mensaje: `Nueva necesidad: ${n.tipo}${n.cantidad ? ` (${n.cantidad})` : ''}`,
+        ciudad: s?.ciudad ?? ciudad,
+        at: n.fecha,
+        ts: ts(n.fecha),
+      })
+    })
+    ofrecimientos.forEach(o => {
+      if (!matchesCiudad(o.ciudad)) return
+      items.push({ key: `o${o.id}`, type: 'ofrecimiento', mensaje: `Nuevo ofrecimiento: ${o.tipo}`, ciudad: o.ciudad, at: o.fecha, ts: ts(o.fecha) })
+    })
+    mascotas.forEach(m => {
+      if (!matchesCiudad(m.ciudad)) return
+      items.push({ key: `m${m.id}`, type: 'mascota', mensaje: `Mascota reportada: ${m.nombre || m.tipo_animal}`, ciudad: m.ciudad, at: m.fecha_visto, ts: ts(m.fecha_visto) })
+    })
+    viviendas.forEach(v => {
+      if (!matchesCiudad(v.ciudad)) return
+      items.push({ key: `v${v.id}`, type: 'vivienda', mensaje: 'Nueva oferta de vivienda', ciudad: v.ciudad, at: v.fecha, ts: ts(v.fecha) })
+    })
+    danos.forEach(d => {
+      if (!matchesCiudad(d.ciudad)) return
+      items.push({ key: `d${d.id}`, type: 'dano', mensaje: `Nuevo reporte de daños: ${d.tipo_inmueble}`, ciudad: d.ciudad, at: d.fecha, ts: ts(d.fecha) })
+    })
+    noticias.forEach(n => {
+      if (!(n.ciudad === null || matchesCiudad(n.ciudad))) return
+      items.push({ key: `i${n.id}`, type: 'noticia', mensaje: `Nueva noticia: ${n.titulo}`, ciudad: n.ciudad, at: n.fecha, ts: ts(n.fecha) })
+    })
+
+    return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 50)
+  }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, sectores, ciudad])
+
   // Abre el modal de reportes cuando el navbar pide "Reportes"
   useEffect(() => {
     if (reportesSignal > 0) {
@@ -177,10 +265,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     }
   }, [reportesSignal])
 
-  // En móvil, el popup de reportes (incluye la actividad reciente) se abre al cargar la página
-  useEffect(() => {
-    if (window.matchMedia('(max-width: 720px)').matches) setReportesModalOpen(true)
-  }, [])
 
 
   // Default map center by city
@@ -449,22 +533,10 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     }
 
     const opts: PositionOptions = { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
-    const permissions = (navigator as unknown as { permissions?: { query?: (d: { name: string }) => Promise<{ state: string }> } }).permissions
-    if (permissions?.query) {
-      permissions
-        .query({ name: 'geolocation' })
-        .then(p => {
-          if (p && p.state === 'denied') {
-            // Bloqueado permanentemente: el navegador ya no volverá a preguntar
-            registerLocationFailure()
-            return
-          }
-          navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts)
-        })
-        .catch(() => navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts))
-    } else {
-      navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts)
-    }
+    // Llamamos siempre a getCurrentPosition: el navegador es quien decide si
+    // muestra el prompt, devuelve la posición (ya autorizado) o llama al error
+    // (cancelado/denegado). Así vuelve a preguntar tras un "Cancelar" previo.
+    navigator.geolocation.getCurrentPosition(onOk, registerLocationFailure, opts)
   }
 
   /** 🆘 NECESITO AYUDA: pide la ubicación al navegador; el modal abre solo si hay permiso. */
@@ -473,15 +545,24 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   }
 
   const submitReport = async () => {
-    if (!pickedLatLng) { alert('Necesitamos tu ubicación: usa "📍 Usar mi ubicación" o "🗺️ Marcar en el mapa".'); return }
     if (!rForm.detalles.trim()) { alert('La descripción es obligatoria'); return }
     if (!rForm.contactoTel.trim()) { alert('Tu teléfono es obligatorio'); return }
+    const direccion = rForm.nombre.trim()
+    if (!pickedLatLng && !direccion) {
+      alert('Necesitamos una ubicación o una dirección: usa "📍 Usar mi ubicación", "🗺️ Marcar en el mapa" o escribe la dirección manualmente.')
+      return
+    }
+
+    // Si no se pudo obtener la ubicación, usa el centro de la ciudad actual
+    // para que el reporte quede geolocalizado y pueda localizarse en el mapa.
+    const fallback = cityCenter[ciudad] || cityCenter.Manizales
+    const coords = pickedLatLng || { lat: fallback[0], lng: fallback[1] }
 
     const sector = await addSector({
       ciudad,
-      nombre: rForm.nombre.trim() || 'Reporte de ayuda',
+      nombre: direccion || 'Reporte de ayuda',
       barrio: '',
-      lat: pickedLatLng.lat, lng: pickedLatLng.lng,
+      lat: coords.lat, lng: coords.lng,
       descripcion: rForm.detalles, nivel_afectacion: 'leve', estado: 'activo',
       contactos: [{ id: 0, nombre: 'Persona que reporta', telefono: rForm.contactoTel, rol: 'Coordinador' }]
     })
@@ -567,7 +648,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   }
 
   /** Abre el detalle de un reporte y centra el mapa en su ubicación (si tiene). */
-  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number }) => {
+  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[] }) => {
     setReportesModalOpen(false)
     setDetailItem(item)
     if (item.lat != null && item.lng != null && mapInstance.current) {
@@ -599,6 +680,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         ubicacion: sector?.nombre,
         telefono: n.telefono_reporta,
         lat: sector?.lat, lng: sector?.lng,
+        imagenes: n.imagen ? [n.imagen] : undefined,
       })} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}>
         <span style={{ fontSize: 15 }}>🆘</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -692,7 +774,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     return (
       <div>
         {/* 🔔 Actividad reciente — notificaciones en tiempo real */}
-        <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={notificaciones.length}
+        <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={reciente.length}
           badge={unread > 0 ? <span className="tag tag-red" style={{ fontSize: 10 }}>{unread} nuevas</span> : null}>
           {pendingNeeds.length > 0 && (
             <>
@@ -700,21 +782,19 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               {pendingNeeds.map(n => renderPendingItem(n))}
             </>
           )}
-          <p style={{ fontSize: 11, fontWeight: 800, color: '#003893', margin: '10px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🔔 Actividad reciente</p>
-          {notificaciones.length === 0 ? (
+          {reciente.length === 0 ? (
             <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
               Sin actividad todavía. Cuando alguien reporte una necesidad, una mascota, un ofrecimiento,
               una vivienda o un daño —o se publique una noticia— aparecerá aquí en tiempo real.
             </p>
           ) : (
-            notificaciones.slice(0, 20).map(n => (
-              <div key={n.id} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+            reciente.map(n => (
+              <div key={n.key} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
                   <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>{n.ciudad ?? 'Todas las ciudades'} · {timeAgo(n.at)}</p>
                 </div>
-                {!n.leida && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#CE1126', flexShrink: 0, marginTop: 4 }} />}
               </div>
             ))
           )}
@@ -741,6 +821,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 ubicacion: sector?.nombre,
                 telefono: n.telefono_reporta,
                 lat: sector?.lat, lng: sector?.lng,
+                imagenes: n.imagen ? [n.imagen] : undefined,
               })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
@@ -772,6 +853,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               titulo: `🤝 ${o.tipo}`,
               detalle: o.descripcion || undefined,
               telefono: o.telefono_ofrece,
+              imagenes: o.imagen ? [o.imagen] : undefined,
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{o.tipo}{o.cantidad ? ` — ${o.cantidad}` : ''}</span>
@@ -799,6 +881,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               ubicacion: m.lugar_visto || undefined,
               telefono: m.telefono_reporta,
               lat: m.lat, lng: m.lng,
+              imagenes: m.imagen ? [m.imagen] : undefined,
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{m.nombre || m.tipo_animal}</span>
@@ -824,6 +907,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               titulo: `🏠 ${v.sector_referencia || 'Vivienda'}`,
               detalle: v.descripcion || undefined,
               telefono: v.telefono_ofrece,
+              imagenes: v.imagen ? [v.imagen] : undefined,
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{v.sector_referencia || 'Vivienda'}</span>
@@ -853,6 +937,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 ubicacion: d.direccion,
                 telefono: d.telefono_reportante,
                 lat: d.lat, lng: d.lng,
+                imagenes: d.imagen ? [d.imagen] : undefined,
               })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{d.tipo_inmueble} — {d.direccion}</span>
@@ -1148,20 +1233,19 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               )}
 
               <h3 style={{ fontSize: 12, fontWeight: 800, color: '#003893', margin: '14px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🔔 Actividad reciente</h3>
-              {notificaciones.length === 0 ? (
+              {reciente.length === 0 ? (
                 <p style={{ fontSize: 13, color: '#6b7280', padding: '8px 0' }}>
                   Sin actividad todavía. Cuando alguien reporte una necesidad, mascota, ofrecimiento,
                   vivienda o daño —o se publique una noticia— aparecerá aquí en tiempo real.
                 </p>
               ) : (
-                notificaciones.slice(0, 20).map(n => (
-                  <div key={n.id} style={{ display: 'flex', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+                reciente.map(n => (
+                  <div key={n.key} style={{ display: 'flex', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
                       <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>{n.ciudad ?? 'Todas las ciudades'} · {timeAgo(n.at)}</p>
                     </div>
-                    {!n.leida && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#CE1126', flexShrink: 0, marginTop: 4 }} />}
                   </div>
                 ))
               )}
@@ -1195,6 +1279,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       {/* Detalle del reporte seleccionado */}
       {detailItem && (
         <Modal title={detailItem.titulo} onClose={() => setDetailItem(null)} hideCancel>
+          <DetailImageCarousel images={detailItem.imagenes ?? []} />
           {detailItem.detalle && <p style={{ fontSize: 14, color: '#1f2430', margin: '0 0 8px' }}>{detailItem.detalle}</p>}
           {detailItem.ubicacion && <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>📍 {detailItem.ubicacion}</p>}
           {detailItem.telefono ? (
@@ -1221,17 +1306,35 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         <Modal
           title="📍 Permiso de ubicación necesario"
           onClose={() => setShowLocationWarning(false)}
-          onConfirm={() => { setShowLocationWarning(false); geolocate(true) }}
-          confirmLabel="Reintentar"
-          hideCancel
         >
           <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-            Para realizar un reporte necesitamos tu ubicación y el navegador no la ha podido obtener.
+            El navegador no ha podido obtener tu ubicación. Puedes intentarlo de nuevo o continuar
+            e ingresar la dirección manualmente.
           </p>
           <div className="alert-yellow" style={{ marginTop: 12 }}>
-            Debes <strong>aceptar el permiso de ubicación</strong> en el navegador. Si lo bloqueaste antes, actívalo:
-            toca el candado 🔒 en la barra de direcciones → <strong>Permisos → Ubicación → Permitir</strong>,
-            y vuelve a intentar.
+            Para permitir la ubicación: toca el candado 🔒 en la barra de direcciones →
+            <strong> Permisos → Ubicación → Permitir</strong>, y vuelve a intentar.
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => { setShowLocationWarning(false); geolocate(true) }}
+            >
+              🔄 Intentar de nuevo
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setShowLocationWarning(false)
+                locationAttemptsRef.current = 0
+                setLocationAttempts(0)
+                setShowReportModal(true)
+              }}
+            >
+              Continuar sin ubicación
+            </button>
           </div>
         </Modal>
       )}
@@ -1239,11 +1342,21 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       {/* Realizar reporte: modal simplificado (descripción + teléfono + foto) */}
       {showReportModal && (
         <Modal title="Realizar reporte" onClose={() => setShowReportModal(false)} onConfirm={submitReport} confirmLabel="Publicar" hideCancel>
-          {pickedLatLng ? (
-            <p style={{ fontSize: 12.5, color: '#2E9E5B', fontWeight: 700, margin: '0 0 12px' }}>
-              📍 Ubicación lista {rForm.nombre && <span style={{ color: '#6b7280', fontWeight: 500 }}>· {rForm.nombre}</span>}
+          {pickedLatLng && (
+            <p style={{ fontSize: 12.5, color: '#2E9E5B', fontWeight: 700, margin: '0 0 8px' }}>
+              📍 Ubicación capturada correctamente
             </p>
-          ) : (
+          )}
+          <div className="form-group">
+            <label className="form-label">Dirección (puedes editarla)</label>
+            <input
+              className="form-input"
+              value={rForm.nombre}
+              onChange={e => setRForm(p => ({ ...p, nombre: e.target.value }))}
+              placeholder="Ej. Barrio La Linda, Manizales"
+            />
+          </div>
+          {!pickedLatLng && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <button type="button" onClick={() => geolocate(false)} className="btn btn-sm btn-outline">📍 Usar mi ubicación</button>
               <button type="button" onClick={() => { setShowReportModal(false); handlePickLocation() }} className="btn btn-sm btn-outline">🗺️ Marcar en el mapa</button>

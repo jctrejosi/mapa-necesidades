@@ -1,5 +1,5 @@
 # SolidaridadCO — despliegue local de la aplicación.
-# La base de datos vive en Supabase (nube); aquí solo corren backend y frontends.
+# En local se usa un PostgreSQL propio (servicio `db`); producción usa Supabase.
 #
 #   node setup.js            -> producción local (imágenes construidas: NestJS + nginx)
 #   node setup.js --dev      -> desarrollo (hot reload: nest start --watch + Vite HMR)
@@ -13,16 +13,40 @@
 name: redsolidaria
 
 services:
+  # ── PostgreSQL local (solo desarrollo) ────────────────────────────────
+  # Producción apunta a Supabase; en local se usa este Postgres para no tocar
+  # los datos reales. El backend aplica las migraciones al arrancar.
+  db:
+    image: postgres:16-alpine
+    container_name: redsolidaria-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: redsolidaria
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - local_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d redsolidaria"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # ── Producción local (build) ─────────────────────────────────────────
   backend:
     build: ../backend
     container_name: redsolidaria-backend
     profiles: ["prod"]
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      # PostgreSQL alojado en Supabase (el password va URL-encoded: @ → %40)
-      DATABASE_URL: postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true
-      DB_SSL: "true"
+      # PostgreSQL local (solo desarrollo)
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/redsolidaria
+      DB_SSL: "false"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
@@ -90,8 +114,8 @@ services:
     profiles: ["dev"]
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://postgres.idiypzqlbjeqgphjlabz:Ju%40n5826227567@aws-0-us-west-2.pooler.supabase.com:6543/redsolidaria_db?pgbouncer=true
-      DB_SSL: "true"
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/redsolidaria
+      DB_SSL: "false"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
@@ -154,3 +178,4 @@ services:
 
 volumes:
   uploads_data:
+  local_db_data:

@@ -60,6 +60,7 @@ class ViviendasService {
       nombre_ofrece: v.nombreOfrece,
       telefono_ofrece: v.telefonoOfrece,
       interesado: nested(v.interesadoNombre, v.interesadoTelefono, v.fechaInteres),
+      fecha: asDate(v.fecha),
       pin: v.pin ?? '',
     };
   }
