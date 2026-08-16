@@ -57,6 +57,27 @@ export function isAdminPass(pass: unknown): boolean {
   return diff === 0;
 }
 
+/**
+ * Llave universal de EDICIÓN de reportes (ADMIN_EDIT en el .env).
+ * Permite editar/borrar cualquier reporte sin conocer su PIN/radicado.
+ * Si ADMIN_EDIT no está definido, cae a ADMIN_PASSWORD.
+ */
+export function isAdminEdit(code: unknown): boolean {
+  const expected = process.env.ADMIN_EDIT ?? process.env.ADMIN_PASSWORD ?? 'admin123';
+  const a = String(code ?? '');
+  if (a.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * Código de edición válido = el PIN del reporte O la llave universal ADMIN_EDIT.
+ */
+export function checkEditCode(stored: string | null | undefined, provided: unknown): boolean {
+  return checkPin(stored, provided) || isAdminEdit(provided);
+}
+
 /** Crea un radicado 'DA######' que no colisione con los existentes. */
 export function genRadicado(existing: Iterable<string>): string {
   const used = new Set(existing);

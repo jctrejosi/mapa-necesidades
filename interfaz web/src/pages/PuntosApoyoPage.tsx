@@ -314,8 +314,8 @@ export default function PuntosApoyoPage({ store }: Props) {
           </div>
           {showForm.id && (
             <div className="form-group">
-              <label className="form-label">Código de edición (4 dígitos) <span className="req">*</span></label>
-              <input className="form-input" value={pForm.pin} onChange={e => setPForm(p => ({ ...p, pin: e.target.value }))} maxLength={4} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
+              <label className="form-label">Código de edición (PIN o llave de admin) <span className="req">*</span></label>
+              <input className="form-input" value={pForm.pin} onChange={e => setPForm(p => ({ ...p, pin: e.target.value }))} maxLength={32} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
             </div>
           )}
         </Modal>
@@ -329,7 +329,7 @@ export default function PuntosApoyoPage({ store }: Props) {
           </p>
           <div className="form-group">
             <label className="form-label">Código de edición <span className="req">*</span></label>
-            <input className="form-input" value={deletePin} onChange={e => setDeletePin(e.target.value)} maxLength={4} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
+            <input className="form-input" value={deletePin} onChange={e => setDeletePin(e.target.value)} maxLength={32} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
           </div>
         </Modal>
       )}

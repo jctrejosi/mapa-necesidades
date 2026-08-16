@@ -21,7 +21,7 @@ import { mascotasPerdidas } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum, nested } from '../common/serialize';
-import { checkPin, genPin, str, toDate, toInt, toNum, today } from '../common/util';
+import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, toNum, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
 
@@ -127,7 +127,8 @@ class MascotasService {
   async updatePublic(id: number, b: MascotaBody) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Mascota no encontrada' });
-    if (!checkPin(row.pin, b.pin)) {
+    const esAdminEdit = isAdminEdit(b.pin);
+    if (!checkEditCode(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
@@ -143,7 +144,7 @@ class MascotasService {
     const nuevo = this.serialize(m);
     await registrarAuditoria(this.db, {
       tabla: 'mascotas_perdidas', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.pin),
+      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
     });
     return nuevo;
   }
@@ -183,13 +184,14 @@ class MascotasService {
   async removePublic(id: number, pin: unknown) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Mascota no encontrada' });
-    if (!checkPin(row.pin, pin)) {
+    const esAdminEdit = isAdminEdit(pin);
+    if (!checkEditCode(row.pin, pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     await this.db.delete(mascotasPerdidas).where(eq(mascotasPerdidas.id, id));
     await registrarAuditoria(this.db, {
       tabla: 'mascotas_perdidas', registroId: id, accion: 'delete',
-      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+      datosPrevios: this.serialize(row), autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(pin),
     });
     return { ok: true };
   }

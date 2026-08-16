@@ -23,7 +23,7 @@ import { reportesDanos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum } from '../common/serialize';
-import { genRadicado, str, toDate, toInt, toNum, today } from '../common/util';
+import { genRadicado, isAdminEdit, str, toDate, toInt, toNum, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
 
@@ -183,7 +183,9 @@ class DanosService {
   async updatePublic(id: number, b: DanoBody) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
-    if (!str(b.radicado) || !row.radicado || str(b.radicado).toUpperCase() !== row.radicado.toUpperCase()) {
+    const esAdminEdit = isAdminEdit(b.radicado);
+    const radOk = !!str(b.radicado) && !!row.radicado && str(b.radicado).toUpperCase() === row.radicado.toUpperCase();
+    if (!esAdminEdit && !radOk) {
       throw new ForbiddenException({ error: 'Número de radicado incorrecto' });
     }
     const previo = this.serializePublic(row);
@@ -197,7 +199,7 @@ class DanosService {
     const nuevo = this.serializePublic(d);
     await registrarAuditoria(this.db, {
       tabla: 'reportes_danos', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.radicado),
+      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.radicado),
     });
     return nuevo;
   }
@@ -240,13 +242,15 @@ class DanosService {
   async removePublic(id: number, radicado: unknown) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
-    if (!str(radicado) || !row.radicado || str(radicado).toUpperCase() !== row.radicado.toUpperCase()) {
+    const esAdminEdit = isAdminEdit(radicado);
+    const radOk = !!str(radicado) && !!row.radicado && str(radicado).toUpperCase() === row.radicado.toUpperCase();
+    if (!esAdminEdit && !radOk) {
       throw new ForbiddenException({ error: 'Número de radicado incorrecto' });
     }
     await this.db.delete(reportesDanos).where(eq(reportesDanos.id, id));
     await registrarAuditoria(this.db, {
       tabla: 'reportes_danos', registroId: id, accion: 'delete',
-      datosPrevios: this.serializePublic(row), autor: 'usuario', codigo: str(radicado),
+      datosPrevios: this.serializePublic(row), autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(radicado),
     });
     return { ok: true };
   }

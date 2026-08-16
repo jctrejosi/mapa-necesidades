@@ -21,7 +21,7 @@ import { necesidades, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
-import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
+import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp, sendWhatsappText, toWhatsappNumber, whatsappConfigured } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
 
@@ -142,7 +142,8 @@ class NecesidadesService {
   async updatePublic(id: number, b: NecesidadBody) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
-    if (!checkPin(row.pin, b.pin)) {
+    const esAdminEdit = isAdminEdit(b.pin);
+    if (!checkEditCode(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
@@ -156,8 +157,8 @@ class NecesidadesService {
     const actualizado = await this.patch(id, b, false);
     await registrarAuditoria(this.db, {
       tabla: 'necesidades', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: actualizado, autor: 'usuario',
-      codigo: str(b.pin), visitorId: str(b.visitor_id),
+      datosPrevios: previo, datosNuevos: actualizado, autor: esAdminEdit ? 'admin' : 'usuario',
+      codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin), visitorId: str(b.visitor_id),
     });
     return actualizado;
   }
@@ -301,13 +302,14 @@ class NecesidadesService {
   async removePublic(id: number, pin: unknown) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
-    if (!checkPin(row.pin, pin)) {
+    const esAdminEdit = isAdminEdit(pin);
+    if (!checkEditCode(row.pin, pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     await this.db.delete(necesidades).where(eq(necesidades.id, id));
     await registrarAuditoria(this.db, {
       tabla: 'necesidades', registroId: id, accion: 'delete',
-      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+      datosPrevios: this.serialize(row), autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(pin),
     });
     return { ok: true };
   }

@@ -197,6 +197,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const mascotaMarkersRef = useRef<any[]>([])
   const danoMarkersRef = useRef<any[]>([])
   const puntoMarkersRef = useRef<any[]>([])
+  // Registro de payloads de detalle por clave, para los botones de los popups
+  const detailRegistry = useRef<Record<string, any>>({})
+  const openDetailRef = useRef<(key: string) => void>(() => {})
   const [mapReady, setMapReady] = useState(false)
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
     ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
@@ -428,6 +431,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   const renderMarkers = useCallback(() => {
     if (!mapInstance.current) return
+    detailRegistry.current = {}
 
     // — Sector markers (always shown)
     markersRef.current.forEach(m => m.remove())
@@ -467,11 +471,25 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             : '<span style="background:#f1f3f5;color:#6b7280;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">⬜ SIN REPORTES</span>'
 
       const needsHtml = ns.length
-        ? ns.slice(0, 4).map(n => `
+        ? ns.slice(0, 4).map(n => {
+          detailRegistry.current[`n${n.id}`] = {
+            titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+            detalle: n.descripcion || undefined,
+            ubicacion: sector.nombre,
+            telefono: n.telefono_reporta,
+            lat: sector.lat, lng: sector.lng,
+            imagenes: n.imagen ? [n.imagen] : undefined,
+            editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
+          }
+          return `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;gap:6px">
               <span style="font-size:12px;font-weight:600;color:#1f2430;flex:1">${needIcon(n.tipo)} ${n.tipo}${n.cantidad ? ' — ' + n.cantidad : ''}</span>
-              ${!n.responsable ? `<button onclick="window.__helpNeed('${n.id}')" style="background:#003893;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">🙋 Yo ayudo</button>` : '<span style="font-size:11px;color:#2E9E5B;white-space:nowrap">🙋 En proceso</span>'}
-            </div>`).join('')
+              <div style="display:flex;gap:4px;flex-shrink:0">
+                ${!n.responsable ? `<button onclick="window.__helpNeed('${n.id}')" style="background:#003893;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">🙋 Yo ayudo</button>` : '<span style="font-size:11px;color:#2E9E5B;white-space:nowrap">🙋 En proceso</span>'}
+                <button onclick="window.__openDetail('n${n.id}')" style="background:#f0f4ff;color:#003893;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">Ver detalle</button>
+              </div>
+            </div>`
+        }).join('')
           + (ns.length > 4 ? `<div style="font-size:12px;color:#003893;padding:4px 0">+${ns.length - 4} más...</div>` : '')
         : '<p style="font-size:12px;color:#6b7280;margin:4px 0">Sin necesidades activas</p>'
 
@@ -498,13 +516,23 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           iconSize: [24, 24], iconAnchor: [12, 12],
         })
         const mk = L.marker([m.lat, m.lng], { icon }).addTo(mapInstance.current)
+        detailRegistry.current[`m${m.id}`] = {
+          titulo: `🐾 ${m.nombre || m.tipo_animal}`,
+          detalle: m.senas || undefined,
+          ubicacion: m.lugar_visto || undefined,
+          telefono: m.telefono_reporta,
+          lat: m.lat, lng: m.lng,
+          imagenes: m.imagen ? [m.imagen] : undefined,
+          editable: { tipo: 'mascota', id: m.id },
+        }
         mk.bindPopup(`
           <div style="min-width:180px">
             <span style="background:#f3e8ff;color:#7C3AED;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">🐾 PERDIDA</span>
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${m.nombre || m.tipo_animal}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">${m.senas}</p>
             <p style="font-size:12px;margin:0 0 4px">📍 ${m.lugar_visto}</p>
-            <p style="font-size:12px;margin:0">📞 ${m.nombre_reporta} · ${m.telefono_reporta}</p>
+            <p style="font-size:12px;margin:0 0 8px">📞 ${m.nombre_reporta} · ${m.telefono_reporta}</p>
+            <button onclick="window.__openDetail('m${m.id}')" style="width:100%;background:#f0f4ff;color:#003893;border:none;border-radius:6px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">👁 Ver detalle</button>
           </div>
         `)
         mascotaMarkersRef.current.push(mk)
@@ -524,12 +552,22 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           iconSize: [22, 22], iconAnchor: [11, 11],
         })
         const mk = L.marker([d.lat, d.lng], { icon }).addTo(mapInstance.current)
+        detailRegistry.current[`d${d.id}`] = {
+          titulo: `🏚️ ${d.tipo_inmueble} — ${d.direccion}`,
+          detalle: d.descripcion || undefined,
+          ubicacion: d.direccion,
+          telefono: d.telefono_reportante,
+          lat: d.lat, lng: d.lng,
+          imagenes: d.imagen ? [d.imagen] : undefined,
+          editable: { tipo: 'dano', id: d.id },
+        }
         mk.bindPopup(`
           <div style="min-width:180px">
             <span style="background:#fde8eb;color:#CE1126;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">🏚 ${d.nivel_percibido.toUpperCase()}</span>
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${d.tipo_inmueble}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${d.direccion}</p>
-            <p style="font-size:12px;color:#6b7280;margin:0">${d.descripcion}</p>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 8px">${d.descripcion}</p>
+            <button onclick="window.__openDetail('d${d.id}')" style="width:100%;background:#f0f4ff;color:#003893;border:none;border-radius:6px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">👁 Ver detalle</button>
           </div>
         `)
         danoMarkersRef.current.push(mk)
@@ -549,13 +587,22 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           iconSize: [38, 38], iconAnchor: [19, 19],
         })
         const mk = L.marker([p.lat, p.lng], { icon }).addTo(mapInstance.current)
+        detailRegistry.current[`p${p.id}`] = {
+          titulo: `${emoji} ${p.nombre}`,
+          detalle: `${p.tipo} · teléfono ${p.telefono || 'no registrado'}`,
+          ubicacion: p.direccion,
+          telefono: p.telefono || undefined,
+          lat: p.lat, lng: p.lng,
+          imagenes: p.imagen ? [p.imagen] : undefined,
+        }
         mk.bindPopup(`
           <div style="min-width:200px">
             <span style="background:#e8eeff;color:#003893;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${emoji} ${p.tipo}</span>
             ${img ? `<img src="${img}" alt="${p.nombre}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;margin:6px 0" />` : ''}
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${p.nombre}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${p.direccion}</p>
-            ${p.telefono ? `<p style="font-size:12px;margin:0">📞 ${p.telefono}</p>` : ''}
+            ${p.telefono ? `<p style="font-size:12px;margin:0 0 8px">📞 ${p.telefono}</p>` : ''}
+            <button onclick="window.__openDetail('p${p.id}')" style="width:100%;background:#f0f4ff;color:#003893;border:none;border-radius:6px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">👁 Ver detalle</button>
           </div>
         `)
         puntoMarkersRef.current.push(mk)
@@ -573,7 +620,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       setShowHelpModal(Number(needId))
       if (mapInstance.current) mapInstance.current.closePopup()
     }
-    return () => { delete (window as any).__helpNeed }
+    ;(window as any).__openDetail = (key: string) => openDetailRef.current(key)
+    return () => {
+      delete (window as any).__helpNeed
+      delete (window as any).__openDetail
+    }
   }, [])
 
   // Auto-refresh every 30s
@@ -866,6 +917,17 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       if (sheetState === 'full') setSheetState('peek')
     }
   }
+
+  // Mantiene el callback de los popups apuntando al openDetail más reciente
+  useEffect(() => {
+    openDetailRef.current = (key: string) => {
+      const item = detailRegistry.current[key]
+      if (item) {
+        if (mapInstance.current) mapInstance.current.closePopup()
+        openDetail(item)
+      }
+    }
+  })
 
   const timeAgo = (iso: string) => {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -1550,7 +1612,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 <label className="form-label">{editReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
                 <input className="form-input" autoFocus value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && editForm.pin.trim() && setEditStep('form')}
-                  placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={editReport.tipo === 'dano' ? 10 : 4}
+                  placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={32}
                   style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
               </div>
             </>
@@ -1582,7 +1644,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           <div className="form-group">
             <label className="form-label">{deleteReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
             <input className="form-input" value={deletePin} onChange={e => setDeletePin(e.target.value)}
-              placeholder={deleteReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={deleteReport.tipo === 'dano' ? 10 : 4}
+              placeholder={deleteReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={32}
               style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
           </div>
         </Modal>
@@ -1745,8 +1807,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               <textarea className="form-input" value={uForm.detalles} placeholder={need.descripcion} onChange={e => setUForm(p => ({ ...p, detalles: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">Código de edición (4 dígitos) <span className="req">*</span></label>
-              <input className="form-input" value={uForm.pin} onChange={e => setUForm(p => ({ ...p, pin: e.target.value }))} maxLength={4} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
+              <label className="form-label">Código de edición (PIN o llave de admin) <span className="req">*</span></label>
+              <input className="form-input" value={uForm.pin} onChange={e => setUForm(p => ({ ...p, pin: e.target.value }))} maxLength={32} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
             </div>
           </Modal>
         )

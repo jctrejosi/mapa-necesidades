@@ -21,7 +21,7 @@ import { puntosApoyo } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asNum } from '../common/serialize';
-import { checkPin, genPin, str, toInt, toNum } from '../common/util';
+import { checkEditCode, genPin, isAdminEdit, str, toInt, toNum } from '../common/util';
 import { registrarAuditoria } from '../common/audit';
 
 type PuntoApoyoBody = {
@@ -116,14 +116,15 @@ class PuntosApoyoService {
   async updatePublic(id: number, b: PuntoApoyoBody) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Punto de apoyo no encontrado' });
-    if (!checkPin(row.pin, b.pin)) {
+    const esAdminEdit = isAdminEdit(b.pin);
+    if (!checkEditCode(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
     const nuevo = await this.patch(id, b);
     await registrarAuditoria(this.db, {
       tabla: 'puntos_apoyo', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.pin),
+      datosPrevios: previo, datosNuevos: nuevo, autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin),
     });
     return nuevo;
   }
@@ -177,13 +178,14 @@ class PuntosApoyoService {
   async removePublic(id: number, pin: unknown) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Punto de apoyo no encontrado' });
-    if (!checkPin(row.pin, pin)) {
+    const esAdminEdit = isAdminEdit(pin);
+    if (!checkEditCode(row.pin, pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     await this.db.delete(puntosApoyo).where(eq(puntosApoyo.id, id));
     await registrarAuditoria(this.db, {
       tabla: 'puntos_apoyo', registroId: id, accion: 'delete',
-      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+      datosPrevios: this.serialize(row), autor: esAdminEdit ? 'admin' : 'usuario', codigo: esAdminEdit ? 'ADMIN_EDIT' : str(pin),
     });
     return { ok: true };
   }
