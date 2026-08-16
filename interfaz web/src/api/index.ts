@@ -5,7 +5,7 @@
  */
 import { getVisitorId, request } from './client'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
+  CentroAcopio, Evento, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './types'
 
@@ -167,6 +167,27 @@ export const deletePuntoApoyo = (id: number): Promise<{ ok: boolean }> =>
 /** Borrado público con el PIN que se le dio al usuario al publicar. */
 export const eliminarPuntoApoyo = (id: number, pin: string): Promise<{ ok: boolean }> =>
   request(`/puntos-apoyo/${id}/eliminar`, { method: 'POST', body: { pin } })
+
+// ── Eventos (asociados a un punto de apoyo mediante su PIN) ─────────────────
+
+export const listEventos = (ciudadLabel: string): Promise<Evento[]> =>
+  request(`/eventos?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
+
+export const createEvento = (b: Partial<Evento> & { punto_pin: string }): Promise<Evento & { pin: string }> =>
+  request('/eventos', { method: 'POST', body: { ...b, visitor_id: getVisitorId() } })
+
+export const updateEvento = (id: number, b: Record<string, unknown>): Promise<Evento> =>
+  request(`/eventos/${id}`, { method: 'PATCH', body: b })
+
+export const updateEventoAdmin = (id: number, b: Record<string, unknown>): Promise<Evento> =>
+  request(`/eventos/${id}/admin`, { method: 'PATCH', body: b })
+
+export const deleteEvento = (id: number): Promise<{ ok: boolean }> =>
+  request(`/eventos/${id}`, { method: 'DELETE' })
+
+/** Borrado público con el PIN que se le dio al usuario al publicar. */
+export const eliminarEvento = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/eventos/${id}/eliminar`, { method: 'POST', body: { pin } })
 
 // ── Noticias ────────────────────────────────────────────────────────────────
 

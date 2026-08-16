@@ -5,7 +5,7 @@
  */
 import { request } from './client'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
+  CentroAcopio, Evento, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './types'
 
@@ -139,6 +139,20 @@ export const updatePuntoApoyo = (id: number, b: Record<string, unknown>): Promis
 
 export const deletePuntoApoyo = (id: number): Promise<{ ok: boolean }> =>
   request(`/puntos-apoyo/${id}`, { method: 'DELETE' })
+
+// ── Eventos (asociados a un punto de apoyo) ───────────────────────────────
+
+export const listEventos = (ciudadLabel: string): Promise<Evento[]> =>
+  request(`/eventos?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
+
+export const createEvento = (b: Partial<Evento> & { punto_apoyo_id: number }): Promise<Evento & { pin: string }> =>
+  request('/eventos', { method: 'POST', body: b })
+
+export const updateEventoAdmin = (id: number, b: Record<string, unknown>): Promise<Evento> =>
+  request(`/eventos/${id}/admin`, { method: 'PATCH', body: b })
+
+export const deleteEvento = (id: number): Promise<{ ok: boolean }> =>
+  request(`/eventos/${id}`, { method: 'DELETE' })
 
 // ── Noticias ────────────────────────────────────────────────────────────────
 

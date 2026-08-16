@@ -4,13 +4,13 @@ import { getAdminPass, getVisitorId, imgUrl, setAdminPass } from './api/client'
 import { cityLabel, CITIES as API_CITIES } from './api'
 import { subscribeEvents, type AppEvent } from './api/events'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
+  CentroAcopio, Evento, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './api/types'
 
 export type {
   Contacto, Sector, Necesidad, Ofrecimiento, Mascota, PuntoApoyo,
-  CentroAcopio, Noticia, Vivienda, ReporteDano,
+  CentroAcopio, Noticia, Vivienda, ReporteDano, Evento,
 } from './api/types'
 
 // ── Helpers de formato / imágenes ───────────────────────────────────────────
@@ -74,6 +74,7 @@ interface Data {
   mascotas: Mascota[]
   centros: CentroAcopio[]
   puntosApoyo: PuntoApoyo[]
+  eventos: Evento[]
   noticias: Noticia[]
   viviendas: Vivienda[]
   danos: ReporteDano[]
@@ -92,7 +93,7 @@ function loadNotificaciones(): Notificacion[] {
 
 let cache: Data = {
   sectores: [], necesidades: [], ofrecimientos: [], mascotas: [],
-  centros: [], puntosApoyo: [], noticias: [], viviendas: [], danos: [],
+  centros: [], puntosApoyo: [], eventos: [], noticias: [], viviendas: [], danos: [],
   notificaciones: loadNotificaciones(),
   toasts: [],
 }
@@ -140,7 +141,7 @@ async function refresh(ciudad: string): Promise<void> {
   const load = <T>(fn: (c: string) => Promise<T[]>) =>
     Promise.all(targets.map(fn)).then(rows => rows.flat())
 
-  const [sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, noticias, viviendas, danos] =
+  const [sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, eventos, noticias, viviendas, danos] =
     await Promise.all([
       load(c => api.listSectores(c, isAdmin)),
       load(api.listNecesidades),
@@ -148,6 +149,7 @@ async function refresh(ciudad: string): Promise<void> {
       load(api.listMascotas),
       load(api.listCentros),
       load(api.listPuntosApoyo),
+      load(api.listEventos),
       load(api.listNoticias),
       load(api.listViviendas),
       load(c => api.listDanos(c, isAdmin)),
@@ -161,6 +163,7 @@ async function refresh(ciudad: string): Promise<void> {
     mascotas: mascotas.map(mapItem),
     centros: centros.map(mapItem),
     puntosApoyo: puntosApoyo.map(mapItem),
+    eventos: eventos.map(mapItem),
     noticias: uniqById(noticias).map(mapItem),
     viviendas: viviendas.map(mapItem),
     danos: danos.map(mapItem),
@@ -361,6 +364,19 @@ export function useStore() {
   const eliminarPuntoApoyo = (id: number, pin: string): Promise<unknown> =>
     mutate(() => api.eliminarPuntoApoyo(id, pin), ciudad)
 
+  const addEvento = (e: Partial<Evento> & { punto_pin: string }): Promise<string> =>
+    mutate(async () => (await api.createEvento({ ...e })).pin, ciudad)
+
+  const updateEvento = (id: number, b: Partial<Evento> & { pin?: string }): Promise<unknown> =>
+    mutate(() => api.updateEvento(id, b as Record<string, unknown>), ciudad)
+
+  const deleteEvento = (id: number): Promise<unknown> =>
+    mutate(() => api.deleteEvento(id), ciudad)
+
+  /** Borrado público con el PIN que se le dio al usuario al publicar. */
+  const eliminarEvento = (id: number, pin: string): Promise<unknown> =>
+    mutate(() => api.eliminarEvento(id, pin), ciudad)
+
   const addNoticia = (n: Omit<Noticia, 'id'>): Promise<unknown> =>
     mutate(async () => api.createNoticia({ ...n, imagen: await withImage(n.imagen) }), ciudad)
 
@@ -434,6 +450,7 @@ export function useStore() {
     addMascota, updateMascota, deleteMascota, eliminarMascota,
     addCentro, updateCentro, deleteCentro,
     addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo, eliminarPuntoApoyo,
+    addEvento, updateEvento, deleteEvento, eliminarEvento,
     addNoticia, updateNoticia, deleteNoticia,
     addVivienda, updateVivienda, deleteVivienda, eliminarVivienda,
     addDano, updateDano, editarDano, deleteDano, eliminarDano,

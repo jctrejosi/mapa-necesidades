@@ -309,6 +309,7 @@ export const puntosApoyo = pgTable(
     direccion: varchar('direccion', { length: 200 }).notNull(),
     telefono: varchar('telefono', { length: 50 }),
     imagen: varchar('imagen', { length: 255 }),
+    color: varchar('color', { length: 20 }).notNull().default('#003893'),
     lat: numeric('lat', { precision: 10, scale: 7 }).notNull(),
     lng: numeric('lng', { precision: 10, scale: 7 }).notNull(),
     visitorId: varchar('visitor_id', { length: 64 }),
@@ -318,3 +319,35 @@ export const puntosApoyo = pgTable(
 );
 
 export type PuntoApoyo = typeof puntosApoyo.$inferSelect;
+
+// ── Eventos (actividades temporales asociadas a un punto de apoyo) ─────────
+// Para crearlos se exige el PIN del punto de apoyo al que se asocian.
+// El marcador en el mapa se muestra solo mientras el evento esté vigente
+// (activo + dentro del período fecha_inicio → fecha_fin).
+
+export const eventos = pgTable(
+  'eventos',
+  {
+    id: serial('id').primaryKey(),
+    pin: varchar('pin', { length: 10 }),
+    puntoApoyoId: integer('punto_apoyo_id')
+      .notNull()
+      .references(() => puntosApoyo.id, { onDelete: 'cascade' }),
+    titulo: varchar('titulo', { length: 150 }).notNull(),
+    descripcion: text('descripcion'),
+    lat: numeric('lat', { precision: 10, scale: 7 }).notNull(),
+    lng: numeric('lng', { precision: 10, scale: 7 }).notNull(),
+    direccion: varchar('direccion', { length: 200 }),
+    activo: boolean('activo').notNull().default(true),
+    fechaInicio: timestamp('fecha_inicio', { withTimezone: true }).notNull(),
+    fechaFin: timestamp('fecha_fin', { withTimezone: true }),
+    visitorId: varchar('visitor_id', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_eventos_punto').on(t.puntoApoyoId),
+    index('idx_eventos_activo').on(t.activo),
+  ],
+);
+
+export type Evento = typeof eventos.$inferSelect;

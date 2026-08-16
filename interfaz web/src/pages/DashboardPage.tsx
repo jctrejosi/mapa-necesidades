@@ -66,7 +66,7 @@ export default function DashboardPage({ store }: Props) {
     <div style={{ background: '#f4f5f7', minHeight: '100%' }}>
       <div className="page-container-wide">
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1f2430', margin: 0 }}>📊 Estadísticas — {ciudad}</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1f2430', margin: 0 }}>📊 Impacto — {ciudad}</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#9AA0AC' }}>Actualiza automáticamente cada 30 segundos</p>
         </div>
 

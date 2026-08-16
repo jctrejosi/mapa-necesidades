@@ -10,6 +10,7 @@ import NoticiasPage from './pages/NoticiasPage'
 import ViviendaPage from './pages/ViviendaPage'
 import DanosPage from './pages/DanosPage'
 import PuntosApoyoPage from './pages/PuntosApoyoPage'
+import EventosPage from './pages/EventosPage'
 import ContactoPage from './pages/ContactoPage'
 import DashboardPage from './pages/DashboardPage'
 import AyudaPage from './pages/AyudaPage'
@@ -29,12 +30,13 @@ const ALL_NAV = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
   { id: 'reportes',      icon: '📋', label: 'Reportes' },
   { id: 'puntos',        icon: '🏪', label: 'Puntos de apoyo' },
+  { id: 'eventos',       icon: '📅', label: 'Eventos' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
   { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
   { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'vivienda',      icon: '🏠', label: 'Vivienda' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
-  { id: 'dashboard',     icon: '📊', label: 'Estadísticas' },
+  { id: 'dashboard',     icon: '📊', label: 'Impacto' },
   { id: 'contacto',      icon: '📞', label: 'Contáctanos' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
 ]
@@ -74,6 +76,7 @@ export default function App() {
       }}>
         {page === 'mapa'          && <MapPage store={store} setPage={navigate} reportesSignal={reportesSignal} />}
         {page === 'puntos'        && <PuntosApoyoPage store={store} />}
+        {page === 'eventos'       && <EventosPage store={store} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
         {page === 'noticias'      && <NoticiasPage store={store} />}

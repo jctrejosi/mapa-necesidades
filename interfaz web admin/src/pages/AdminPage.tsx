@@ -63,6 +63,22 @@ const TIPOS_PUNTO_APOYO = [
   'Fundación', 'Centro de acopio', 'Líder de barrio', 'Hospital', 'ONG', 'Otro',
 ]
 
+/** ISO → valor para <input type="datetime-local">. */
+const toLocalInput = (iso: string | null) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** <input datetime-local> → ISO (o null si está vacío/inválido). */
+const fromLocalInput = (s: string) => {
+  if (!s) return null
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 function KpiCard({ icon, label, value, tone = 'blue' }: { icon: string; label: string; value: number; tone?: string }) {
   return (
     <div className="kpi-card">
@@ -153,11 +169,12 @@ export default function AdminPage({ store }: Props) {
   const [loginError, setLoginError] = useState(false)
 
   const {
-    ciudad, sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, noticias, viviendas, danos,
+    ciudad, sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, eventos, noticias, viviendas, danos,
     updateSector, deleteSector, updateNecesidad, deleteNecesidad,
     updateOfrecimiento, deleteOfrecimiento, deleteMascota, updateMascota,
     addCentro, updateCentro, deleteCentro,
     addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo,
+    addEvento, updateEvento, deleteEvento,
     addNoticia, updateNoticia, deleteNoticia,
     deleteVivienda, updateDano, deleteDano, loginAdmin, logoutAdmin
   } = store
@@ -188,6 +205,8 @@ export default function AdminPage({ store }: Props) {
   const [newNeedForm, setNewNeedForm] = useState({ tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const, descripcion: '', reportado_por: '', telefono_reporta: '' })
   const [centroForm, setCentroForm] = useState<{ nombre: string; organizacion: string; es_acopio: boolean; es_sangre: boolean; es_alojamiento: boolean; que_recibe: string; direccion: string; telefono: string; horario: string; lat: number; lng: number; estado: 'abierto' | 'cerrado'; imagen: string | null }>({ nombre: '', organizacion: '', es_acopio: true, es_sangre: false, es_alojamiento: false, que_recibe: '', direccion: '', telefono: '', horario: '', lat: 5.07, lng: -75.51, estado: 'abierto', imagen: null })
   const [puntoForm, setPuntoForm] = useState<{ nombre: string; tipo: string; direccion: string; telefono: string; imagen: string | null; lat: number; lng: number }>({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+  const [showEventoForm, setShowEventoForm] = useState<any>(null)
+  const [eventoForm, setEventoForm] = useState<{ punto_id: number; titulo: string; descripcion: string; direccion: string; lat: number; lng: number; fechaInicio: string; fechaFin: string; activo: boolean }>({ punto_id: 0, titulo: '', descripcion: '', direccion: '', lat: 5.07, lng: -75.51, fechaInicio: '', fechaFin: '', activo: true })
   const [noticiaForm, setNoticiaForm] = useState({ titulo: '', contenido: '', autor: '', ciudad_noticia: '' as string | null })
   const [danoForm, setDanoForm] = useState<{ estado: 'pendiente' | 'visita_programada' | 'visitado'; fecha_visita: string; resultado_visita: string; notas_admin: string }>({ estado: 'pendiente', fecha_visita: '', resultado_visita: '', notas_admin: '' })
 
@@ -437,6 +456,66 @@ export default function AdminPage({ store }: Props) {
     setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
   }
 
+  // ── Eventos (edición con la llave de admin, sin PIN) ──
+  const openEventoAdd = () => {
+    const defInicio = toLocalInput(new Date().toISOString())
+    const defFin = toLocalInput(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
+    setEventoForm({
+      punto_id: (puntosApoyo.find(p => p.ciudad === ciudad)?.id) ?? 0,
+      titulo: '', descripcion: '', direccion: '', lat: 5.07, lng: -75.51,
+      fechaInicio: defInicio, fechaFin: defFin, activo: true,
+    })
+    setShowEventoForm({})
+  }
+
+  const openEventoEdit = (e: any) => {
+    setEventoForm({
+      punto_id: e.punto?.id ?? 0,
+      titulo: e.titulo, descripcion: e.descripcion, direccion: e.direccion,
+      lat: e.lat, lng: e.lng,
+      fechaInicio: toLocalInput(e.fecha_inicio), fechaFin: toLocalInput(e.fecha_fin),
+      activo: e.activo,
+    })
+    setShowEventoForm(e)
+  }
+
+  const geocodeEvento = async () => {
+    const q = `${eventoForm.direccion}, ${ciudad}`.trim()
+    if (!q) { alert('Escribe primero la dirección'); return }
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      if (Array.isArray(data) && data.length) {
+        setEventoForm(p => ({ ...p, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }))
+      } else {
+        alert('No se encontraron coordenadas para esa dirección. Ajusta la dirección o ingresa lat/lng manualmente.')
+      }
+    } catch {
+      alert('No se pudo consultar el geocodificador. Ingresa lat/lng manualmente.')
+    }
+  }
+
+  const submitEvento = async () => {
+    if (!eventoForm.titulo.trim()) { alert('El título del evento es obligatorio'); return }
+    if (!eventoForm.punto_id) { alert('Selecciona el punto de apoyo al que se asocia el evento'); return }
+    const fecha_inicio = fromLocalInput(eventoForm.fechaInicio)
+    if (!fecha_inicio) { alert('Indica la fecha de inicio del evento'); return }
+    const fecha_fin = fromLocalInput(eventoForm.fechaFin)
+    const base = {
+      titulo: eventoForm.titulo.trim(),
+      descripcion: eventoForm.descripcion.trim(),
+      direccion: eventoForm.direccion.trim(),
+      lat: eventoForm.lat, lng: eventoForm.lng,
+      activo: eventoForm.activo,
+      fecha_inicio, fecha_fin,
+    }
+    const r = showEventoForm?.id
+      ? await updateEvento(showEventoForm.id, base)
+      : await addEvento({ ...base, punto_apoyo_id: eventoForm.punto_id })
+    if (!r) return
+    setShowEventoForm(null)
+  }
+
   const submitNoticia = async () => {
     if (!noticiaForm.titulo.trim()) { alert('El título es obligatorio'); return }
     const ciudadIdNoticia = noticiaForm.ciudad_noticia ? cityId(noticiaForm.ciudad_noticia) : null
@@ -490,6 +569,7 @@ export default function AdminPage({ store }: Props) {
     { id: 'viviendas', icon: '🏠', label: 'Viviendas' },
     { id: 'centros', icon: '📦', label: 'Centros' },
     { id: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
+    { id: 'eventos', icon: '📅', label: 'Eventos' },
     { id: 'noticias', icon: '📰', label: 'Noticias' },
     { id: 'visitas', icon: '👥', label: 'Visitas' },
     { id: 'auditoria', icon: '🧾', label: 'Auditoría' },
@@ -861,6 +941,57 @@ export default function AdminPage({ store }: Props) {
       )
     }
 
+    if (section === 'eventos') {
+      const evs = eventos
+        .filter(e => e.ciudad === ciudad)
+        .filter(e => !q || `${e.titulo} ${e.descripcion} ${e.direccion} ${e.punto?.nombre ?? ''}`.toLowerCase().includes(q))
+      return (
+        <Section title="Eventos" icon="📅" count={evs.length} toolbar={
+          <div className="admin-toolbar">
+            <input className="form-input admin-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por título, descripción, dirección o punto…" />
+            <button className="btn btn-primary btn-sm" onClick={openEventoAdd}>+ Crear evento</button>
+          </div>
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Estado</Th><Th>Evento</Th><Th>Punto de apoyo</Th><Th>Período</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {evs.length === 0 && <Empty text="Sin eventos registrados." />}
+              {evs.map(e => (
+                <tr key={e.id} className="row-hover">
+                  <Td>
+                    <span className={`tag ${e.activo ? (e.vigente ? 'tag-green' : 'tag-orange') : 'tag-gray'}`} style={{ fontSize: 11 }}>
+                      {e.activo ? (e.vigente ? '🟢 Vigente' : '🟠 Activo (fuera de período)') : '⚪ Inactivo'}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span style={{ fontWeight: 600 }}>{e.titulo}</span>
+                    {e.descripcion && <div style={{ fontSize: 12, color: '#6b7280' }}>{e.descripcion}</div>}
+                  </Td>
+                  <Td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: e.punto?.color ?? '#003893', border: '1px solid #e1e4e9', flexShrink: 0 }} />
+                      {e.punto?.nombre ?? '—'}
+                    </span>
+                    {e.punto?.tipo && <div style={{ fontSize: 11.5, color: '#6b7280' }}>{e.punto.tipo}</div>}
+                  </Td>
+                  <Td style={{ fontSize: 12 }}>
+                    {e.fecha_inicio ? fmtFecha(e.fecha_inicio) : '—'}{e.fecha_fin ? ` → ${fmtFecha(e.fecha_fin)}` : ''}
+                  </Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn btn-xs btn-outline" onClick={() => openEventoEdit(e)}>✎ Editar</button>
+                      <button className="btn btn-xs btn-outline" onClick={() => updateEvento(e.id, { activo: !e.activo })}>{e.activo ? '⏸ Desactivar' : '▶ Activar'}</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar evento?')) deleteEvento(e.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
     if (section === 'noticias') {
       return (
         <Section title="Noticias y comunicados" icon="📰" count={noticiasRows.length} toolbar={
@@ -1183,6 +1314,56 @@ export default function AdminPage({ store }: Props) {
             </div>
           </div>
           <button type="button" className="btn btn-outline btn-sm" onClick={geocodePunto}>📍 Buscar coordenadas por la dirección</button>
+        </Modal>
+      )}
+
+      {/* Evento form (edición con la llave de admin) */}
+      {showEventoForm !== null && (
+        <Modal title={showEventoForm.id ? '✎ Editar evento' : '+ Crear evento'} onClose={() => setShowEventoForm(null)} onConfirm={submitEvento} confirmLabel="Guardar" wide>
+          <div className="form-group">
+            <label className="form-label">Punto de apoyo <span className="req">*</span></label>
+            <select className="form-select" value={eventoForm.punto_id} onChange={e => setEventoForm(p => ({ ...p, punto_id: Number(e.target.value) }))} disabled={!!showEventoForm.id}>
+              <option value={0}>— Selecciona el punto de apoyo —</option>
+              {puntosApoyo.filter(p => p.ciudad === ciudad).map(p => <option key={p.id} value={p.id}>{p.nombre} · {p.tipo}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Título del evento <span className="req">*</span></label>
+            <input className="form-input" value={eventoForm.titulo} onChange={e => setEventoForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Ej. Jornada de vacunación de mascotas" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Descripción</label>
+            <textarea className="form-input" rows={3} value={eventoForm.descripcion} onChange={e => setEventoForm(p => ({ ...p, descripcion: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Dirección del evento</label>
+            <input className="form-input" value={eventoForm.direccion} onChange={e => setEventoForm(p => ({ ...p, direccion: e.target.value }))} placeholder="Ej. Carrera 23 # 45-67, Manizales" />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+            <div className="form-group">
+              <label className="form-label">Latitud</label>
+              <input className="form-input" type="number" step="any" value={eventoForm.lat} onChange={e => setEventoForm(p => ({ ...p, lat: parseFloat(e.target.value) }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Longitud</label>
+              <input className="form-input" type="number" step="any" value={eventoForm.lng} onChange={e => setEventoForm(p => ({ ...p, lng: parseFloat(e.target.value) }))} />
+            </div>
+          </div>
+          <button type="button" className="btn btn-outline btn-sm" onClick={geocodeEvento}>📍 Buscar coordenadas por la dirección</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px', marginTop: 14 }}>
+            <div className="form-group">
+              <label className="form-label">Inicio <span className="req">*</span></label>
+              <input className="form-input" type="datetime-local" value={eventoForm.fechaInicio} onChange={e => setEventoForm(p => ({ ...p, fechaInicio: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Fin (opcional)</label>
+              <input className="form-input" type="datetime-local" value={eventoForm.fechaFin} onChange={e => setEventoForm(p => ({ ...p, fechaFin: e.target.value }))} />
+            </div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+            <input type="checkbox" checked={eventoForm.activo} onChange={e => setEventoForm(p => ({ ...p, activo: e.target.checked }))} style={{ width: 18, height: 18 }} />
+            Evento activo (visible en el mapa dentro del período)
+          </label>
         </Modal>
       )}
 

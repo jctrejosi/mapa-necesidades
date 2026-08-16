@@ -32,10 +32,17 @@ type PuntoApoyoBody = {
   direccion?: string;
   telefono?: string;
   imagen?: string;
+  color?: string;
   lat?: unknown;
   lng?: unknown;
   visitor_id?: string;
 };
+
+/** Acepta colores hex (#RGB o #RRGGBB); si no es válido usa el azul por defecto. */
+function safeColor(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : '#003893';
+}
 
 @Injectable()
 class PuntosApoyoService {
@@ -50,6 +57,7 @@ class PuntosApoyoService {
       direccion: p.direccion,
       telefono: p.telefono ?? '',
       imagen: p.imagen ?? '',
+      color: p.color,
       lat: asNum(p.lat),
       lng: asNum(p.lng),
       // El PIN no viaja en los listados: se entrega solo al crear.
@@ -92,6 +100,7 @@ class PuntosApoyoService {
         direccion,
         telefono: str(b.telefono) || null,
         imagen: str(b.imagen) || null,
+        color: safeColor(b.color),
         lat: String(lat),
         lng: String(lng),
         visitorId: str(b.visitor_id)?.slice(0, 64) || null,
@@ -149,6 +158,7 @@ class PuntosApoyoService {
     if (b.direccion !== undefined) set.direccion = str(b.direccion);
     if (b.telefono !== undefined) set.telefono = str(b.telefono) || null;
     if (b.imagen !== undefined) set.imagen = str(b.imagen) || null;
+    if (b.color !== undefined) set.color = safeColor(b.color);
     if (b.lat !== undefined) {
       const lat = toNum(b.lat);
       if (lat === null) throw new BadRequestException({ error: 'Latitud inválida' });

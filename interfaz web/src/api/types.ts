@@ -49,7 +49,16 @@ export interface CentroAcopio {
 export interface PuntoApoyo {
   id: number; ciudad: string; nombre: string; tipo: string
   direccion: string; telefono: string; imagen: string | null
-  lat: number; lng: number
+  lat: number; lng: number; color: string
+}
+
+export interface Evento {
+  id: number; ciudad: string; titulo: string; descripcion: string
+  lat: number; lng: number; direccion: string
+  activo: boolean; vigente: boolean
+  fecha_inicio: string | null; fecha_fin: string | null
+  punto: { id: number; nombre: string; tipo: string; color: string; telefono: string; imagen: string | null }
+  pin: string | null
 }
 
 export interface Noticia {

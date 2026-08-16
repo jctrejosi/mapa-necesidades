@@ -73,7 +73,7 @@ export default function PuntosApoyoPage({ store }: Props) {
   const [tipoFilter, setTipoFilter] = useState('Todas')
 
   const [showForm, setShowForm] = useState<any>(null)
-  const [pForm, setPForm] = useState({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null as string | null, lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
+  const [pForm, setPForm] = useState({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null as string | null, color: '#003893', lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
   const [geocoding, setGeocoding] = useState(false)
   const geocodeTimer = useRef<number | null>(null)
 
@@ -94,12 +94,12 @@ export default function PuntosApoyoPage({ store }: Props) {
   }
 
   const openAdd = () => {
-    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
+    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: '#003893', lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
     setShowForm({})
   }
 
   const openEdit = (p: any) => {
-    setPForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, lat: p.lat, lng: p.lng, pin: '' })
+    setPForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || '#003893', lat: p.lat, lng: p.lng, pin: '' })
     setShowForm(p)
   }
 
@@ -165,7 +165,7 @@ export default function PuntosApoyoPage({ store }: Props) {
       setShowForm(null)
       setPinResult(pin)
     }
-    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
+    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: '#003893', lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
   }
 
   const submitDelete = async () => {
@@ -229,8 +229,11 @@ export default function PuntosApoyoPage({ store }: Props) {
               <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1f2430' }}>{p.nombre}</h3>
-                  <span className="tag tag-blue" style={{ fontSize: 10.5 }}>
-                    {ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'} {p.tipo}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: p.color || '#003893', border: '2px solid #fff', boxShadow: '0 0 0 1px #e1e4e9', flexShrink: 0 }} />
+                    <span className="tag tag-blue" style={{ fontSize: 10.5 }}>
+                      {ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'} {p.tipo}
+                    </span>
                   </span>
                 </div>
                 <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px' }}>📍 {p.direccion}</p>
@@ -289,6 +292,20 @@ export default function PuntosApoyoPage({ store }: Props) {
           <div className="form-group">
             <label className="form-label">Imagen (aparece en el marcador del mapa)</label>
             <ImageInput value={pForm.imagen ?? undefined} onChange={v => setPForm(p => ({ ...p, imagen: v ?? null }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Color del marcador (por defecto azul)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{3,8}$/.test(pForm.color) ? pForm.color : '#003893'}
+                onChange={e => setPForm(p => ({ ...p, color: e.target.value }))}
+                style={{ width: 46, height: 36, padding: 2, border: '1px solid #e1e4e9', borderRadius: 8, background: '#fff', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 13, color: '#6b7280' }}>
+                {pForm.color} — los eventos de este punto titilarán con este color en el mapa.
+              </span>
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">Ubicación exacta <span className="req">*</span></label>

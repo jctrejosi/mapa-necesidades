@@ -17,6 +17,7 @@ import { BotModule } from './bot/bot.module';
 import { VisitasModule } from './visitas/visitas.module';
 import { AuditoriaModule } from './audit/audit.module';
 import { PuntosApoyoModule } from './puntos-apoyo/puntos-apoyo.module';
+import { EventosModule } from './eventos/eventos.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PuntosApoyoModule } from './puntos-apoyo/puntos-apoyo.module';
     VisitasModule,
     AuditoriaModule,
     PuntosApoyoModule,
+    EventosModule,
   ],
 })
 export class AppModule {}

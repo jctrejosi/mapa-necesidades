@@ -150,11 +150,11 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 
 
 export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
-  const { ciudad, sectores, necesidades, puntosApoyo, mascotas, danos, noticias, ofrecimientos, viviendas,
+  const { ciudad, sectores, necesidades, puntosApoyo, eventos, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
     addSector, addNecesidad, addMascota, addDano, updateNecesidad, ayudarNecesidad, getSectorEstado,
     eliminarNecesidad, updateOfrecimiento, eliminarOfrecimiento, updateMascota, eliminarMascota,
-    updateVivienda, eliminarVivienda, editarDano, eliminarDano } = store
+    updateVivienda, eliminarVivienda, editarDano, eliminarDano, updateEvento, eliminarEvento } = store
 
   const isColombia = ciudad === 'Colombia'
   const matchesCiudad = (c: string | null) => isColombia || c === ciudad
@@ -165,6 +165,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const mascotaMarkersRef = useRef<any[]>([])
   const danoMarkersRef = useRef<any[]>([])
   const puntoMarkersRef = useRef<any[]>([])
+  const eventoMarkersRef = useRef<any[]>([])
   // Registro de payloads de detalle por clave, para los botones de los popups
   const detailRegistry = useRef<Record<string, any>>({})
   const openDetailRef = useRef<(key: string) => void>(() => {})
@@ -174,6 +175,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     puntos: true,
     mascotas: true,
     danos: true,
+    eventos: true,
   }))
   const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
   // Mobile UX
@@ -339,9 +341,25 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       if (!(n.ciudad === null || matchesCiudad(n.ciudad))) return
       items.push({ key: `i${n.id}`, type: 'noticia', mensaje: `Nueva noticia: ${n.titulo}`, ciudad: n.ciudad, at: n.fecha, ts: ts(n.fecha) })
     })
+    eventos.forEach(e => {
+      if (!matchesCiudad(e.ciudad)) return
+      items.push({
+        key: `ev${e.id}`, type: 'evento', mensaje: `Nuevo evento: ${e.titulo}`, ciudad: e.ciudad,
+        at: e.fecha_inicio ?? new Date().toISOString(), ts: e.fecha_inicio ? Date.parse(e.fecha_inicio) : Date.now(),
+        detail: {
+          titulo: `📅 ${e.titulo}`,
+          detalle: e.descripcion || undefined,
+          ubicacion: e.direccion || undefined,
+          telefono: e.punto?.telefono || undefined,
+          lat: e.lat, lng: e.lng,
+          imagenes: e.punto?.imagen ? [e.punto.imagen] : undefined,
+          editable: { tipo: 'evento', id: e.id },
+        },
+      })
+    })
 
     return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 50)
-  }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, sectores, ciudad])
+  }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, eventos, sectores, ciudad])
 
   // Abre el modal de reportes cuando el navbar pide "Reportes"
   useEffect(() => {
@@ -552,7 +570,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         const emoji = ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);background:#003893 url('${img}') center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:16px">${img ? '' : emoji}</div>`,
+          html: `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);background:${p.color} url('${img}') center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:16px">${img ? '' : emoji}</div>`,
           iconSize: [38, 38], iconAnchor: [19, 19],
         })
         const mk = L.marker([p.lat, p.lng], { icon }).addTo(mapInstance.current)
@@ -577,7 +595,56 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         puntoMarkersRef.current.push(mk)
       })
     }
-  }, [sectores, necesidades, puntosApoyo, mascotas, danos, ciudad, getSectorEstado, layers])
+
+    // — Eventos vigentes: marcador pulsante con el color del punto de apoyo
+    eventoMarkersRef.current.forEach(m => m.remove())
+    eventoMarkersRef.current = []
+    if (layers.eventos) {
+      const now = Date.now()
+      const vigentes = eventos.filter(e => {
+        if (!matchesCiudad(e.ciudad) || !e.activo) return false
+        const ini = e.fecha_inicio ? new Date(e.fecha_inicio).getTime() : 0
+        const fin = e.fecha_fin ? new Date(e.fecha_fin).getTime() : Infinity
+        return now >= ini && now <= fin
+      })
+      vigentes.forEach(e => {
+        const color = e.punto?.color ?? '#003893'
+        const img = e.punto?.imagen ?? ''
+        const icon = L.divIcon({
+          className: '',
+          html: `
+            <div class="evt-marker" style="--evc:${color}">
+              <span class="evt-ping"></span>
+              <div class="evt-core"${img ? ` style="background-image:url('${img}')"` : ''}>
+                <span class="evt-badge">📅</span>
+              </div>
+            </div>`,
+          iconSize: [34, 34], iconAnchor: [17, 17],
+        })
+        const mk = L.marker([e.lat, e.lng], { icon }).addTo(mapInstance.current)
+        detailRegistry.current[`ev${e.id}`] = {
+          titulo: `📅 ${e.titulo}`,
+          detalle: e.descripcion || undefined,
+          ubicacion: e.direccion || undefined,
+          telefono: e.punto?.telefono || undefined,
+          lat: e.lat, lng: e.lng,
+          imagenes: e.punto?.imagen ? [e.punto.imagen] : undefined,
+          editable: { tipo: 'evento', id: e.id },
+        }
+        mk.bindPopup(`
+          <div style="min-width:190px">
+            <span style="background:#e8f5e9;color:#2E9E5B;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">📅 EVENTO ACTIVO</span>
+            <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${e.titulo}</h4>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 4px">🏪 ${e.punto?.nombre ?? 'Punto de apoyo'}</p>
+            ${e.direccion ? `<p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${e.direccion}</p>` : ''}
+            ${e.descripcion ? `<p style="font-size:12px;color:#6b7280;margin:0 0 8px">${e.descripcion}</p>` : ''}
+            <button onclick="window.__openDetail('ev${e.id}')" style="width:100%;background:#f0f4ff;color:#003893;border:none;border-radius:6px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">👁 Ver detalle</button>
+          </div>
+        `)
+        eventoMarkersRef.current.push(mk)
+      })
+    }
+  }, [sectores, necesidades, puntosApoyo, eventos, mascotas, danos, ciudad, getSectorEstado, layers])
 
   useEffect(() => {
     renderMarkers()
@@ -878,6 +945,12 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         imagen,
         pin: codigo,
       })
+    } else if (editReport.tipo === 'evento') {
+      r = await updateEvento(editReport.id, {
+        direccion: editForm.direccion || undefined,
+        descripcion: editForm.descripcion || undefined,
+        pin: codigo,
+      })
     } else {
       r = await editarDano(editReport.id, {
         radicado: codigo,
@@ -906,6 +979,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     else if (deleteReport.tipo === 'ofrecimiento') r = await eliminarOfrecimiento(deleteReport.id, codigo)
     else if (deleteReport.tipo === 'mascota') r = await eliminarMascota(deleteReport.id, codigo)
     else if (deleteReport.tipo === 'vivienda') r = await eliminarVivienda(deleteReport.id, codigo)
+    else if (deleteReport.tipo === 'evento') r = await eliminarEvento(deleteReport.id, codigo)
     else r = await eliminarDano(deleteReport.id, codigo)
     if (!r) return
     setDeleteReport(null)
@@ -1288,6 +1362,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         label: t.label.split(' ').slice(1).join(' ') || t.label,
       })),
       { key: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
+      { key: 'eventos', icon: '📅', label: 'Eventos' },
       { key: 'mascotas', icon: '🐾', label: 'Mascotas perdidas' },
       { key: 'danos', icon: '🏚️', label: 'Daños' },
     ]

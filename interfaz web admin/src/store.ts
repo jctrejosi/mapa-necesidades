@@ -4,13 +4,13 @@ import { getAdminPass, imgUrl, setAdminPass } from './api/client'
 import { cityLabel } from './api'
 import { subscribeEvents, type AppEvent } from './api/events'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
+  CentroAcopio, Evento, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './api/types'
 
 export type {
   Contacto, Sector, Necesidad, Ofrecimiento, Mascota, PuntoApoyo,
-  CentroAcopio, Noticia, Vivienda, ReporteDano,
+  CentroAcopio, Noticia, Vivienda, ReporteDano, Evento,
 } from './api/types'
 
 // ── Helpers de formato / imágenes ───────────────────────────────────────────
@@ -74,6 +74,7 @@ interface Data {
   mascotas: Mascota[]
   centros: CentroAcopio[]
   puntosApoyo: PuntoApoyo[]
+  eventos: Evento[]
   noticias: Noticia[]
   viviendas: Vivienda[]
   danos: ReporteDano[]
@@ -92,7 +93,7 @@ function loadNotificaciones(): Notificacion[] {
 
 let cache: Data = {
   sectores: [], necesidades: [], ofrecimientos: [], mascotas: [],
-  centros: [], puntosApoyo: [], noticias: [], viviendas: [], danos: [],
+  centros: [], puntosApoyo: [], eventos: [], noticias: [], viviendas: [], danos: [],
   notificaciones: loadNotificaciones(),
   toasts: [],
 }
@@ -116,7 +117,7 @@ const mapItem = (x: any) => ({
 /** Carga todos los listados (admin ve sectores cerrados y campos completos). */
 async function refresh(ciudad: string): Promise<void> {
   const isAdmin = !!getAdminPass()
-  const [sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, noticias, viviendas, danos] =
+  const [sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, eventos, noticias, viviendas, danos] =
     await Promise.all([
       api.listSectores(ciudad, isAdmin),
       api.listNecesidades(ciudad),
@@ -124,6 +125,7 @@ async function refresh(ciudad: string): Promise<void> {
       api.listMascotas(ciudad),
       api.listCentros(ciudad),
       api.listPuntosApoyo(ciudad),
+      api.listEventos(ciudad),
       api.listNoticias(ciudad),
       api.listViviendas(ciudad),
       api.listDanos(ciudad, isAdmin),
@@ -137,6 +139,7 @@ async function refresh(ciudad: string): Promise<void> {
     mascotas: mascotas.map(mapItem),
     centros: centros.map(mapItem),
     puntosApoyo: puntosApoyo.map(mapItem),
+    eventos: eventos.map(mapItem),
     noticias: noticias.map(mapItem),
     viviendas: viviendas.map(mapItem),
     danos: danos.map(mapItem),
@@ -317,6 +320,16 @@ export function useStore() {
   const deletePuntoApoyo = (id: number): Promise<unknown> =>
     mutate(() => api.deletePuntoApoyo(id), ciudad)
 
+  const addEvento = (e: Partial<Evento> & { punto_apoyo_id: number }): Promise<string> =>
+    mutate(async () => (await api.createEvento({ ...e })).pin, ciudad)
+
+  /** Edición con la llave de admin (x-admin-password). */
+  const updateEvento = (id: number, b: Partial<Evento>): Promise<unknown> =>
+    mutate(() => api.updateEventoAdmin(id, b as Record<string, unknown>), ciudad)
+
+  const deleteEvento = (id: number): Promise<unknown> =>
+    mutate(() => api.deleteEvento(id), ciudad)
+
   const addNoticia = (n: Omit<Noticia, 'id'>): Promise<unknown> =>
     mutate(async () => api.createNoticia({ ...n, imagen: await withImage(n.imagen) }), ciudad)
 
@@ -378,6 +391,7 @@ export function useStore() {
     addMascota, updateMascota, deleteMascota,
     addCentro, updateCentro, deleteCentro,
     addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo,
+    addEvento, updateEvento, deleteEvento,
     addNoticia, updateNoticia, deleteNoticia,
     addVivienda, updateVivienda, deleteVivienda,
     addDano, updateDano, deleteDano,

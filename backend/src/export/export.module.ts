@@ -15,9 +15,11 @@ import { eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import {
   contactos,
+  eventos,
   necesidades,
   mascotasPerdidas,
   ofrecimientos,
+  puntosApoyo,
   sectores,
   viviendas,
 } from '../db/schema';
@@ -25,7 +27,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { genPin, str, toInt } from '../common/util';
 
 // Tablas que tienen PIN de edición (whitelist para ver/restablecer códigos)
-const PIN_TABLES = ['necesidades', 'ofrecimientos', 'mascotas_perdidas', 'viviendas'] as const;
+const PIN_TABLES = ['necesidades', 'ofrecimientos', 'mascotas_perdidas', 'viviendas', 'eventos', 'puntos_apoyo'] as const;
 type PinTable = (typeof PIN_TABLES)[number];
 
 @Injectable()
@@ -76,6 +78,14 @@ class ExportService {
       const rows = await this.db.select({ pin: mascotasPerdidas.pin }).from(mascotasPerdidas).where(eq(mascotasPerdidas.id, id)).limit(1);
       return { pin: rows[0]?.pin ?? null };
     }
+    if (t === 'eventos') {
+      const rows = await this.db.select({ pin: eventos.pin }).from(eventos).where(eq(eventos.id, id)).limit(1);
+      return { pin: rows[0]?.pin ?? null };
+    }
+    if (t === 'puntos_apoyo') {
+      const rows = await this.db.select({ pin: puntosApoyo.pin }).from(puntosApoyo).where(eq(puntosApoyo.id, id)).limit(1);
+      return { pin: rows[0]?.pin ?? null };
+    }
     const rows = await this.db.select({ pin: viviendas.pin }).from(viviendas).where(eq(viviendas.id, id)).limit(1);
     return { pin: rows[0]?.pin ?? null };
   }
@@ -87,6 +97,8 @@ class ExportService {
     if (t === 'necesidades') await this.db.update(necesidades).set({ pin }).where(eq(necesidades.id, id));
     if (t === 'ofrecimientos') await this.db.update(ofrecimientos).set({ pin }).where(eq(ofrecimientos.id, id));
     if (t === 'mascotas_perdidas') await this.db.update(mascotasPerdidas).set({ pin }).where(eq(mascotasPerdidas.id, id));
+    if (t === 'eventos') await this.db.update(eventos).set({ pin }).where(eq(eventos.id, id));
+    if (t === 'puntos_apoyo') await this.db.update(puntosApoyo).set({ pin }).where(eq(puntosApoyo.id, id));
     if (t === 'viviendas') await this.db.update(viviendas).set({ pin }).where(eq(viviendas.id, id));
     return { pin };
   }

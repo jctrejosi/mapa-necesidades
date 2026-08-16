@@ -60,15 +60,20 @@ export function isAdminPass(pass: unknown): boolean {
 /**
  * Llave universal de EDICIÓN de reportes (ADMIN_EDIT en el .env).
  * Permite editar/borrar cualquier reporte sin conocer su PIN/radicado.
+ * Acepta varias llaves separadas por coma (ej. ADMIN_EDIT=admin-edit-2026,2026)
+ * y recorta espacios alrededor de lo que escriba el usuario.
  * Si ADMIN_EDIT no está definido, cae a ADMIN_PASSWORD.
  */
 export function isAdminEdit(code: unknown): boolean {
-  const expected = process.env.ADMIN_EDIT ?? process.env.ADMIN_PASSWORD ?? 'admin123';
-  const a = String(code ?? '');
-  if (a.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+  const env = process.env.ADMIN_EDIT ?? process.env.ADMIN_PASSWORD ?? 'admin123';
+  const keys = env.split(',').map(k => k.trim()).filter(Boolean);
+  const a = String(code ?? '').trim();
+  return keys.some(expected => {
+    if (a.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ expected.charCodeAt(i);
+    return diff === 0;
+  });
 }
 
 /**
