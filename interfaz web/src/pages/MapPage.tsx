@@ -135,7 +135,9 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
-    addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado } = store
+    addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado,
+    eliminarNecesidad, updateOfrecimiento, eliminarOfrecimiento, updateMascota, eliminarMascota,
+    updateVivienda, eliminarVivienda, editarDano, eliminarDano } = store
 
   const isColombia = ciudad === 'Colombia'
   const matchesCiudad = (c: string | null) => isColombia || c === ciudad
@@ -170,6 +172,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [showNeedModal, setShowNeedModal] = useState<number | null>(null) // sector_id
   const [showHelpModal, setShowHelpModal] = useState<number | null>(null) // need_id
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null) // need_id
+  // Editar/eliminar cualquier reporte público con el código (PIN/radicado)
+  const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
+  const [editForm, setEditForm] = useState({ pin: '', campo1: '', campo2: '' })
+  const [deleteReport, setDeleteReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
+  const [deletePin, setDeletePin] = useState('')
   const [pinResult, setPinResult] = useState<string | null>(null)
 
   // Centro de reportes (panel de notificaciones por secciones)
@@ -459,7 +466,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             <span style="background:#fde8eb;color:#CE1126;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">🏚 ${d.nivel_percibido.toUpperCase()}</span>
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${d.tipo_inmueble}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${d.direccion}</p>
-            <p style="font-size:12px;margin:0 0 2px">Radicado: <strong>${d.radicado}</strong></p>
             <p style="font-size:12px;color:#6b7280;margin:0">${d.descripcion}</p>
           </div>
         `)
@@ -610,18 +616,89 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     if (!showUpdateModal) return
     const need = necesidades.find(n => n.id === showUpdateModal)
     if (!need) return
-    if (need.pin && uForm.pin !== need.pin) { alert('Código incorrecto. Inténtalo de nuevo.'); return }
+    if (!uForm.pin.trim()) { alert('Ingresa el código de 4 dígitos que se te dio al publicar.'); return }
     const r = await updateNecesidad(showUpdateModal, {
       cantidad: uForm.cantidad || need.cantidad,
       prioridad: uForm.prioridad,
       descripcion: uForm.detalles || need.descripcion,
       estado: uForm.estado,
       imagen: uForm.imagen || need.imagen,
-      pin: uForm.pin,
+      pin: uForm.pin.trim(),
     })
     if (!r) return
     setShowUpdateModal(null)
     alert('✅ Necesidad actualizada correctamente.')
+  }
+
+  // ── Editar / eliminar reporte propio (PIN o radicado) ──
+  const openEdit = (e: { tipo: string; id: number }) => {
+    setEditForm({ pin: '', campo1: '', campo2: '' })
+    setEditReport({ ...e, titulo: detailItem?.titulo ?? '' })
+  }
+
+  const openDelete = (e: { tipo: string; id: number }) => {
+    setDeletePin('')
+    setDeleteReport({ ...e, titulo: detailItem?.titulo ?? '' })
+  }
+
+  const submitEditReport = async () => {
+    if (!editReport) return
+    const codigo = editForm.pin.trim()
+    if (!codigo) {
+      alert(editReport.tipo === 'dano'
+        ? 'Ingresa el número de radicado para poder editar.'
+        : 'Ingresa el código de 4 dígitos que se te dio al publicar.')
+      return
+    }
+    let r: unknown
+    if (editReport.tipo === 'necesidad') {
+      r = await updateNecesidad(editReport.id, {
+        descripcion: editForm.campo1 || undefined,
+        cantidad: editForm.campo2 || undefined,
+        pin: codigo,
+      })
+    } else if (editReport.tipo === 'ofrecimiento') {
+      r = await updateOfrecimiento(editReport.id, {
+        descripcion: editForm.campo1 || undefined,
+        cantidad: editForm.campo2 || undefined,
+        pin: codigo,
+      })
+    } else if (editReport.tipo === 'mascota') {
+      r = await updateMascota(editReport.id, { senas: editForm.campo1 || undefined, pin: codigo })
+    } else if (editReport.tipo === 'vivienda') {
+      r = await updateVivienda(editReport.id, {
+        descripcion: editForm.campo1 || undefined,
+        capacidad: editForm.campo2 || undefined,
+        pin: codigo,
+      })
+    } else {
+      r = await editarDano(editReport.id, { radicado: codigo, descripcion: editForm.campo1 || undefined })
+    }
+    if (!r) return
+    setEditReport(null)
+    setDetailItem(null)
+    alert('✅ Reporte actualizado.')
+  }
+
+  const submitDeleteReport = async () => {
+    if (!deleteReport) return
+    const codigo = deletePin.trim()
+    if (!codigo) {
+      alert(deleteReport.tipo === 'dano'
+        ? 'Ingresa el número de radicado para poder eliminar.'
+        : 'Ingresa el código de 4 dígitos que se te dio al publicar.')
+      return
+    }
+    let r: unknown
+    if (deleteReport.tipo === 'necesidad') r = await eliminarNecesidad(deleteReport.id, codigo)
+    else if (deleteReport.tipo === 'ofrecimiento') r = await eliminarOfrecimiento(deleteReport.id, codigo)
+    else if (deleteReport.tipo === 'mascota') r = await eliminarMascota(deleteReport.id, codigo)
+    else if (deleteReport.tipo === 'vivienda') r = await eliminarVivienda(deleteReport.id, codigo)
+    else r = await eliminarDano(deleteReport.id, codigo)
+    if (!r) return
+    setDeleteReport(null)
+    setDetailItem(null)
+    alert('🗑 Reporte eliminado. La modificación quedó registrada en la auditoría.')
   }
 
   const centerOnSector = (sectorId: number) => {
@@ -648,7 +725,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   }
 
   /** Abre el detalle de un reporte y centra el mapa en su ubicación (si tiene). */
-  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[] }) => {
+  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[]; editable?: { tipo: string; id: number } }) => {
     setReportesModalOpen(false)
     setDetailItem(item)
     if (item.lat != null && item.lng != null && mapInstance.current) {
@@ -681,6 +758,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         telefono: n.telefono_reporta,
         lat: sector?.lat, lng: sector?.lng,
         imagenes: n.imagen ? [n.imagen] : undefined,
+        editable: { tipo: 'necesidad', id: n.id },
       })} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}>
         <span style={{ fontSize: 15 }}>🆘</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -822,6 +900,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 telefono: n.telefono_reporta,
                 lat: sector?.lat, lng: sector?.lng,
                 imagenes: n.imagen ? [n.imagen] : undefined,
+                editable: { tipo: 'necesidad', id: n.id },
               })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
@@ -854,6 +933,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               detalle: o.descripcion || undefined,
               telefono: o.telefono_ofrece,
               imagenes: o.imagen ? [o.imagen] : undefined,
+              editable: { tipo: 'ofrecimiento', id: o.id },
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{o.tipo}{o.cantidad ? ` — ${o.cantidad}` : ''}</span>
@@ -882,6 +962,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               telefono: m.telefono_reporta,
               lat: m.lat, lng: m.lng,
               imagenes: m.imagen ? [m.imagen] : undefined,
+              editable: { tipo: 'mascota', id: m.id },
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{m.nombre || m.tipo_animal}</span>
@@ -908,6 +989,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               detalle: v.descripcion || undefined,
               telefono: v.telefono_ofrece,
               imagenes: v.imagen ? [v.imagen] : undefined,
+              editable: { tipo: 'vivienda', id: v.id },
             })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{v.sector_referencia || 'Vivienda'}</span>
@@ -938,6 +1020,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 telefono: d.telefono_reportante,
                 lat: d.lat, lng: d.lng,
                 imagenes: d.imagen ? [d.imagen] : undefined,
+                editable: { tipo: 'dano', id: d.id },
               })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{d.tipo_inmueble} — {d.direccion}</span>
@@ -945,7 +1028,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                     {d.estado === 'pendiente' ? '🔴 Pendiente' : d.estado === 'visita_programada' ? '🟠 Visita' : '✅ Visitado'}
                   </span>
                 </div>
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>Radicado: {d.radicado} · {d.nivel_percibido}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9AA0AC' }}>Nivel: {d.nivel_percibido}</p>
               </div>
             ))}
           </ReportSection>
@@ -1298,6 +1381,55 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ) : (
             <p style={{ fontSize: 12.5, color: '#9AA0AC', margin: 0 }}>No hay teléfono registrado para este reporte.</p>
           )}
+          {detailItem.editable && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', borderTop: '1px solid #f0f0f0', paddingTop: 14 }}>
+              <button className="btn btn-outline btn-sm" onClick={() => openEdit(detailItem.editable!)}>✎ Editar reporte</button>
+              <button className="btn btn-red btn-sm" onClick={() => openDelete(detailItem.editable!)}>🗑 Eliminar</button>
+              <span style={{ fontSize: 11, color: '#9AA0AC', alignSelf: 'center' }}>
+                Se pedirá el código que recibiste al publicar.
+              </span>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* Editar reporte propio (PIN o radicado) */}
+      {editReport && (
+        <Modal title={`✎ Editar: ${editReport.titulo}`} onClose={() => setEditReport(null)} onConfirm={submitEditReport} confirmLabel="Guardar cambios">
+          <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>
+            Para poder editar ingresa el {editReport.tipo === 'dano' ? 'número de radicado' : 'código de 4 dígitos'} que se te dio al publicar.
+          </p>
+          <div className="form-group">
+            <label className="form-label">{editReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
+            <input className="form-input" value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value }))}
+              placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={editReport.tipo === 'dano' ? 10 : 4}
+              style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{editReport.tipo === 'mascota' ? 'Señas / descripción' : 'Descripción'}</label>
+            <textarea className="form-input" rows={3} value={editForm.campo1} onChange={e => setEditForm(p => ({ ...p, campo1: e.target.value }))} />
+          </div>
+          {editReport.tipo !== 'dano' && editReport.tipo !== 'mascota' && (
+            <div className="form-group">
+              <label className="form-label">{editReport.tipo === 'vivienda' ? 'Capacidad' : 'Cantidad'}</label>
+              <input className="form-input" value={editForm.campo2} onChange={e => setEditForm(p => ({ ...p, campo2: e.target.value }))} />
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* Eliminar reporte propio (PIN o radicado) */}
+      {deleteReport && (
+        <Modal title={`🗑 Eliminar: ${deleteReport.titulo}`} onClose={() => setDeleteReport(null)} onConfirm={submitDeleteReport} confirmLabel="Eliminar definitivamente" confirmClass="btn btn-red">
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
+            Esta acción borra el reporte del mapa. Quedará registrada en la auditoría.
+          </p>
+          <div className="form-group">
+            <label className="form-label">{deleteReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
+            <input className="form-input" value={deletePin} onChange={e => setDeletePin(e.target.value)}
+              placeholder={deleteReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={deleteReport.tipo === 'dano' ? 10 : 4}
+              style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
+          </div>
         </Modal>
       )}
 

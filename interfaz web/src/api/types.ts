@@ -63,7 +63,7 @@ export interface Vivienda {
 }
 
 export interface ReporteDano {
-  id: number; radicado: string; ciudad: string
+  id: number; radicado?: string; ciudad: string
   tipo_inmueble: string; direccion: string
   lat: number; lng: number
   habitado: 'si' | 'no' | 'evacuado'

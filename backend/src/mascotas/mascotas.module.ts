@@ -23,6 +23,7 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, toNum, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
+import { registrarAuditoria } from '../common/audit';
 
 type MascotaBody = {
   pin?: string;
@@ -61,7 +62,7 @@ class MascotasService {
       nombre_reporta: m.nombreReporta,
       telefono_reporta: m.telefonoReporta,
       avistado_por: nested(m.avistadoPorNombre, m.avistadoPorTelefono, m.fechaAvistamiento),
-      pin: m.pin ?? '',
+      // El PIN no viaja en los listados públicos.
     };
   }
 
@@ -115,6 +116,11 @@ class MascotasService {
       at: new Date().toISOString(),
     });
     notifyReporteWhatsapp(b.telefono_reporta, 'reporte de mascota', pin, `Detalle: ${str(b.nombre_mascota) || tipo}`);
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: m.id, accion: 'create',
+      datosNuevos: this.serialize(m), autor: 'usuario', codigo: pin,
+      visitorId: str(b.visitor_id),
+    });
     return { ...this.serialize(m), pin };
   }
 
@@ -124,6 +130,7 @@ class MascotasService {
     if (!checkPin(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
+    const previo = this.serialize(row);
     const set: Partial<typeof mascotasPerdidas.$inferInsert> = {};
     if (b.nombre_mascota !== undefined) set.nombreMascota = str(b.nombre_mascota) || null;
     if (b.tipo_animal !== undefined) set.tipoAnimal = str(b.tipo_animal);
@@ -133,7 +140,12 @@ class MascotasService {
     if (b.fecha_visto !== undefined) set.fechaVisto = toDate(b.fecha_visto) ?? today();
     if (b.estado !== undefined) set.estado = b.estado === 'encontrado' ? 'encontrado' : 'perdido';
     const [m] = await this.db.update(mascotasPerdidas).set(set).where(eq(mascotasPerdidas.id, id)).returning();
-    return this.serialize(m);
+    const nuevo = this.serialize(m);
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.pin),
+    });
+    return nuevo;
   }
 
   async avistar(id: number, nombre: unknown, telefono: unknown) {
@@ -157,7 +169,28 @@ class MascotasService {
   }
 
   async remove(id: number) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Mascota no encontrada' });
     await this.db.delete(mascotasPerdidas).where(eq(mascotasPerdidas.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'admin', codigo: 'llave-admin',
+    });
+    return { ok: true };
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  async removePublic(id: number, pin: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Mascota no encontrada' });
+    if (!checkPin(row.pin, pin)) {
+      throw new ForbiddenException({ error: 'Código de edición incorrecto' });
+    }
+    await this.db.delete(mascotasPerdidas).where(eq(mascotasPerdidas.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'mascotas_perdidas', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+    });
     return { ok: true };
   }
 }
@@ -201,6 +234,12 @@ export class MascotasController {
   @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.svc.remove(toInt(id));
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  @Post(':id/eliminar')
+  removePublic(@Param('id') id: string, @Body() b: { pin?: string }) {
+    return this.svc.removePublic(toInt(id), b?.pin);
   }
 }
 

@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
-import { restablecerPin, cityId } from '../api'
+import { restablecerPin, verPin, cityId, CITIES, listVisitas, listAuditoria } from '../api'
+import type { Necesidad, ReporteDano } from '../api/types'
 
 interface Props { store: Store }
+
+// ── Utilidades de fecha / orden ──────────────────────────────────────────────
 
 function exportCSV(rows: any[], filename: string) {
   if (!rows.length) return
@@ -17,6 +20,127 @@ function exportCSV(rows: any[], filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Timestamp de una fecha 'YYYY-MM-DD' o ISO. */
+const dateTs = (iso?: string | null): number => {
+  if (!iso) return 0
+  const t = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+/** Filtra por rango de fechas (desde/hasta, inclusivo). */
+const inDateRange = (iso: string | null | undefined, from: string, to: string): boolean => {
+  if (!from && !to) return true
+  const t = dateTs(iso)
+  if (from && t < dateTs(from)) return false
+  if (to && t > dateTs(to) + 86_399_999) return false
+  return true
+}
+
+/** Ordena del más reciente al más antiguo (empate por id desc). */
+function byDateDesc<T extends { id: number }>(rows: T[], dateOf: (r: T) => string | null | undefined): T[] {
+  return [...rows].sort((a, b) => dateTs(dateOf(b)) - dateTs(dateOf(a)) || b.id - a.id)
+}
+
+const fmtDateTime = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+// ── Componentes visuales ─────────────────────────────────────────────────────
+
+const TAG: Record<string, string> = {
+  requiere: 'tag-red', urgente: 'tag-red', pendiente: 'tag-red', perdido: 'tag-red', colapso: 'tag-red', severo: 'tag-red',
+  en_proceso: 'tag-orange', reservado: 'tag-orange', visita_programada: 'tag-orange', moderado: 'tag-orange', alquiler: 'tag-orange',
+  atendida: 'tag-green', disponible: 'tag-green', encontrado: 'tag-green', abierto: 'tag-green', gratis: 'tag-green', visitado: 'tag-green',
+  cerrado: 'tag-gray', entregado: 'tag-gray', ocupado: 'tag-gray', leve: 'tag-gray', activo: 'tag-green',
+}
+
+const StatusTag = ({ v }: { v: string }) => <span className={`tag ${TAG[v] ?? 'tag-gray'}`}>{v.replace(/_/g, ' ')}</span>
+
+function KpiCard({ icon, label, value, tone = 'blue' }: { icon: string; label: string; value: number; tone?: string }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-icon" style={{ background: `var(--kpi-${tone})` }}>{icon}</div>
+      <div>
+        <div className="kpi-value">{value}</div>
+        <div className="kpi-label">{label}</div>
+      </div>
+    </div>
+  )
+}
+
+function Chips({ options, value, onChange }: { options: { id: string; label: string }[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div className="chips-row">
+      {options.map(o => (
+        <button key={o.id} className={`chip ${value === o.id ? 'active' : ''}`} onClick={() => onChange(o.id)}>{o.label}</button>
+      ))}
+    </div>
+  )
+}
+
+/** Barra de herramientas de una sección: búsqueda + chips de estado + rango de fechas. */
+function Toolbar(props: {
+  search: string; setSearch: (s: string) => void; placeholder?: string
+  chips?: { id: string; label: string }[]; chip?: string; setChip?: (id: string) => void
+  dateFrom: string; setDateFrom: (s: string) => void
+  dateTo: string; setDateTo: (s: string) => void
+  extra?: React.ReactNode
+}) {
+  return (
+    <div className="admin-toolbar">
+      <input
+        className="form-input admin-search"
+        value={props.search}
+        onChange={e => props.setSearch(e.target.value)}
+        placeholder={props.placeholder ?? 'Buscar…'}
+      />
+      {props.chips && props.chip !== undefined && props.setChip && (
+        <Chips options={props.chips} value={props.chip} onChange={props.setChip} />
+      )}
+      <div className="date-filters">
+        <input className="form-input" type="date" value={props.dateFrom} onChange={e => props.setDateFrom(e.target.value)} title="Desde" aria-label="Desde" />
+        <span className="date-sep">→</span>
+        <input className="form-input" type="date" value={props.dateTo} onChange={e => props.setDateTo(e.target.value)} title="Hasta" aria-label="Hasta" />
+        {(props.dateFrom || props.dateTo) && (
+          <button className="btn btn-xs btn-outline" onClick={() => { props.setDateFrom(''); props.setDateTo('') }}>✕ Limpiar</button>
+        )}
+      </div>
+      {props.extra}
+    </div>
+  )
+}
+
+function Section({ title, icon, count, onExport, toolbar, children }: {
+  title: string; icon: string; count: number
+  onExport?: () => void; toolbar?: React.ReactNode; children: React.ReactNode
+}) {
+  return (
+    <div className="card admin-section">
+      <div className="section-head">
+        <h2><span className="section-icon">{icon}</span>{title}</h2>
+        <span className="count-pill">{count}</span>
+        {onExport && <button className="btn btn-outline btn-xs" onClick={onExport}>⬇ Exportar CSV</button>}
+      </div>
+      {toolbar}
+      <div className="table-wrap">{children}</div>
+    </div>
+  )
+}
+
+const Td = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+  <td style={{ padding: '10px 14px', borderBottom: '1px solid #f0f0f0', fontSize: 13, verticalAlign: 'top', ...style }}>{children}</td>
+)
+const Th = ({ children }: { children: React.ReactNode }) => (
+  <th style={{ padding: '9px 14px', background: '#f8f9fb', borderBottom: '1px solid #e1e4e9', fontSize: 11.5, fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.4px', color: '#6b7280' }}>{children}</th>
+)
+
+const Empty = ({ text }: { text: string }) => (
+  <tr><td colSpan={99} style={{ padding: '28px 16px', textAlign: 'center', color: '#9AA0AC', fontSize: 13 }}>{text}</td></tr>
+)
+
+// ── Página ───────────────────────────────────────────────────────────────────
+
 export default function AdminPage({ store }: Props) {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('cr_admin') === '1')
@@ -25,13 +149,30 @@ export default function AdminPage({ store }: Props) {
   const {
     ciudad, sectores, necesidades, ofrecimientos, mascotas, centros, noticias, viviendas, danos,
     updateSector, deleteSector, updateNecesidad, deleteNecesidad,
-    updateOfrecimiento, deleteOfrecimiento, deleteMascota,
+    updateOfrecimiento, deleteOfrecimiento, deleteMascota, updateMascota,
     addCentro, updateCentro, deleteCentro,
     addNoticia, updateNoticia, deleteNoticia,
-    deleteVivienda, updateDano, deleteDano, setSectores, loginAdmin, logoutAdmin
+    deleteVivienda, updateDano, deleteDano, loginAdmin, logoutAdmin
   } = store
 
+  const [section, setSection] = useState('resumen')
+  const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [nChip, setNChip] = useState('urgentes')
+  const [oChip, setOChip] = useState('todos')
+  const [mChip, setMChip] = useState('todos')
+  const [cChip, setCChip] = useState('todos')
+  const [vChip, setVChip] = useState('todos')
+  const [dChip, setDChip] = useState('pendientes')
+  const [visitas, setVisitas] = useState<any[]>([])
+  const [visitasLoading, setVisitasLoading] = useState(false)
+  const [auditoria, setAuditoria] = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditDetail, setAuditDetail] = useState<any | null>(null)
+
   const [showPinModal, setShowPinModal] = useState<{ pin: string | null; id: number; type: string } | null>(null)
+  const [pinLoading, setPinLoading] = useState(false)
   const [showCentroForm, setShowCentroForm] = useState<any>(null)
   const [showNoticiaForm, setShowNoticiaForm] = useState<any>(null)
   const [showDanoGestionar, setShowDanoGestionar] = useState<any>(null)
@@ -57,10 +198,26 @@ export default function AdminPage({ store }: Props) {
     setAuthed(false)
   }
 
+  const loadVisitas = async () => {
+    setVisitasLoading(true)
+    try { setVisitas(await listVisitas(100)) } catch (e) { alert(e instanceof Error ? e.message : String(e)) }
+    setVisitasLoading(false)
+  }
+
+  const loadAuditoria = async () => {
+    setAuditLoading(true)
+    try { setAuditoria(await listAuditoria(200)) } catch (e) { alert(e instanceof Error ? e.message : String(e)) }
+    setAuditLoading(false)
+  }
+
+  useEffect(() => { if (authed && section === 'visitas') loadVisitas() }, [authed, section])
+  useEffect(() => { if (authed && section === 'auditoria') loadAuditoria() }, [authed, section])
+
   if (!authed) {
     return (
-      <div style={{ background: '#f4f5f7', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div className="card" style={{ padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
+      <div className="login-wrap">
+        <div className="tricolor-band" />
+        <div className="card login-card">
           <div style={{ fontSize: 40, marginBottom: 8 }}>🔑</div>
           <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Acceso administrador</h2>
           <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>Ingresa la contraseña de administración</p>
@@ -70,6 +227,7 @@ export default function AdminPage({ store }: Props) {
               className="form-input"
               type="password"
               value={password}
+              autoFocus
               onChange={e => { setPassword(e.target.value); setLoginError(false) }}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
               style={{ textAlign: 'center', letterSpacing: 4 }}
@@ -82,7 +240,7 @@ export default function AdminPage({ store }: Props) {
     )
   }
 
-  // Filtered by city
+  // ── Datos filtrados por ciudad ──
   const cSectores = sectores.filter(s => s.ciudad === ciudad)
   const cOfrecimientos = ofrecimientos.filter(o => o.ciudad === ciudad)
   const cMascotas = mascotas.filter(m => m.ciudad === ciudad)
@@ -90,28 +248,146 @@ export default function AdminPage({ store }: Props) {
   const cNoticias = noticias.filter(n => n.ciudad === null || n.ciudad === ciudad)
   const cViviendas = viviendas.filter(v => v.ciudad === ciudad)
   const cDanos = danos.filter(d => d.ciudad === ciudad)
+  const cNecesidades = necesidades.filter(n => cSectores.some(s => s.id === n.sector_id))
 
-  const Section = ({ title, count, children, onExport }: { title: string; count: number; children: React.ReactNode; onExport?: () => void }) => (
-    <div className="card" style={{ marginBottom: 24 }}>
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid #e1e4e9', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, flex: 1 }}>{title}</h2>
-        <span style={{ background: '#e8eeff', color: '#003893', fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 999 }}>{count}</span>
-        {onExport && <button className="btn btn-outline btn-xs" onClick={onExport}>⬇ Exportar CSV</button>}
-      </div>
-      <div style={{ overflowX: 'auto' }}>{children}</div>
-    </div>
-  )
+  const sectorOf = (sectorId: number) => sectores.find(s => s.id === sectorId)
 
-  const Td = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
-    <td style={{ padding: '10px 14px', borderBottom: '1px solid #f0f0f0', fontSize: 13, verticalAlign: 'top', ...style }}>{children}</td>
-  )
-  const Th = ({ children }: { children: React.ReactNode }) => (
-    <th style={{ padding: '8px 14px', background: '#f8f9fb', borderBottom: '1px solid #e1e4e9', fontSize: 12, fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap' }}>{children}</th>
-  )
+  // ── KPIs ──
+  const kpis = useMemo(() => ({
+    urgentes: cNecesidades.filter(n => n.estado === 'requiere' && !n.responsable).length,
+    enProceso: cNecesidades.filter(n => n.estado === 'requiere' && n.responsable).length,
+    atendidas: cNecesidades.filter(n => n.estado === 'atendida').length,
+    disponibles: cOfrecimientos.filter(o => o.estado === 'disponible' && !o.reservado_por).length,
+    danosPendientes: cDanos.filter(d => d.estado === 'pendiente').length,
+    viviendas: cViviendas.filter(v => v.estado === 'disponible').length,
+  }), [cNecesidades, cOfrecimientos, cDanos, cViviendas])
 
-  const showPin = (pin: string | null, id: number, type: string) => setShowPinModal({ pin, id, type })
+  // ── Búsqueda y filtros por sección ──
+  const q = search.trim().toLowerCase()
+  const hasDate = !!(dateFrom || dateTo)
+
+  const needsRows = useMemo(() => {
+    const rows = cNecesidades.filter(n => {
+      if (nChip === 'urgentes' && !(n.estado === 'requiere' && !n.responsable)) return false
+      if (nChip === 'en_proceso' && !(n.estado === 'requiere' && n.responsable)) return false
+      if (nChip === 'atendidas' && n.estado !== 'atendida') return false
+      if (hasDate && !inDateRange(n.fecha, dateFrom, dateTo)) return false
+      if (q) {
+        const s = sectorOf(n.sector_id)
+        const text = `${n.tipo} ${n.descripcion} ${n.cantidad} ${n.reportado_por} ${n.telefono_reporta} ${s?.nombre ?? ''}`.toLowerCase()
+        if (!text.includes(q)) return false
+      }
+      return true
+    })
+    return byDateDesc(rows, n => n.fecha)
+  }, [cNecesidades, nChip, q, hasDate, dateFrom, dateTo, sectores])
+
+  const ofsRows = useMemo(() => {
+    const rows = cOfrecimientos.filter(o => {
+      if (oChip === 'disponibles' && !(o.estado === 'disponible' && !o.reservado_por)) return false
+      if (oChip === 'reservados' && !(o.estado === 'disponible' && o.reservado_por)) return false
+      if (oChip === 'entregados' && o.estado !== 'entregado') return false
+      if (hasDate && !inDateRange(o.fecha, dateFrom, dateTo)) return false
+      if (q && `${o.tipo} ${o.descripcion} ${o.nombre_ofrece} ${o.telefono_ofrece}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, o => o.fecha)
+  }, [cOfrecimientos, oChip, q, hasDate, dateFrom, dateTo])
+
+  const petsRows = useMemo(() => {
+    const rows = cMascotas.filter(m => {
+      if (mChip === 'perdidas' && m.estado !== 'perdido') return false
+      if (mChip === 'encontradas' && m.estado !== 'encontrado') return false
+      if (hasDate && !inDateRange(m.fecha_visto, dateFrom, dateTo)) return false
+      if (q && `${m.nombre} ${m.tipo_animal} ${m.senas} ${m.lugar_visto} ${m.nombre_reporta}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, m => m.fecha_visto)
+  }, [cMascotas, mChip, q, hasDate, dateFrom, dateTo])
+
+  const centrosRows = useMemo(() => {
+    const rows = cCentros.filter(c => {
+      if (cChip === 'abiertos' && c.estado !== 'abierto') return false
+      if (cChip === 'cerrados' && c.estado !== 'cerrado') return false
+      if (q && `${c.nombre} ${c.organizacion} ${c.direccion} ${c.que_recibe}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, () => null)
+  }, [cCentros, cChip, q])
+
+  const viviendasRows = useMemo(() => {
+    const rows = cViviendas.filter(v => {
+      if (vChip === 'disponibles' && v.estado !== 'disponible') return false
+      if (vChip === 'ocupadas' && v.estado !== 'ocupado') return false
+      if (hasDate && !inDateRange((v as any).fecha, dateFrom, dateTo)) return false
+      if (q && `${v.sector_referencia} ${v.descripcion} ${v.nombre_ofrece} ${v.telefono_ofrece}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, v => (v as any).fecha)
+  }, [cViviendas, vChip, q, hasDate, dateFrom, dateTo])
+
+  const danosRows = useMemo(() => {
+    const rows = cDanos.filter(d => {
+      if (dChip === 'pendientes' && d.estado !== 'pendiente') return false
+      if (dChip === 'visita' && d.estado !== 'visita_programada') return false
+      if (dChip === 'visitados' && d.estado !== 'visitado') return false
+      if (hasDate && !inDateRange(d.fecha, dateFrom, dateTo)) return false
+      if (q && `${d.radicado} ${d.tipo_inmueble} ${d.direccion} ${d.nombre_reportante} ${d.telefono_reportante} ${d.cedula ?? ''}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, d => d.fecha)
+  }, [cDanos, dChip, q, hasDate, dateFrom, dateTo])
+
+  const noticiasRows = useMemo(() => {
+    const rows = cNoticias.filter(n => {
+      if (hasDate && !inDateRange(n.fecha, dateFrom, dateTo)) return false
+      if (q && `${n.titulo} ${n.contenido} ${n.autor}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, n => n.fecha)
+  }, [cNoticias, q, hasDate, dateFrom, dateTo])
+
+  const sectoresRows = useMemo(() => {
+    const rows = cSectores.filter(s => {
+      if (hasDate && !inDateRange((s as any).created_at, dateFrom, dateTo)) return false
+      if (q && `${s.nombre} ${s.barrio} ${s.descripcion}`.toLowerCase().includes(q) === false) return false
+      return true
+    })
+    return byDateDesc(rows, s => (s as any).created_at)
+  }, [cSectores, q, hasDate, dateFrom, dateTo])
+
+  // Actividad reciente (todas las entidades, más reciente primero)
+  const actividad = useMemo(() => {
+    const items: { key: string; icon: string; titulo: string; detalle: string; fecha: string }[] = []
+    cNecesidades.forEach(n => {
+      const s = sectorOf(n.sector_id)
+      items.push({ key: `n${n.id}`, icon: '🆘', titulo: `${n.tipo}${n.cantidad ? ` — ${n.cantidad}` : ''}`, detalle: `📍 ${s?.nombre ?? 'Sector'} · ${n.reportado_por}`, fecha: n.fecha })
+    })
+    cOfrecimientos.forEach(o => items.push({ key: `o${o.id}`, icon: '🤝', titulo: o.tipo, detalle: `Ofrece: ${o.nombre_ofrece}`, fecha: o.fecha }))
+    cMascotas.forEach(m => items.push({ key: `m${m.id}`, icon: '🐾', titulo: `${m.nombre || m.tipo_animal}`, detalle: `📍 ${m.lugar_visto || 'Sin lugar'}`, fecha: m.fecha_visto }))
+    cViviendas.forEach(v => items.push({ key: `v${v.id}`, icon: '🏠', titulo: v.sector_referencia || 'Vivienda', detalle: `Ofrece: ${v.nombre_ofrece}`, fecha: (v as any).fecha ?? '' }))
+    cDanos.forEach(d => items.push({ key: `d${d.id}`, icon: '🏚️', titulo: `${d.tipo_inmueble} — ${d.direccion}`, detalle: `Radicado ${d.radicado}`, fecha: d.fecha }))
+    cNoticias.forEach(n => items.push({ key: `i${n.id}`, icon: '📰', titulo: n.titulo, detalle: `✍️ ${n.autor || 'Equipo'}`, fecha: n.fecha }))
+    return items.sort((a, b) => dateTs(b.fecha) - dateTs(a.fecha)).slice(0, 15)
+  }, [cNecesidades, cOfrecimientos, cMascotas, cViviendas, cDanos, cNoticias, sectores])
+
+  // ── Acciones (se conserva la funcionalidad existente) ──
+  const pinTabla = (type: string) =>
+    type === 'necesidad' ? 'necesidades' : type === 'ofrecimiento' ? 'ofrecimientos' : type === 'mascota' ? 'mascotas_perdidas' : 'viviendas'
+
+  const showPin = (pin: string | null, id: number, type: string) => {
+    setShowPinModal({ pin, id, type })
+    // El PIN ya no viaja en los listados: se consulta por el endpoint protegido.
+    if (!pin) {
+      setPinLoading(true)
+      verPin(pinTabla(type), id)
+        .then(r => setShowPinModal(p => (p && p.id === id ? { ...p, pin: r.pin } : p)))
+        .catch(() => setShowPinModal(p => (p && p.id === id ? { ...p, pin: '(sin código)' } : p)))
+        .finally(() => setPinLoading(false))
+    }
+  }
   const resetPin = async (id: number, type: string) => {
-    const tabla = type === 'necesidad' ? 'necesidades' : type === 'ofrecimiento' ? 'ofrecimientos' : type === 'mascota' ? 'mascotas_perdidas' : 'viviendas'
+    const tabla = pinTabla(type)
     const { pin } = await restablecerPin(tabla, id)
     setShowPinModal(prev => prev ? { ...prev, pin } : null)
   }
@@ -167,45 +443,142 @@ export default function AdminPage({ store }: Props) {
     setNewNeedForm({ tipo: 'Agua potable', cantidad: '', prioridad: 'alta', descripcion: '', reportado_por: '', telefono_reporta: '' })
   }
 
-  return (
-    <div style={{ background: '#f4f5f7', minHeight: '100%' }}>
-      <div style={{ maxWidth: 980, margin: '0 auto', padding: '24px 16px 80px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1f2430', margin: 0 }}>🛠️ Panel de administración</h1>
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>Ciudad: <strong>{ciudad}</strong></p>
-          </div>
-          <button className="btn btn-outline btn-sm" onClick={handleLogout}>Cerrar sesión</button>
-        </div>
+  const NAV: { id: string; icon: string; label: string }[] = [
+    { id: 'resumen', icon: '📊', label: 'Resumen' },
+    { id: 'necesidades', icon: '🆘', label: 'Necesidades' },
+    { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
+    { id: 'sectores', icon: '📍', label: 'Sectores' },
+    { id: 'danos', icon: '🏚️', label: 'Daños' },
+    { id: 'mascotas', icon: '🐾', label: 'Mascotas' },
+    { id: 'viviendas', icon: '🏠', label: 'Viviendas' },
+    { id: 'centros', icon: '📦', label: 'Centros' },
+    { id: 'noticias', icon: '📰', label: 'Noticias' },
+    { id: 'visitas', icon: '👥', label: 'Visitas' },
+    { id: 'auditoria', icon: '🧾', label: 'Auditoría' },
+  ]
 
-        {/* Sectores */}
-        <Section title="📍 Sectores" count={cSectores.length}
+  const renderSection = () => {
+    if (section === 'necesidades') {
+      return (
+        <Section title="Necesidades reportadas" icon="🆘" count={needsRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por tipo, descripción, sector o teléfono…"
+            chips={[
+              { id: 'urgentes', label: '🔴 Urgentes' },
+              { id: 'en_proceso', label: '🟠 En proceso' },
+              { id: 'atendidas', label: '✅ Atendidas' },
+              { id: 'todos', label: 'Todas' },
+            ]} chip={nChip} setChip={setNChip}
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Necesidad</Th><Th>Estado</Th><Th>Prioridad</Th><Th>Reporta</Th><Th>Sector</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {needsRows.length === 0 && <Empty text="Sin necesidades con estos filtros." />}
+              {needsRows.map((n: Necesidad) => (
+                <tr key={n.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(n.fecha)}</Td>
+                  <Td><span style={{ fontWeight: 600 }}>{n.tipo}</span>{n.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{n.cantidad}</span></>}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.descripcion?.slice(0, 90)}</span></Td>
+                  <Td>{n.responsable ? <StatusTag v="en_proceso" /> : n.estado === 'atendida' ? <StatusTag v="atendida" /> : <StatusTag v="urgente" />}</Td>
+                  <Td><span className={`tag ${n.prioridad === 'alta' ? 'tag-red' : n.prioridad === 'media' ? 'tag-orange' : 'tag-gray'}`}>{n.prioridad}</span></Td>
+                  <Td>{n.reportado_por}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.telefono_reporta}</span></Td>
+                  <Td style={{ fontSize: 12.5 }}>{sectorOf(n.sector_id)?.nombre ?? '—'}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {n.responsable ? (
+                        <button className="btn btn-xs btn-outline" onClick={() => updateNecesidad(n.id, { responsable: null })}>Liberar</button>
+                      ) : n.estado !== 'atendida' ? (
+                        <button className="btn btn-xs btn-green" onClick={() => updateNecesidad(n.id, { estado: 'atendida' })}>✓ Atendida</button>
+                      ) : (
+                        <button className="btn btn-xs btn-outline" onClick={() => updateNecesidad(n.id, { estado: 'requiere' })}>Reabrir</button>
+                      )}
+                      {n.responsable && <span style={{ fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</span>}
+                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(n.pin, n.id, 'necesidad')}>🔑 PIN</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar necesidad?')) deleteNecesidad(n.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'ofrecimientos') {
+      return (
+        <Section title="Ofrecimientos de ayuda" icon="🤝" count={ofsRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por tipo, descripción o nombre…"
+            chips={[
+              { id: 'disponibles', label: '🟢 Disponibles' },
+              { id: 'reservados', label: '🟠 Reservados' },
+              { id: 'entregados', label: '✅ Entregados' },
+              { id: 'todos', label: 'Todos' },
+            ]} chip={oChip} setChip={setOChip}
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Estado</Th><Th>Tipo</Th><Th>Ofrece</Th><Th>Reservado por</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {ofsRows.length === 0 && <Empty text="Sin ofrecimientos con estos filtros." />}
+              {ofsRows.map(o => (
+                <tr key={o.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(o.fecha)}</Td>
+                  <Td>{o.estado === 'entregado' ? <StatusTag v="entregado" /> : o.reservado_por ? <StatusTag v="reservado" /> : <StatusTag v="disponible" />}</Td>
+                  <Td><span style={{ fontWeight: 600 }}>{o.tipo}</span>{o.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.cantidad}</span></>}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{o.descripcion?.slice(0, 80)}</span></Td>
+                  <Td>{o.nombre_ofrece}<br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.telefono_ofrece}</span></Td>
+                  <Td>{o.reservado_por ? <span>{o.reservado_por.nombre}<br /><span style={{ color: '#6b7280', fontSize: 12 }}>{o.reservado_por.telefono}</span></span> : '—'}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {o.reservado_por && <button className="btn btn-xs btn-outline" onClick={() => updateOfrecimiento(o.id, { reservado_por: null })}>Liberar</button>}
+                      {o.estado === 'disponible' && !o.reservado_por && (
+                        <button className="btn btn-xs btn-green" onClick={() => updateOfrecimiento(o.id, { estado: 'entregado' })}>✓ Entregado</button>
+                      )}
+                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(o.pin, o.id, 'ofrecimiento')}>🔑 PIN</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteOfrecimiento(o.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'sectores') {
+      return (
+        <Section title="Sectores reportados" icon="📍" count={sectoresRows.length}
           onExport={() => exportCSV(
-            cSectores.flatMap(s => necesidades.filter(n => n.sector_id === s.id).map(n => ({
+            sectoresRows.flatMap(s => necesidades.filter(n => n.sector_id === s.id).map(n => ({
               sector: s.nombre, barrio: s.barrio, nivel: s.nivel_afectacion,
               necesidad: n.tipo, cantidad: n.cantidad, prioridad: n.prioridad,
               estado: n.estado, responsable: n.responsable?.nombre || '', fecha: n.fecha
             }))),
             `sectores-${ciudad}.csv`
-          )}>
+          )}
+          toolbar={
+            <Toolbar search={search} setSearch={setSearch} placeholder="Buscar sector o barrio…"
+              dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+          }>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr><Th>Sector</Th><Th>Nivel</Th><Th>Estado</Th><Th>Necesidades</Th><Th>Acciones</Th></tr></thead>
             <tbody>
-              {cSectores.map(s => {
-                const ns = necesidades.filter(n => n.sector_id === s.id)
+              {sectoresRows.length === 0 && <Empty text="Sin sectores con estos filtros." />}
+              {sectoresRows.map(s => {
+                const ns = byDateDesc(necesidades.filter(n => n.sector_id === s.id), n => n.fecha)
                 return (
-                  <tr key={s.id}>
-                    <Td><span style={{ fontWeight: 600 }}>{s.nombre}</span><br/><span style={{ color: '#6b7280', fontSize: 12 }}>{s.barrio}</span></Td>
+                  <tr key={s.id} className="row-hover">
+                    <Td><span style={{ fontWeight: 600 }}>{s.nombre}</span><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{s.barrio}</span></Td>
                     <Td><span className={`tag ${s.nivel_afectacion === 'severo' ? 'tag-red' : s.nivel_afectacion === 'moderado' ? 'tag-orange' : 'tag-gray'}`}>{s.nivel_afectacion.toUpperCase()}</span></Td>
-                    <Td><span className={`tag ${s.estado === 'activo' ? 'tag-green' : 'tag-gray'}`}>{s.estado}</span></Td>
+                    <Td><StatusTag v={s.estado} /></Td>
                     <Td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {ns.map(n => (
                           <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                            <span style={{ flex: 1 }}>{n.tipo} ({n.estado})</span>
-                            <label>
+                            <span style={{ flex: 1 }}>{n.tipo} {n.cantidad ? `(${n.cantidad})` : ''} · <span style={{ color: '#9AA0AC' }}>{fmtFecha(n.fecha)}</span></span>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                               <input type="checkbox" checked={n.estado === 'atendida'} onChange={e => updateNecesidad(n.id, { estado: e.target.checked ? 'atendida' : 'requiere' })} />
-                              {' '}atendida
+                              atendida
                             </label>
                             <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(n.pin, n.id, 'necesidad')}>🔑</button>
                             {n.responsable && <button className="btn btn-xs btn-outline" onClick={() => updateNecesidad(n.id, { responsable: null })}>Liberar</button>}
@@ -220,7 +593,7 @@ export default function AdminPage({ store }: Props) {
                         <button className="btn btn-xs btn-outline" onClick={() => {
                           const name = prompt('Nuevo nombre del sector:', s.nombre)
                           if (name) updateSector(s.id, { nombre: name })
-                        }}>✎</button>
+                        }}>✎ Nombre</button>
                         <button className="btn btn-xs" style={{ background: '#f0f4ff', color: '#003893' }} onClick={() => updateSector(s.id, { estado: s.estado === 'activo' ? 'cerrado' : 'activo' })}>
                           {s.estado === 'activo' ? 'Cerrar' : 'Reactivar'}
                         </button>
@@ -233,163 +606,45 @@ export default function AdminPage({ store }: Props) {
             </tbody>
           </table>
         </Section>
+      )
+    }
 
-        {/* Ofrecimientos */}
-        <Section title="🤝 Ofrecimientos" count={cOfrecimientos.length}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Estado</Th><Th>Tipo</Th><Th>Ofrece</Th><Th>Reservado por</Th><Th>Fecha</Th><Th>Acciones</Th></tr></thead>
-            <tbody>
-              {cOfrecimientos.map(o => (
-                <tr key={o.id}>
-                  <Td><span className={`tag ${o.estado === 'entregado' ? 'tag-gray' : o.reservado_por ? 'tag-orange' : 'tag-green'}`}>{o.estado === 'entregado' ? 'entregado' : o.reservado_por ? 'reservado' : 'disponible'}</span></Td>
-                  <Td>{o.tipo}<br/><span style={{ color: '#6b7280', fontSize: 12 }}>{o.cantidad}</span></Td>
-                  <Td>{o.nombre_ofrece}<br/><span style={{ color: '#6b7280', fontSize: 12 }}>{o.telefono_ofrece}</span></Td>
-                  <Td>{o.reservado_por ? <span>{o.reservado_por.nombre}<br/><span style={{ color: '#6b7280', fontSize: 12 }}>{o.reservado_por.telefono}</span></span> : '—'}</Td>
-                  <Td>{fmtFecha(o.fecha)}</Td>
-                  <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {o.reservado_por && <button className="btn btn-xs btn-outline" onClick={() => updateOfrecimiento(o.id, { reservado_por: null })}>Liberar</button>}
-                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(o.pin, o.id, 'ofrecimiento')}>🔑</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteOfrecimiento(o.id) }}>✕</button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-
-        {/* Mascotas */}
-        <Section title="🐾 Mascotas" count={cMascotas.length}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Estado</Th><Th>Animal</Th><Th>Señas</Th><Th>Reporta</Th><Th>Avistado por</Th><Th>Acciones</Th></tr></thead>
-            <tbody>
-              {cMascotas.map(m => (
-                <tr key={m.id}>
-                  <Td><span className={`tag ${m.estado === 'perdido' ? 'tag-red' : 'tag-green'}`}>{m.estado}</span></Td>
-                  <Td>{m.tipo_animal} — {m.nombre || 'S/N'}</Td>
-                  <Td style={{ maxWidth: 180 }}><span style={{ fontSize: 12, color: '#6b7280' }}>{m.senas.slice(0, 60)}</span></Td>
-                  <Td>{m.nombre_reporta}<br/><span style={{ fontSize: 12, color: '#6b7280' }}>{m.telefono_reporta}</span></Td>
-                  <Td>{m.avistado_por ? `${m.avistado_por.nombre}` : '—'}</Td>
-                  <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(m.pin, m.id, 'mascota')}>🔑</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteMascota(m.id) }}>✕</button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-
-        {/* Centros de acopio */}
-        <Section title="📦 Centros de acopio" count={cCentros.length}>
-          <div style={{ padding: '10px 16px' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => {
-              setCentroForm({ nombre: '', organizacion: '', es_acopio: true, es_sangre: false, es_alojamiento: false, que_recibe: '', direccion: '', telefono: '', horario: '', lat: 5.07, lng: -75.51, estado: 'abierto', imagen: null })
-              setShowCentroForm({})
-            }}>+ Agregar centro</button>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Estado</Th><Th>Nombre</Th><Th>Tipos</Th><Th>Recibe</Th><Th>Dirección</Th><Th>Acciones</Th></tr></thead>
-            <tbody>
-              {cCentros.map(c => (
-                <tr key={c.id}>
-                  <Td><span className={`tag ${c.estado === 'abierto' ? 'tag-green' : 'tag-gray'}`}>{c.estado}</span></Td>
-                  <Td><span style={{ fontWeight: 600 }}>{c.nombre}</span><br/><span style={{ fontSize: 12, color: '#6b7280' }}>{c.organizacion}</span></Td>
-                  <Td>{[c.es_acopio && '📦', c.es_sangre && '🩸', c.es_alojamiento && '🏠'].filter(Boolean).join(' ')}</Td>
-                  <Td style={{ maxWidth: 160 }}><span style={{ fontSize: 12 }}>{c.que_recibe.slice(0, 50)}</span></Td>
-                  <Td style={{ fontSize: 12 }}>{c.direccion}</Td>
-                  <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-xs btn-outline" onClick={() => { setCentroForm({ ...c }); setShowCentroForm(c) }}>✎</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar centro?')) deleteCentro(c.id) }}>✕</button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-
-        {/* Noticias */}
-        <Section title="📰 Noticias" count={cNoticias.length}>
-          <div style={{ padding: '10px 16px' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => {
-              setNoticiaForm({ titulo: '', contenido: '', autor: '', ciudad_noticia: ciudad })
-              setShowNoticiaForm({})
-            }}>+ Publicar noticia</button>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Título</Th><Th>Visible en</Th><Th>Autor</Th><Th>Fecha</Th><Th>Acciones</Th></tr></thead>
-            <tbody>
-              {cNoticias.map(n => (
-                <tr key={n.id}>
-                  <Td style={{ maxWidth: 240 }}><span style={{ fontWeight: 600 }}>{n.titulo.slice(0, 60)}</span></Td>
-                  <Td>{n.ciudad === null ? <span className="tag tag-yellow">Todas</span> : n.ciudad}</Td>
-                  <Td>{n.autor}</Td>
-                  <Td>{fmtFecha(n.fecha)}</Td>
-                  <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-xs btn-outline" onClick={() => { setNoticiaForm({ titulo: n.titulo, contenido: n.contenido, autor: n.autor, ciudad_noticia: n.ciudad }); setShowNoticiaForm(n) }}>✎</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar noticia?')) deleteNoticia(n.id) }}>✕</button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-
-        {/* Viviendas */}
-        <Section title="🏠 Viviendas" count={cViviendas.length}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Estado</Th><Th>Tipo</Th><Th>Sector</Th><Th>Ofrece</Th><Th>Interesado</Th><Th>Acciones</Th></tr></thead>
-            <tbody>
-              {cViviendas.map(v => (
-                <tr key={v.id}>
-                  <Td><span className={`tag ${v.estado === 'disponible' ? (v.tipo === 'alquiler' ? 'tag-orange' : 'tag-green') : 'tag-gray'}`}>{v.estado}</span></Td>
-                  <Td>{v.tipo === 'alquiler' ? `💰 ${v.precio}` : '🏠 Gratis'}</Td>
-                  <Td>{v.sector_referencia}</Td>
-                  <Td>{v.nombre_ofrece}<br/><span style={{ fontSize: 12, color: '#6b7280' }}>{v.telefono_ofrece}</span></Td>
-                  <Td>{v.interesado ? `${v.interesado.nombre}` : '—'}</Td>
-                  <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(v.pin, v.id, 'vivienda')}>🔑</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteVivienda(v.id) }}>✕</button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-
-        {/* Reportes de daños */}
-        <Section title="🏚️ Reportes de daños" count={cDanos.length}
+    if (section === 'danos') {
+      return (
+        <Section title="Reportes de daños estructurales" icon="🏚️" count={danosRows.length}
           onExport={() => exportCSV(
-            cDanos.map(d => ({
+            danosRows.map(d => ({
               radicado: d.radicado, tipo: d.tipo_inmueble, direccion: d.direccion,
               nivel: d.nivel_percibido, habitado: d.habitado, estado: d.estado,
               nombre: d.nombre_reportante, telefono: d.telefono_reportante, cedula: d.cedula || '',
               fecha: d.fecha, fecha_visita: d.fecha_visita || '', resultado: d.resultado_visita || ''
             })),
             `danos-${ciudad}.csv`
-          )}>
+          )}
+          toolbar={
+            <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por radicado, dirección o reportante…"
+              chips={[
+                { id: 'pendientes', label: '🔴 Pendientes' },
+                { id: 'visita', label: '🟠 Con visita' },
+                { id: 'visitados', label: '✅ Visitados' },
+                { id: 'todos', label: 'Todos' },
+              ]} chip={dChip} setChip={setDChip}
+              dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+          }>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Estado</Th><Th>Radicado</Th><Th>Inmueble</Th><Th>Nivel</Th><Th>Reportante</Th><Th>Fecha</Th><Th>Acciones</Th></tr></thead>
+            <thead><tr><Th>Fecha</Th><Th>Estado</Th><Th>Radicado</Th><Th>Inmueble</Th><Th>Nivel</Th><Th>Reportante</Th><Th>Acciones</Th></tr></thead>
             <tbody>
-              {cDanos.map(d => (
-                <tr key={d.id}>
-                  <Td><span className={`tag ${d.estado === 'pendiente' ? 'tag-red' : d.estado === 'visita_programada' ? 'tag-orange' : 'tag-green'}`}>{d.estado.replace('_', ' ')}</span></Td>
-                  <Td><code style={{ fontSize: 12 }}>{d.radicado}</code></Td>
-                  <Td>{d.tipo_inmueble}<br/><span style={{ fontSize: 12, color: '#6b7280' }}>{d.direccion.slice(0, 40)}</span></Td>
+              {danosRows.length === 0 && <Empty text="Sin reportes con estos filtros." />}
+              {danosRows.map((d: ReporteDano) => (
+                <tr key={d.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(d.fecha)}</Td>
+                  <Td><StatusTag v={d.estado} /></Td>
+                  <Td><code style={{ fontSize: 12, background: '#f1f3f5', padding: '2px 6px', borderRadius: 6 }}>{d.radicado}</code></Td>
+                  <Td><span style={{ fontWeight: 600 }}>{d.tipo_inmueble}</span><br /><span style={{ fontSize: 12, color: '#6b7280' }}>{d.direccion.slice(0, 40)}</span></Td>
                   <Td><span className={`tag ${d.nivel_percibido === 'colapso' || d.nivel_percibido === 'severo' ? 'tag-red' : d.nivel_percibido === 'moderado' ? 'tag-orange' : 'tag-gray'}`}>{d.nivel_percibido}</span></Td>
-                  <Td>{d.nombre_reportante}<br/><span style={{ fontSize: 12, color: '#6b7280' }}>{d.telefono_reportante}</span>{d.cedula && <span style={{ fontSize: 11, color: '#9AA0AC', display: 'block' }}>CC: {d.cedula}</span>}</Td>
-                  <Td>{fmtFecha(d.fecha)}</Td>
+                  <Td>{d.nombre_reportante}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{d.telefono_reportante}</span>{d.cedula && <span style={{ fontSize: 11, color: '#9AA0AC', display: 'block' }}>CC: {d.cedula}</span>}</Td>
                   <Td>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs btn-outline" onClick={() => {
                         setDanoForm({ estado: d.estado, fecha_visita: d.fecha_visita || '', resultado_visita: d.resultado_visita || '', notas_admin: d.notas_admin || '' })
                         setShowDanoGestionar(d)
@@ -402,7 +657,340 @@ export default function AdminPage({ store }: Props) {
             </tbody>
           </table>
         </Section>
-      </div>
+      )
+    }
+
+    if (section === 'mascotas') {
+      return (
+        <Section title="Mascotas reportadas" icon="🐾" count={petsRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por nombre, raza o señas…"
+            chips={[
+              { id: 'perdidas', label: '🔴 Perdidas' },
+              { id: 'encontradas', label: '✅ Encontradas' },
+              { id: 'todos', label: 'Todas' },
+            ]} chip={mChip} setChip={setMChip}
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Estado</Th><Th>Animal</Th><Th>Señas</Th><Th>Reporta</Th><Th>Avistado por</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {petsRows.length === 0 && <Empty text="Sin mascotas con estos filtros." />}
+              {petsRows.map(m => (
+                <tr key={m.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(m.fecha_visto)}</Td>
+                  <Td><StatusTag v={m.estado} /></Td>
+                  <Td><span style={{ fontWeight: 600 }}>{m.nombre || 'S/N'}</span> · {m.tipo_animal}</Td>
+                  <Td style={{ maxWidth: 180 }}><span style={{ fontSize: 12, color: '#6b7280' }}>{m.senas.slice(0, 60)}</span></Td>
+                  <Td>{m.nombre_reporta}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{m.telefono_reporta}</span></Td>
+                  <Td>{m.avistado_por ? `${m.avistado_por.nombre}` : '—'}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {m.estado === 'perdido' && (
+                        <button className="btn btn-xs btn-green" onClick={() => { if (confirm('¿Marcar como encontrada?')) updateMascota(m.id, { estado: 'encontrado' }) }}>✓ Encontrada</button>
+                      )}
+                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(m.pin, m.id, 'mascota')}>🔑 PIN</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteMascota(m.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'viviendas') {
+      return (
+        <Section title="Ofertas de vivienda" icon="🏠" count={viviendasRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por sector o nombre…"
+            chips={[
+              { id: 'disponibles', label: '🟢 Disponibles' },
+              { id: 'ocupadas', label: '⚪ Ocupadas' },
+              { id: 'todos', label: 'Todas' },
+            ]} chip={vChip} setChip={setVChip}
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Estado</Th><Th>Tipo</Th><Th>Sector</Th><Th>Ofrece</Th><Th>Interesado</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {viviendasRows.length === 0 && <Empty text="Sin viviendas con estos filtros." />}
+              {viviendasRows.map(v => (
+                <tr key={v.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha((v as any).fecha)}</Td>
+                  <Td><StatusTag v={v.estado} /></Td>
+                  <Td>{v.tipo === 'alquiler' ? `💰 ${v.precio}` : '🏠 Gratis'}</Td>
+                  <Td>{v.sector_referencia}</Td>
+                  <Td>{v.nombre_ofrece}<br /><span style={{ fontSize: 12, color: '#6b7280' }}>{v.telefono_ofrece}</span></Td>
+                  <Td>{v.interesado ? `${v.interesado.nombre}` : '—'}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(v.pin, v.id, 'vivienda')}>🔑 PIN</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteVivienda(v.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'centros') {
+      return (
+        <Section title="Centros de acopio" icon="📦" count={centrosRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por nombre, dirección o qué recibe…"
+            chips={[
+              { id: 'abiertos', label: '🟢 Abiertos' },
+              { id: 'cerrados', label: '⚪ Cerrados' },
+              { id: 'todos', label: 'Todos' },
+            ]} chip={cChip} setChip={setCChip}
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo}
+            extra={<button className="btn btn-primary btn-sm" onClick={() => {
+              setCentroForm({ nombre: '', organizacion: '', es_acopio: true, es_sangre: false, es_alojamiento: false, que_recibe: '', direccion: '', telefono: '', horario: '', lat: 5.07, lng: -75.51, estado: 'abierto', imagen: null })
+              setShowCentroForm({})
+            }}>+ Agregar centro</button>} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Estado</Th><Th>Nombre</Th><Th>Tipos</Th><Th>Recibe</Th><Th>Dirección</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {centrosRows.length === 0 && <Empty text="Sin centros con estos filtros." />}
+              {centrosRows.map(c => (
+                <tr key={c.id} className="row-hover">
+                  <Td><StatusTag v={c.estado} /></Td>
+                  <Td><span style={{ fontWeight: 600 }}>{c.nombre}</span><br /><span style={{ fontSize: 12, color: '#6b7280' }}>{c.organizacion}</span></Td>
+                  <Td>{[c.es_acopio && '📦', c.es_sangre && '🩸', c.es_alojamiento && '🏠'].filter(Boolean).join(' ')}</Td>
+                  <Td style={{ maxWidth: 160 }}><span style={{ fontSize: 12 }}>{c.que_recibe.slice(0, 50)}</span></Td>
+                  <Td style={{ fontSize: 12 }}>{c.direccion}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn btn-xs btn-outline" onClick={() => { setCentroForm({ ...c }); setShowCentroForm(c) }}>✎ Editar</button>
+                      <button className="btn btn-xs" style={{ background: '#f0f4ff', color: '#003893' }} onClick={() => updateCentro(c.id, { estado: c.estado === 'abierto' ? 'cerrado' : 'abierto' })}>
+                        {c.estado === 'abierto' ? 'Cerrar' : 'Abrir'}
+                      </button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar centro?')) deleteCentro(c.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'noticias') {
+      return (
+        <Section title="Noticias y comunicados" icon="📰" count={noticiasRows.length} toolbar={
+          <Toolbar search={search} setSearch={setSearch} placeholder="Buscar por título, contenido o autor…"
+            dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo}
+            extra={<button className="btn btn-primary btn-sm" onClick={() => {
+              setNoticiaForm({ titulo: '', contenido: '', autor: '', ciudad_noticia: ciudad })
+              setShowNoticiaForm({})
+            }}>+ Publicar noticia</button>} />
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Título</Th><Th>Visible en</Th><Th>Autor</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {noticiasRows.length === 0 && <Empty text="Sin comunicados con estos filtros." />}
+              {noticiasRows.map(n => (
+                <tr key={n.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(n.fecha)}</Td>
+                  <Td style={{ maxWidth: 240 }}><span style={{ fontWeight: 600 }}>{n.titulo.slice(0, 60)}</span></Td>
+                  <Td>{n.ciudad === null ? <span className="tag tag-yellow">Todas</span> : n.ciudad}</Td>
+                  <Td>{n.autor}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn btn-xs btn-outline" onClick={() => { setNoticiaForm({ titulo: n.titulo, contenido: n.contenido, autor: n.autor, ciudad_noticia: n.ciudad }); setShowNoticiaForm(n) }}>✎ Editar</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar noticia?')) deleteNoticia(n.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'visitas') {
+      return (
+        <Section title="Visitas al sitio" icon="👥" count={visitas.length} toolbar={
+          <div className="admin-toolbar" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-outline btn-sm" onClick={loadVisitas} disabled={visitasLoading}>↻ Actualizar</button>
+          </div>
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Página</Th><Th>Ciudad</Th><Th>IP</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
+            <tbody>
+              {visitas.length === 0 && <Empty text="Sin visitas registradas." />}
+              {visitas.map((v, i) => (
+                <tr key={v.id ?? i} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(v.created_at)}</Td>
+                  <Td><code style={{ fontSize: 12 }}>{v.path ?? '/'}</code></Td>
+                  <Td>{v.ciudad ?? '—'}</Td>
+                  <Td style={{ fontSize: 12, color: '#6b7280' }}>{v.ip ?? '—'}</Td>
+                  <Td style={{ fontSize: 12 }}>{v.lang ?? '—'}</Td>
+                  <Td style={{ maxWidth: 160, fontSize: 12, color: '#6b7280' }}>{v.referrer ? v.referrer.slice(0, 60) : '—'}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    if (section === 'auditoria') {
+      return (
+        <Section title="Auditoría (rastro de modificaciones)" icon="🧾" count={auditoria.length} toolbar={
+          <div className="admin-toolbar" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-outline btn-sm" onClick={loadAuditoria} disabled={auditLoading}>↻ Actualizar</button>
+          </div>
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Fecha</Th><Th>Tabla</Th><Th>Registro</Th><Th>Acción</Th><Th>Quién</Th><Th>Código</Th><Th>Cambios</Th></tr></thead>
+            <tbody>
+              {auditoria.length === 0 && <Empty text="Sin modificaciones registradas todavía." />}
+              {auditoria.map(a => (
+                <tr key={a.id} className="row-hover">
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(a.created_at)}</Td>
+                  <Td><code style={{ fontSize: 12 }}>{a.tabla}</code></Td>
+                  <Td>#{a.registro_id}</Td>
+                  <Td>
+                    <span className={`tag ${a.accion === 'create' ? 'tag-green' : a.accion === 'update' ? 'tag-orange' : 'tag-red'}`}>
+                      {a.accion === 'create' ? 'creado' : a.accion === 'update' ? 'editado' : 'borrado'}
+                    </span>
+                  </Td>
+                  <Td>{a.autor === 'admin' ? '🔐 Admin' : a.autor === 'usuario' ? '👤 Usuario' : '⚙️ Sistema'}</Td>
+                  <Td><code style={{ fontSize: 12 }}>{a.codigo ?? '—'}</code></Td>
+                  <Td>
+                    <button className="btn btn-xs btn-outline" onClick={() => setAuditDetail(a)}>Ver cambios</button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
+    // ── Resumen ──
+    return (
+      <>
+        <div className="kpi-grid">
+          <KpiCard icon="🔴" label="Urgentes (sin ayuda)" value={kpis.urgentes} tone="red" />
+          <KpiCard icon="🟠" label="En proceso" value={kpis.enProceso} tone="orange" />
+          <KpiCard icon="✅" label="Atendidas" value={kpis.atendidas} tone="green" />
+          <KpiCard icon="🤝" label="Ofrecimientos libres" value={kpis.disponibles} tone="blue" />
+          <KpiCard icon="🏚️" label="Daños pendientes" value={kpis.danosPendientes} tone="red" />
+          <KpiCard icon="🏠" label="Viviendas disponibles" value={kpis.viviendas} tone="blue" />
+        </div>
+
+        <div className="card admin-section">
+          <div className="section-head">
+            <h2><span className="section-icon">🔥</span>Últimos reportes (más recientes primero)</h2>
+            <span className="count-pill">{actividad.length}</span>
+          </div>
+          <div style={{ padding: '4px 8px 12px' }}>
+            {actividad.length === 0 && <div className="empty-state" style={{ padding: '24px 12px' }}><p>Sin actividad todavía.</p></div>}
+            {actividad.map(a => (
+              <div key={a.key} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid #f0f0f0', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 18 }}>{a.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#1f2430' }}>{a.titulo}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>{a.detalle}</p>
+                </div>
+                <span style={{ fontSize: 11.5, color: '#9AA0AC', whiteSpace: 'nowrap' }}>{fmtFecha(a.fecha)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card admin-section">
+          <div className="section-head">
+            <h2><span className="section-icon">🆘</span>Necesidades urgentes</h2>
+            <span className="count-pill">{kpis.urgentes}</span>
+          </div>
+          <div style={{ padding: '4px 8px 12px' }}>
+            {byDateDesc(cNecesidades.filter(n => n.estado === 'requiere' && !n.responsable), n => n.fecha).slice(0, 8).map(n => (
+              <div key={n.id} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid #f0f0f0', alignItems: 'center' }}>
+                <span style={{ fontSize: 18 }}>🆘</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#1f2430' }}>{n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>📍 {sectorOf(n.sector_id)?.nombre ?? 'Sector'} · {n.reportado_por} · {n.telefono_reporta}</p>
+                </div>
+                <button className="btn btn-xs btn-green" onClick={() => updateNecesidad(n.id, { estado: 'atendida' })}>✓ Atendida</button>
+              </div>
+            ))}
+            {kpis.urgentes === 0 && <div className="empty-state" style={{ padding: '24px 12px' }}><p>¡Sin necesidades urgentes pendientes! 🎉</p></div>}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="admin-layout">
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar-title">
+          <span style={{ fontSize: 18 }}>🛠️</span>
+          <div>
+            <strong>Administración</strong>
+            <span style={{ fontSize: 11, color: '#9AA0AC', display: 'block' }}>todos ayudamos</span>
+          </div>
+        </div>
+        <nav className="admin-nav">
+          {NAV.map(item => (
+            <button key={item.id} className={`admin-nav-btn ${section === item.id ? 'active' : ''}`} onClick={() => setSection(item.id)}>
+              <span>{item.icon}</span>{item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="admin-sidebar-footer">
+          <button className="btn btn-outline btn-sm" style={{ width: '100%' }} onClick={handleLogout}>Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main className="admin-main">
+        <div className="admin-topbar">
+          <div>
+            <h1>{NAV.find(n => n.id === section)?.icon} {NAV.find(n => n.id === section)?.label}</h1>
+            <p style={{ fontSize: 12.5, color: '#6b7280', margin: '2px 0 0' }}>Ciudad: <strong>{ciudad}</strong></p>
+          </div>
+          <select className="form-select" style={{ width: 'auto', fontSize: 13, padding: '5px 8px', maxWidth: 170 }} value={ciudad} onChange={e => store.setCiudad(e.target.value)} aria-label="Ciudad">
+            {CITIES.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
+          </select>
+        </div>
+        {renderSection()}
+      </main>
+
+      {/* Detalle de auditoría */}
+      {auditDetail && (
+        <Modal title={`🧾 Cambios — ${auditDetail.tabla} #${auditDetail.registro_id}`} onClose={() => setAuditDetail(null)} hideCancel wide>
+          <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 10px' }}>
+            {auditDetail.accion === 'create' ? 'Creado' : auditDetail.accion === 'update' ? 'Editado' : 'Borrado'} ·{' '}
+            {auditDetail.autor === 'admin' ? '🔐 Admin' : auditDetail.autor === 'usuario' ? '👤 Usuario' : '⚙️ Sistema'} ·{' '}
+            {fmtDateTime(auditDetail.created_at)}
+          </p>
+          {auditDetail.datos_previos && (
+            <div className="form-group">
+              <label className="form-label">Antes</label>
+              <pre style={{ background: '#f8f9fb', border: '1px solid #e1e4e9', borderRadius: 8, padding: 10, fontSize: 11.5, overflow: 'auto', maxHeight: 200, margin: 0 }}>
+                {JSON.stringify(auditDetail.datos_previos, null, 2)}
+              </pre>
+            </div>
+          )}
+          {auditDetail.datos_nuevos && (
+            <div className="form-group">
+              <label className="form-label">Después</label>
+              <pre style={{ background: '#f8f9fb', border: '1px solid #e1e4e9', borderRadius: 8, padding: 10, fontSize: 11.5, overflow: 'auto', maxHeight: 200, margin: 0 }}>
+                {JSON.stringify(auditDetail.datos_nuevos, null, 2)}
+              </pre>
+            </div>
+          )}
+        </Modal>
+      )}
 
       {/* PIN modal */}
       {showPinModal && (
@@ -410,7 +998,9 @@ export default function AdminPage({ store }: Props) {
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <div style={{ background: '#e8eeff', border: '2px dashed #003893', borderRadius: 10, padding: '16px 24px', marginBottom: 16 }}>
               <p style={{ fontSize: 11, color: '#003893', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 6px' }}>Código actual</p>
-              <p style={{ fontSize: 36, fontWeight: 800, color: '#003893', letterSpacing: 10, margin: 0 }}>{showPinModal.pin}</p>
+              <p style={{ fontSize: 36, fontWeight: 800, color: '#003893', letterSpacing: 10, margin: 0 }}>
+                {pinLoading ? '···' : (showPinModal.pin ?? '(sin código)')}
+              </p>
             </div>
             <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>Restablecer genera un código nuevo — el anterior deja de funcionar.</p>
             <button className="btn btn-outline btn-sm" onClick={() => resetPin(showPinModal.id, showPinModal.type)}>🔄 Restablecer código</button>
@@ -487,7 +1077,7 @@ export default function AdminPage({ store }: Props) {
             <label className="form-label">Visible en</label>
             <select className="form-select" value={noticiaForm.ciudad_noticia ?? ''} onChange={e => setNoticiaForm(p => ({ ...p, ciudad_noticia: e.target.value || null }))}>
               <option value="">📢 Todas las ciudades</option>
-              {['Manizales','Pereira','Cali','Quibdó','Norte del Valle','Armenia'].map(c => <option key={c} value={c}>{c}</option>)}
+              {CITIES.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
             </select>
           </div>
           <div className="form-group">

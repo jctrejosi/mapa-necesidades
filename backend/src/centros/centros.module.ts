@@ -20,6 +20,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asNum } from '../common/serialize';
 import { str, toInt, toNum } from '../common/util';
+import { registrarAuditoria } from '../common/audit';
 
 type CentroBody = {
   ciudad?: string;
@@ -107,10 +108,20 @@ class CentrosService {
       item: this.serialize(c),
       at: new Date().toISOString(),
     });
+    await registrarAuditoria(this.db, {
+      tabla: 'centros_acopio', registroId: c.id, accion: 'create',
+      datosNuevos: this.serialize(c), autor: 'admin', codigo: 'llave-admin',
+    });
     return this.serialize(c);
   }
 
+  async get(id: number) {
+    const rows = await this.db.select().from(centrosAcopio).where(eq(centrosAcopio.id, id)).limit(1);
+    return rows.length ? rows[0] : null;
+  }
+
   async update(id: number, b: CentroBody) {
+    const previo = await this.get(id);
     const set: Partial<typeof centrosAcopio.$inferInsert> = {};
     if (b.ciudad !== undefined) set.ciudad = str(b.ciudad) || 'manizales';
     if (b.nombre !== undefined) set.nombre = str(b.nombre);
@@ -135,11 +146,21 @@ class CentrosService {
     }
     if (b.estado !== undefined) set.estado = b.estado === 'cerrado' ? 'cerrado' : 'abierto';
     const [c] = await this.db.update(centrosAcopio).set(set).where(eq(centrosAcopio.id, id)).returning();
+    await registrarAuditoria(this.db, {
+      tabla: 'centros_acopio', registroId: id, accion: 'update',
+      datosPrevios: previo ? this.serialize(previo) : null, datosNuevos: this.serialize(c),
+      autor: 'admin', codigo: 'llave-admin',
+    });
     return this.serialize(c);
   }
 
   async remove(id: number) {
+    const previo = await this.get(id);
     await this.db.delete(centrosAcopio).where(eq(centrosAcopio.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'centros_acopio', registroId: id, accion: 'delete',
+      datosPrevios: previo ? this.serialize(previo) : null, autor: 'admin', codigo: 'llave-admin',
+    });
     return { ok: true };
   }
 }

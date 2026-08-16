@@ -23,6 +23,7 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp, sendWhatsappText, toWhatsappNumber, whatsappConfigured } from '../common/whatsapp';
+import { registrarAuditoria } from '../common/audit';
 
 type NecesidadBody = {
   pin?: string;
@@ -61,7 +62,8 @@ class NecesidadesService {
       responsable: nested(n.responsableNombre, n.responsableTelefono, n.fechaCompromiso),
       reportado_por: n.reportadoPor ?? '',
       telefono_reporta: n.telefonoReporta ?? '',
-      pin: n.pin ?? '',
+      // El PIN nunca viaja en los listados públicos: se entrega solo al crear
+      // (y el admin lo consulta por el endpoint protegido /admin/pins).
     };
   }
 
@@ -128,6 +130,11 @@ class NecesidadesService {
     });
     // Confirmación por WhatsApp con el código de edición
     notifyReporteWhatsapp(b.telefono_reporta, 'reporte de necesidad', pin, `Detalle: ${tipo}`);
+    await registrarAuditoria(this.db, {
+      tabla: 'necesidades', registroId: n.id, accion: 'create',
+      datosNuevos: this.serialize(n), autor: 'usuario', codigo: pin,
+      visitorId: str(b.visitor_id),
+    });
     return { ...this.serialize(n), pin };
   }
 
@@ -137,13 +144,27 @@ class NecesidadesService {
     if (!checkPin(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
-    return this.patch(id, b, false);
+    const previo = this.serialize(row);
+    const actualizado = await this.patch(id, b, false);
+    await registrarAuditoria(this.db, {
+      tabla: 'necesidades', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: actualizado, autor: 'usuario',
+      codigo: str(b.pin), visitorId: str(b.visitor_id),
+    });
+    return actualizado;
   }
 
   async adminUpdate(id: number, b: NecesidadBody) {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
-    return this.patch(id, b, true);
+    const previo = this.serialize(row);
+    const actualizado = await this.patch(id, b, true);
+    await registrarAuditoria(this.db, {
+      tabla: 'necesidades', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: actualizado, autor: 'admin',
+      codigo: 'llave-admin',
+    });
+    return actualizado;
   }
 
   private async patch(id: number, b: NecesidadBody, esAdmin: boolean) {
@@ -258,7 +279,28 @@ class NecesidadesService {
   }
 
   async remove(id: number) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
     await this.db.delete(necesidades).where(eq(necesidades.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'necesidades', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'admin', codigo: 'llave-admin',
+    });
+    return { ok: true };
+  }
+
+  /** Borrado público: exige el PIN que se le dio al usuario al publicar. */
+  async removePublic(id: number, pin: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
+    if (!checkPin(row.pin, pin)) {
+      throw new ForbiddenException({ error: 'Código de edición incorrecto' });
+    }
+    await this.db.delete(necesidades).where(eq(necesidades.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'necesidades', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+    });
     return { ok: true };
   }
 }
@@ -315,6 +357,12 @@ export class NecesidadesController {
   @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.svc.remove(toInt(id));
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  @Post(':id/eliminar')
+  removePublic(@Param('id') id: string, @Body() b: { pin?: string }) {
+    return this.svc.removePublic(toInt(id), b?.pin);
   }
 }
 

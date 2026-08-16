@@ -3,6 +3,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -266,3 +267,30 @@ export const visitas = pgTable(
 );
 
 export type Visita = typeof visitas.$inferSelect;
+
+// ── Auditoría (rastro de todas las modificaciones) ───────────────────────────
+// Cada create/update/delete de un reporte queda registrado aquí con los datos
+// anteriores y posteriores, quién lo hizo (usuario con PIN/radicado, admin con
+// su llave del .env, o el sistema) y el código usado.
+
+export const auditoria = pgTable(
+  'auditoria',
+  {
+    id: serial('id').primaryKey(),
+    tabla: varchar('tabla', { length: 50 }).notNull(),
+    registroId: integer('registro_id').notNull(),
+    accion: varchar('accion', { length: 20 }).notNull(),
+    datosPrevios: jsonb('datos_previos'),
+    datosNuevos: jsonb('datos_nuevos'),
+    autor: varchar('autor', { length: 30 }).notNull().default('usuario'),
+    codigo: varchar('codigo', { length: 20 }),
+    visitorId: varchar('visitor_id', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_auditoria_tabla_registro').on(t.tabla, t.registroId),
+    index('idx_auditoria_created').on(t.createdAt),
+  ],
+);
+
+export type Auditoria = typeof auditoria.$inferSelect;

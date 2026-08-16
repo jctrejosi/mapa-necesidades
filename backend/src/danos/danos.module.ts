@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Inject,
   Injectable,
@@ -24,12 +25,14 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum } from '../common/serialize';
 import { genRadicado, str, toDate, toInt, toNum, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
+import { registrarAuditoria } from '../common/audit';
 
 // Ciudades con convenio para visita técnica (coincide con la app anterior)
 const CIUDADES_REPORTE_DANOS = ['manizales'];
 
 type DanoBody = {
   ciudad?: string;
+  radicado?: string;
   tipo_inmueble?: string;
   direccion?: string;
   lat?: unknown;
@@ -52,11 +55,11 @@ type DanoBody = {
 class DanosService {
   constructor(@Inject(DB) private db: Db) {}
 
-  /** Campos públicos (las notas internas solo las ve el admin). */
+  /** Campos públicos (las notas internas solo las ve el admin).
+   *  El radicado NO viaja en listados públicos: es la llave de edición/borrado. */
   private serializePublic(d: typeof reportesDanos.$inferSelect) {
     return {
       id: d.id,
-      radicado: d.radicado,
       ciudad: d.ciudad,
       tipo_inmueble: d.tipoInmueble,
       direccion: d.direccion,
@@ -71,14 +74,15 @@ class DanosService {
       telefono_reportante: d.telefonoReporta,
       fecha: asDate(d.fecha),
       fecha_visita: d.fechaVisita ? asDate(d.fechaVisita) : null,
+      resultado_visita: d.resultadoVisita,
     };
   }
 
   private serializeAdmin(d: typeof reportesDanos.$inferSelect) {
     return {
       ...this.serializePublic(d),
+      radicado: d.radicado,
       cedula: d.cedulaReporta,
-      resultado_visita: d.resultadoVisita,
       notas_admin: d.notasAdmin,
     };
   }
@@ -100,6 +104,11 @@ class DanosService {
       .limit(1);
     if (!rows.length) throw new NotFoundException({ error: 'Reporte no encontrado' });
     return this.serializePublic(rows[0]);
+  }
+
+  async get(id: number) {
+    const rows = await this.db.select().from(reportesDanos).where(eq(reportesDanos.id, id)).limit(1);
+    return rows.length ? rows[0] : null;
   }
 
   async listAdmin(ciudad: unknown) {
@@ -162,10 +171,40 @@ class DanosService {
       at: new Date().toISOString(),
     });
     notifyReporteWhatsapp(b.telefono_reportante, 'reporte de daños', radicado, `Detalle: ${tipoInmueble} — ${direccion}`);
+    await registrarAuditoria(this.db, {
+      tabla: 'reportes_danos', registroId: d.id, accion: 'create',
+      datosNuevos: this.serializePublic(d), autor: 'usuario', codigo: radicado,
+      visitorId: str(b.visitor_id),
+    });
     return { ...this.serializePublic(d), radicado };
   }
 
+  /** Edición pública con el número de radicado (el código del reportante). */
+  async updatePublic(id: number, b: DanoBody) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
+    if (!str(b.radicado) || !row.radicado || str(b.radicado).toUpperCase() !== row.radicado.toUpperCase()) {
+      throw new ForbiddenException({ error: 'Número de radicado incorrecto' });
+    }
+    const previo = this.serializePublic(row);
+    const set: Partial<typeof reportesDanos.$inferInsert> = {};
+    if (b.direccion !== undefined) set.direccion = str(b.direccion);
+    if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
+    if (b.telefono_reportante !== undefined) set.telefonoReporta = str(b.telefono_reportante);
+    if (b.habitado !== undefined) set.habitado = b.habitado === 'no' || b.habitado === 'evacuado' ? b.habitado : 'si';
+    const [d] = await this.db.update(reportesDanos).set(set).where(eq(reportesDanos.id, id)).returning();
+    const nuevo = this.serializePublic(d);
+    await registrarAuditoria(this.db, {
+      tabla: 'reportes_danos', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.radicado),
+    });
+    return nuevo;
+  }
+
   async updateAdmin(id: number, b: DanoBody) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
+    const previo = this.serializeAdmin(row);
     const set: Partial<typeof reportesDanos.$inferInsert> = {};
     if (b.estado !== undefined) {
       if (!['pendiente', 'visita_programada', 'visitado'].includes(b.estado)) {
@@ -177,11 +216,37 @@ class DanosService {
     if (b.resultado_visita !== undefined) set.resultadoVisita = str(b.resultado_visita) || null;
     if (b.notas_admin !== undefined) set.notasAdmin = str(b.notas_admin) || null;
     const [d] = await this.db.update(reportesDanos).set(set).where(eq(reportesDanos.id, id)).returning();
-    return this.serializeAdmin(d);
+    const nuevo = this.serializeAdmin(d);
+    await registrarAuditoria(this.db, {
+      tabla: 'reportes_danos', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'admin', codigo: 'llave-admin',
+    });
+    return nuevo;
   }
 
   async remove(id: number) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
     await this.db.delete(reportesDanos).where(eq(reportesDanos.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'reportes_danos', registroId: id, accion: 'delete',
+      datosPrevios: this.serializeAdmin(row), autor: 'admin', codigo: 'llave-admin',
+    });
+    return { ok: true };
+  }
+
+  /** Borrado público con el número de radicado. */
+  async removePublic(id: number, radicado: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Reporte no encontrado' });
+    if (!str(radicado) || !row.radicado || str(radicado).toUpperCase() !== row.radicado.toUpperCase()) {
+      throw new ForbiddenException({ error: 'Número de radicado incorrecto' });
+    }
+    await this.db.delete(reportesDanos).where(eq(reportesDanos.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'reportes_danos', registroId: id, accion: 'delete',
+      datosPrevios: this.serializePublic(row), autor: 'usuario', codigo: str(radicado),
+    });
     return { ok: true };
   }
 
@@ -260,6 +325,18 @@ export class DanosController {
   @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.svc.remove(toInt(id));
+  }
+
+  /** Edición pública con el número de radicado. */
+  @Post(':id/editar')
+  updatePublic(@Param('id') id: string, @Body() b: DanoBody) {
+    return this.svc.updatePublic(toInt(id), b);
+  }
+
+  /** Borrado público con el número de radicado. */
+  @Post(':id/eliminar')
+  removePublic(@Param('id') id: string, @Body() b: { radicado?: string }) {
+    return this.svc.removePublic(toInt(id), b?.radicado);
   }
 }
 

@@ -183,3 +183,13 @@ export const verPin = (tabla: string, id: number): Promise<{ pin: string | null 
 
 export const restablecerPin = (tabla: string, id: number): Promise<{ pin: string }> =>
   request(`/admin/pins/${tabla}/${id}/reset`, { method: 'POST', body: {} })
+
+// ── Visitas al sitio ─────────────────────────────────────────────────────────
+
+export const listVisitas = (limit = 100): Promise<any[]> =>
+  request(`/visitas/admin?limit=${limit}`)
+
+// ── Auditoría (rastro de modificaciones) ─────────────────────────────────────
+
+export const listAuditoria = (limit = 200): Promise<any[]> =>
+  request(`/auditoria?limit=${limit}`)

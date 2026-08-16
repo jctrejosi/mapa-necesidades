@@ -1,42 +1,30 @@
 import { useStore } from './store'
 import AdminPage from './pages/AdminPage'
-import { CITIES } from './api'
 
 /**
  * Interfaz de ADMINISTRACIÓN (separada del cliente público).
- * Solo monta el panel administrativo + un selector de ciudad.
+ * Solo monta el panel administrativo; el selector de ciudad vive dentro del panel.
  */
 export default function App() {
   const store = useStore()
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f4f5f7' }}>
+    <div style={{ minHeight: '100vh', background: '#f4f5f7', display: 'flex', flexDirection: 'column' }}>
       <header
         style={{
-          background: '#fff', boxShadow: '0 1px 0 #e1e4e9', position: 'sticky', top: 0, zIndex: 200,
-          padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: '#fff', boxShadow: '0 1px 0 #e1e4e9', zIndex: 200,
+          padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 16, color: '#003893' }}>
-          🔐 SolidaridadCO · Administración
+        <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 15, color: '#003893' }}>
+          🔐 todos ayudamos · Administración
         </span>
         <div style={{ flex: 1 }} />
-
-        <select
-          className="form-select"
-          style={{ width: 'auto', fontSize: 13, padding: '5px 8px', maxWidth: 160 }}
-          value={store.ciudad}
-          onChange={e => store.setCiudad(e.target.value)}
-          aria-label="Ciudad"
-        >
-          {CITIES.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}
-        </select>
-
         <a href="/" style={{ fontSize: 13, color: '#003893', fontWeight: 600, textDecoration: 'none' }}>
-          ← Volver al mapa
+          ← Ver sitio público
         </a>
       </header>
-
+      <div className="tricolor-band" />
       <AdminPage store={store} />
     </div>
   )

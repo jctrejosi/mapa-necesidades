@@ -20,6 +20,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asNum, asIso } from '../common/serialize';
 import { str, toInt, toNum } from '../common/util';
+import { registrarAuditoria } from '../common/audit';
 
 const CIUDADES = ['manizales', 'pereira', 'cali', 'quibdo', 'norte_valle', 'armenia'];
 
@@ -156,10 +157,15 @@ class SectoresService {
         at: new Date().toISOString(),
       });
     }
+    await registrarAuditoria(this.db, {
+      tabla: 'sectores', registroId: s.id, accion: 'create',
+      datosNuevos: sector, autor: 'usuario', visitorId: str(b.visitor_id),
+    });
     return sector;
   }
 
   async update(id: number, b: SectorBody) {
+    const previo = await this.get(id);
     const set: Partial<typeof sectores.$inferInsert> = {};
     if (b.nombre !== undefined) set.nombre = str(b.nombre);
     if (b.barrio !== undefined) set.barrio = str(b.barrio) || null;
@@ -177,7 +183,12 @@ class SectoresService {
     if (lng !== null) set.lng = String(lng);
 
     await this.db.update(sectores).set(set).where(eq(sectores.id, id));
-    return this.get(id);
+    const actualizado = await this.get(id);
+    await registrarAuditoria(this.db, {
+      tabla: 'sectores', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: actualizado, autor: 'admin', codigo: 'llave-admin',
+    });
+    return actualizado;
   }
 
   async setEstado(id: number, estado: unknown) {
@@ -189,7 +200,12 @@ class SectoresService {
   }
 
   async remove(id: number) {
+    const previo = await this.get(id);
     await this.db.delete(sectores).where(eq(sectores.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'sectores', registroId: id, accion: 'delete',
+      datosPrevios: previo, autor: 'admin', codigo: 'llave-admin',
+    });
     return { ok: true };
   }
 

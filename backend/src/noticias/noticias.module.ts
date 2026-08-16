@@ -20,6 +20,7 @@ import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate } from '../common/serialize';
 import { str, toDate, toInt, today } from '../common/util';
+import { registrarAuditoria } from '../common/audit';
 
 type NoticiaBody = {
   ciudad?: string;
@@ -80,10 +81,20 @@ class NoticiasService {
       item: this.serialize(n),
       at: new Date().toISOString(),
     });
+    await registrarAuditoria(this.db, {
+      tabla: 'noticias', registroId: n.id, accion: 'create',
+      datosNuevos: this.serialize(n), autor: 'admin', codigo: 'llave-admin',
+    });
     return this.serialize(n);
   }
 
+  async get(id: number) {
+    const rows = await this.db.select().from(noticias).where(eq(noticias.id, id)).limit(1);
+    return rows.length ? rows[0] : null;
+  }
+
   async update(id: number, b: NoticiaBody) {
+    const previo = await this.get(id);
     const set: Partial<typeof noticias.$inferInsert> = {};
     if (b.ciudad !== undefined) set.ciudad = str(b.ciudad) || null;
     if (b.titulo !== undefined) set.titulo = str(b.titulo);
@@ -92,11 +103,21 @@ class NoticiasService {
     if (b.autor !== undefined) set.autor = str(b.autor) || null;
     if (b.fecha !== undefined) set.fecha = toDate(b.fecha) ?? today();
     const [n] = await this.db.update(noticias).set(set).where(eq(noticias.id, id)).returning();
+    await registrarAuditoria(this.db, {
+      tabla: 'noticias', registroId: id, accion: 'update',
+      datosPrevios: previo ? this.serialize(previo) : null, datosNuevos: this.serialize(n),
+      autor: 'admin', codigo: 'llave-admin',
+    });
     return this.serialize(n);
   }
 
   async remove(id: number) {
+    const previo = await this.get(id);
     await this.db.delete(noticias).where(eq(noticias.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'noticias', registroId: id, accion: 'delete',
+      datosPrevios: previo ? this.serialize(previo) : null, autor: 'admin', codigo: 'llave-admin',
+    });
     return { ok: true };
   }
 }

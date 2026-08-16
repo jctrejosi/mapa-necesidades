@@ -294,6 +294,10 @@ export function useStore() {
   const deleteNecesidad = (id: number): Promise<unknown> =>
     mutate(() => api.deleteNecesidad(id), ciudad)
 
+  /** Borrado público con el PIN del usuario. */
+  const eliminarNecesidad = (id: number, pin: string): Promise<unknown> =>
+    mutate(() => api.eliminarNecesidad(id, pin), ciudad)
+
   const addOfrecimiento = (o: Omit<Ofrecimiento, 'id' | 'pin'>): Promise<string> =>
     mutate(async () => (await api.createOfrecimiento({ ...o, imagen: await withImage(o.imagen) })).pin, ciudad)
 
@@ -309,6 +313,10 @@ export function useStore() {
   const deleteOfrecimiento = (id: number): Promise<unknown> =>
     mutate(() => api.deleteOfrecimiento(id), ciudad)
 
+  /** Borrado público con el PIN del usuario. */
+  const eliminarOfrecimiento = (id: number, pin: string): Promise<unknown> =>
+    mutate(() => api.eliminarOfrecimiento(id, pin), ciudad)
+
   const addMascota = (m: Omit<Mascota, 'id' | 'pin'>): Promise<string> =>
     mutate(async () => (await api.createMascota({ ...m, imagen: await withImage(m.imagen) })).pin, ciudad)
 
@@ -323,6 +331,10 @@ export function useStore() {
 
   const deleteMascota = (id: number): Promise<unknown> =>
     mutate(() => api.deleteMascota(id), ciudad)
+
+  /** Borrado público con el PIN del usuario. */
+  const eliminarMascota = (id: number, pin: string): Promise<unknown> =>
+    mutate(() => api.eliminarMascota(id, pin), ciudad)
 
   const addCentro = (c: Omit<CentroAcopio, 'id'>): Promise<unknown> =>
     mutate(async () => api.createCentro({ ...c, imagen: await withImage(c.imagen) }), ciudad)
@@ -357,14 +369,26 @@ export function useStore() {
   const deleteVivienda = (id: number): Promise<unknown> =>
     mutate(() => api.deleteVivienda(id), ciudad)
 
+  /** Borrado público con el PIN del usuario. */
+  const eliminarVivienda = (id: number, pin: string): Promise<unknown> =>
+    mutate(() => api.eliminarVivienda(id, pin), ciudad)
+
   const addDano = (d: Omit<ReporteDano, 'id' | 'radicado'>): Promise<string> =>
     mutate(async () => (await api.createDano({ ...d, imagen: await withImage(d.imagen) })).radicado, ciudad)
 
   const updateDano = (id: number, b: Partial<ReporteDano>): Promise<unknown> =>
     mutate(() => api.updateDanoAdmin(id, b as Record<string, unknown>), ciudad)
 
+  /** Edición pública de un reporte de daños con el número de radicado. */
+  const editarDano = (id: number, b: Record<string, unknown>): Promise<unknown> =>
+    mutate(() => api.editarDano(id, b), ciudad)
+
   const deleteDano = (id: number): Promise<unknown> =>
     mutate(() => api.deleteDano(id), ciudad)
+
+  /** Borrado público de un reporte de daños con el número de radicado. */
+  const eliminarDano = (id: number, radicado: string): Promise<unknown> =>
+    mutate(() => api.eliminarDano(id, radicado), ciudad)
 
   const setSectores = useCallback((list: Sector[]) => {
     cache = { ...cache, sectores: list }
@@ -389,13 +413,13 @@ export function useStore() {
     ...data,
     setSectores,
     addSector, updateSector, deleteSector,
-    addNecesidad, updateNecesidad, deleteNecesidad, ayudarNecesidad,
-    addOfrecimiento, updateOfrecimiento, deleteOfrecimiento,
-    addMascota, updateMascota, deleteMascota,
+    addNecesidad, updateNecesidad, deleteNecesidad, eliminarNecesidad, ayudarNecesidad,
+    addOfrecimiento, updateOfrecimiento, deleteOfrecimiento, eliminarOfrecimiento,
+    addMascota, updateMascota, deleteMascota, eliminarMascota,
     addCentro, updateCentro, deleteCentro,
     addNoticia, updateNoticia, deleteNoticia,
-    addVivienda, updateVivienda, deleteVivienda,
-    addDano, updateDano, deleteDano,
+    addVivienda, updateVivienda, deleteVivienda, eliminarVivienda,
+    addDano, updateDano, editarDano, deleteDano, eliminarDano,
     getSectorEstado,
     loginAdmin, logoutAdmin,
     dismissToast, markAllRead,

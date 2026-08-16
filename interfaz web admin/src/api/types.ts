@@ -58,6 +58,7 @@ export interface Vivienda {
   imagen: string | null; estado: 'disponible' | 'ocupado'
   nombre_ofrece: string; telefono_ofrece: string
   interesado: { nombre: string; telefono: string; fecha: string } | null
+  fecha: string
   pin: string | null
 }
 

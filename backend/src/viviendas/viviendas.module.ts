@@ -23,6 +23,7 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
+import { registrarAuditoria } from '../common/audit';
 
 type ViviendaBody = {
   pin?: string;
@@ -61,7 +62,7 @@ class ViviendasService {
       telefono_ofrece: v.telefonoOfrece,
       interesado: nested(v.interesadoNombre, v.interesadoTelefono, v.fechaInteres),
       fecha: asDate(v.fecha),
-      pin: v.pin ?? '',
+      // El PIN no viaja en los listados públicos.
     };
   }
 
@@ -112,6 +113,11 @@ class ViviendasService {
       at: new Date().toISOString(),
     });
     notifyReporteWhatsapp(b.telefono_ofrece, 'oferta de vivienda', pin, `Detalle: ${v.tipo === 'alquiler' ? 'Alquiler' : 'Gratis'}`);
+    await registrarAuditoria(this.db, {
+      tabla: 'viviendas', registroId: v.id, accion: 'create',
+      datosNuevos: this.serialize(v), autor: 'usuario', codigo: pin,
+      visitorId: str(b.visitor_id),
+    });
     return { ...this.serialize(v), pin };
   }
 
@@ -121,6 +127,7 @@ class ViviendasService {
     if (!checkPin(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
+    const previo = this.serialize(row);
     const set: Partial<typeof viviendas.$inferInsert> = {};
     if (b.tipo !== undefined) set.tipo = b.tipo === 'alquiler' ? 'alquiler' : 'gratis';
     if (b.precio !== undefined) set.precio = str(b.precio) || null;
@@ -133,7 +140,12 @@ class ViviendasService {
     if (b.nombre_ofrece !== undefined) set.nombreOfrece = str(b.nombre_ofrece);
     if (b.telefono_ofrece !== undefined) set.telefonoOfrece = str(b.telefono_ofrece);
     const [v] = await this.db.update(viviendas).set(set).where(eq(viviendas.id, id)).returning();
-    return this.serialize(v);
+    const nuevo = this.serialize(v);
+    await registrarAuditoria(this.db, {
+      tabla: 'viviendas', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.pin),
+    });
+    return nuevo;
   }
 
   async marcarInteresado(id: number, nombre: unknown, telefono: unknown) {
@@ -157,7 +169,28 @@ class ViviendasService {
   }
 
   async remove(id: number) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Vivienda no encontrada' });
     await this.db.delete(viviendas).where(eq(viviendas.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'viviendas', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'admin', codigo: 'llave-admin',
+    });
+    return { ok: true };
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  async removePublic(id: number, pin: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Vivienda no encontrada' });
+    if (!checkPin(row.pin, pin)) {
+      throw new ForbiddenException({ error: 'Código de edición incorrecto' });
+    }
+    await this.db.delete(viviendas).where(eq(viviendas.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'viviendas', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+    });
     return { ok: true };
   }
 }
@@ -195,6 +228,12 @@ export class ViviendasController {
   @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.svc.remove(toInt(id));
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  @Post(':id/eliminar')
+  removePublic(@Param('id') id: string, @Body() b: { pin?: string }) {
+    return this.svc.removePublic(toInt(id), b?.pin);
   }
 }
 

@@ -15,9 +15,12 @@ export default function ImageInput({ value, onChange, capture }: ImageInputProps
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 4 * 1024 * 1024) { alert("La imagen no puede superar 4MB"); return }
+    // Las fotos de cámara suelen pesar varios MB: comprimimos primero y
+    // validamos el tamaño del RESULTADO (el backend acepta hasta 5 MB).
+    if (file.size > 25 * 1024 * 1024) { alert("La imagen es demasiado grande (máx. 25MB)"); return }
     try {
       const b64 = await compressImage(file)
+      if (b64.length > 6 * 1024 * 1024) { alert("La imagen sigue siendo muy pesada después de comprimirla. Intenta con otra foto."); return }
       onChange(b64)
     } catch {
       alert("No se pudo procesar la imagen")
@@ -60,8 +63,9 @@ export default function ImageInput({ value, onChange, capture }: ImageInputProps
 
       {/* Cargar desde galería */}
       <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handleFile} />
-      {/* Tomar foto con cámara (capture) */}
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleFile} />
+      {/* Tomar foto con cámara (capture). accept explícito para que iOS
+          convierta a JPEG en lugar de HEIC. */}
+      <input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style={{ display: "none" }} onChange={handleFile} />
     </div>
   )
 }

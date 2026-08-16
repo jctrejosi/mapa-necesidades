@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Store } from '../store'
 import { fmtFecha } from '../store'
+import * as api from '../api'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
@@ -54,10 +55,15 @@ export default function DanosPage({ store }: Props) {
     setDForm({ tipo_inmueble: 'Casa', direccion: '', habitado: 'si', nivel_percibido: 'leve', descripcion: '', nombre: '', telefono: '', cedula: '', imagen: null })
   }
 
-  const handleConsultar = () => {
-    const r = danos.find(d => d.radicado === consultaRadicado.trim().toUpperCase())
-    if (!r) { alert('No se encontró un reporte con ese número de radicado.'); return }
-    setConsultaResult(r)
+  const handleConsultar = async () => {
+    const rad = consultaRadicado.trim().toUpperCase()
+    if (!rad) return
+    try {
+      const r = await api.consultarDano(rad)
+      setConsultaResult(r)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'No se encontró un reporte con ese número de radicado.')
+    }
   }
 
   if (!showDanos) {

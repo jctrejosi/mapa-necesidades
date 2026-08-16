@@ -84,6 +84,10 @@ export const ayudarNecesidad = (id: number, telefono: string): Promise<{ ok: boo
 export const deleteNecesidad = (id: number): Promise<{ ok: boolean }> =>
   request(`/necesidades/${id}`, { method: 'DELETE' })
 
+/** Borrado público con el PIN que se le dio al usuario. */
+export const eliminarNecesidad = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/necesidades/${id}/eliminar`, { method: 'POST', body: { pin } })
+
 // ── Ofrecimientos ───────────────────────────────────────────────────────────
 
 export const listOfrecimientos = (ciudadLabel: string): Promise<Ofrecimiento[]> =>
@@ -104,6 +108,10 @@ export const liberarReserva = (id: number): Promise<Ofrecimiento> =>
 export const deleteOfrecimiento = (id: number): Promise<{ ok: boolean }> =>
   request(`/ofrecimientos/${id}`, { method: 'DELETE' })
 
+/** Borrado público con el PIN que se le dio al usuario. */
+export const eliminarOfrecimiento = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/ofrecimientos/${id}/eliminar`, { method: 'POST', body: { pin } })
+
 // ── Mascotas ────────────────────────────────────────────────────────────────
 
 export const listMascotas = (ciudadLabel: string): Promise<Mascota[]> =>
@@ -120,6 +128,10 @@ export const avistarMascota = (id: number, nombre: string, telefono: string): Pr
 
 export const deleteMascota = (id: number): Promise<{ ok: boolean }> =>
   request(`/mascotas/${id}`, { method: 'DELETE' })
+
+/** Borrado público con el PIN que se le dio al usuario. */
+export const eliminarMascota = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/mascotas/${id}/eliminar`, { method: 'POST', body: { pin } })
 
 // ── Centros ─────────────────────────────────────────────────────────────────
 
@@ -166,6 +178,10 @@ export const marcarInteresado = (id: number, nombre: string, telefono: string): 
 export const deleteVivienda = (id: number): Promise<{ ok: boolean }> =>
   request(`/viviendas/${id}`, { method: 'DELETE' })
 
+/** Borrado público con el PIN que se le dio al usuario. */
+export const eliminarVivienda = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/viviendas/${id}/eliminar`, { method: 'POST', body: { pin } })
+
 // ── Daños ───────────────────────────────────────────────────────────────────
 
 export const listDanos = (ciudadLabel: string, admin = false): Promise<ReporteDano[]> =>
@@ -177,8 +193,20 @@ export const createDano = (b: Partial<ReporteDano>): Promise<ReporteDano & { rad
 export const updateDanoAdmin = (id: number, b: Record<string, unknown>): Promise<ReporteDano> =>
   request(`/danos/${id}`, { method: 'PATCH', body: b })
 
+/** Consulta pública de un reporte de daños por su número de radicado. */
+export const consultarDano = (radicado: string): Promise<ReporteDano> =>
+  request(`/danos/${encodeURIComponent(radicado)}`)
+
 export const deleteDano = (id: number): Promise<{ ok: boolean }> =>
   request(`/danos/${id}`, { method: 'DELETE' })
+
+/** Edición pública de un reporte de daños con el número de radicado. */
+export const editarDano = (id: number, b: Record<string, unknown>): Promise<ReporteDano> =>
+  request(`/danos/${id}/editar`, { method: 'POST', body: b })
+
+/** Borrado público de un reporte de daños con el número de radicado. */
+export const eliminarDano = (id: number, radicado: string): Promise<{ ok: boolean }> =>
+  request(`/danos/${id}/eliminar`, { method: 'POST', body: { radicado } })
 
 // ── Uploads (Cloudinary: solo se guarda la URL) ─────────────────────────────
 

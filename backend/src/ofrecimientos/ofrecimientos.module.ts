@@ -23,6 +23,7 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
 import { checkPin, genPin, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
+import { registrarAuditoria } from '../common/audit';
 
 type OfrecimientoBody = {
   pin?: string;
@@ -56,7 +57,7 @@ class OfrecimientosService {
       telefono_ofrece: o.telefonoOfrece ?? '',
       estado: o.estado,
       reservado_por: nested(o.reservadoPorNombre, o.reservadoPorTelefono, o.fechaReserva),
-      pin: o.pin ?? '',
+      // El PIN no viaja en los listados públicos.
     };
   }
 
@@ -105,6 +106,11 @@ class OfrecimientosService {
       at: new Date().toISOString(),
     });
     notifyReporteWhatsapp(b.telefono_ofrece, 'ofrecimiento', pin, `Detalle: ${str(b.tipo)}`);
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: o.id, accion: 'create',
+      datosNuevos: this.serialize(o), autor: 'usuario', codigo: pin,
+      visitorId: str(b.visitor_id),
+    });
     return { ...this.serialize(o), pin };
   }
 
@@ -114,6 +120,7 @@ class OfrecimientosService {
     if (!checkPin(row.pin, b.pin)) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
+    const previo = this.serialize(row);
     const set: Partial<typeof ofrecimientos.$inferInsert> = {};
     if (b.tipo !== undefined) set.tipo = str(b.tipo);
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
@@ -122,7 +129,12 @@ class OfrecimientosService {
     if (b.fecha !== undefined) set.fecha = toDate(b.fecha) ?? today();
     if (b.estado !== undefined) set.estado = b.estado === 'entregado' ? 'entregado' : 'disponible';
     const [o] = await this.db.update(ofrecimientos).set(set).where(eq(ofrecimientos.id, id)).returning();
-    return this.serialize(o);
+    const nuevo = this.serialize(o);
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: id, accion: 'update',
+      datosPrevios: previo, datosNuevos: nuevo, autor: 'usuario', codigo: str(b.pin),
+    });
+    return nuevo;
   }
 
   async reservar(id: number, nombre: unknown, telefono: unknown) {
@@ -146,7 +158,28 @@ class OfrecimientosService {
   }
 
   async remove(id: number) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Ofrecimiento no encontrado' });
     await this.db.delete(ofrecimientos).where(eq(ofrecimientos.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'admin', codigo: 'llave-admin',
+    });
+    return { ok: true };
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  async removePublic(id: number, pin: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Ofrecimiento no encontrado' });
+    if (!checkPin(row.pin, pin)) {
+      throw new ForbiddenException({ error: 'Código de edición incorrecto' });
+    }
+    await this.db.delete(ofrecimientos).where(eq(ofrecimientos.id, id));
+    await registrarAuditoria(this.db, {
+      tabla: 'ofrecimientos', registroId: id, accion: 'delete',
+      datosPrevios: this.serialize(row), autor: 'usuario', codigo: str(pin),
+    });
     return { ok: true };
   }
 }
@@ -184,6 +217,12 @@ export class OfrecimientosController {
   @UseGuards(AdminGuard)
   remove(@Param('id') id: string) {
     return this.svc.remove(toInt(id));
+  }
+
+  /** Borrado público con el PIN del usuario. */
+  @Post(':id/eliminar')
+  removePublic(@Param('id') id: string, @Body() b: { pin?: string }) {
+    return this.svc.removePublic(toInt(id), b?.pin);
   }
 }
 
