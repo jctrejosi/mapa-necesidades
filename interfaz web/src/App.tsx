@@ -21,7 +21,7 @@ const BOTTOM_TABS = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrece' },
   { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
-  { id: 'noticias',      icon: '📰', label: 'Noticias' },
+  { id: 'danos',         icon: '🏚️', label: 'Daños' },
   { id: '__more__',      icon: '☰',  label: 'Más' },
 ]
 

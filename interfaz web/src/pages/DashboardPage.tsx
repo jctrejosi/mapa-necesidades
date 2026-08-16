@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { Store } from '../store'
-import { TIPOS_NECESIDAD } from '../data/mock'
+import { TIPOS_NECESIDAD, needLabel } from '../data/mock'
 
 interface Props { store: Store }
 
@@ -40,9 +40,9 @@ export default function DashboardPage({ store }: Props) {
     { icon: '🤝', label: 'Ofrecimientos disponibles', value: ciudadOfrecimientos.length, color: '#003893' },
   ]
 
-  // By type
+  // By type (agrupa tipos legacy y nuevos en las categorías canónicas)
   const byType = TIPOS_NECESIDAD.map(tipo => {
-    const ns = ciudadNecesidades.filter(n => n.tipo === tipo)
+    const ns = ciudadNecesidades.filter(n => needLabel(n.tipo) === tipo)
     return {
       tipo, total: ns.length,
       sinAsignar: ns.filter(n => n.estado === 'requiere' && !n.responsable).length,

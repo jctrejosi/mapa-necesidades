@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store, Necesidad } from '../store'
-import { TIPOS_NECESIDAD, ICONO_PUNTO_APOYO } from '../data/mock'
+import { TIPOS_NECESIDAD, ICONO_PUNTO_APOYO, TIPOS_AYUDA, NEED_LAYERS, needKey, needIcon } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
@@ -57,38 +57,6 @@ function getStatusColor(estado: string) {
   if (estado === 'en_proceso') return '#E08E00'
   if (estado === 'atendido') return '#2E9E5B'
   return '#9AA0AC'
-}
-
-/** Ícono según el tipo de necesidad reportada. */
-const NEED_TYPES = [
-  { key: 'agua', icon: '💧', label: '💧 Agua' },
-  { key: 'alimentos', icon: '🍞', label: '🍞 Alimentos' },
-  { key: 'refugio', icon: '⛺', label: '⛺ Refugio' },
-  { key: 'medicamentos', icon: '💊', label: '💊 Medicamentos' },
-  { key: 'salud', icon: '🩺', label: '🩺 Atención médica' },
-  { key: 'ropa', icon: '🧥', label: '🧥 Ropa / Cobijas' },
-  { key: 'maquinaria', icon: '🚜', label: '🚜 Maquinaria' },
-  { key: 'mascotas', icon: '🐾', label: '🐾 Mascotas' },
-  { key: 'otro', icon: '🆘', label: '🆘 Otro' },
-]
-
-/** Clave de categoría según el tipo de necesidad reportada. */
-function needKey(tipo: string) {
-  const t = (tipo || '').toLowerCase()
-  if (t.includes('agua')) return 'agua'
-  if (t.includes('aliment') || t.includes('comida')) return 'alimentos'
-  if (t.includes('refugio') || t.includes('carpa')) return 'refugio'
-  if (t.includes('medicament')) return 'medicamentos'
-  if (t.includes('médica') || t.includes('medica') || t.includes('salud') || t.includes('psicol')) return 'salud'
-  if (t.includes('ropa') || t.includes('cobija') || t.includes('abrigo')) return 'ropa'
-  if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'maquinaria'
-  if (t.includes('mascota')) return 'mascotas'
-  return 'otro'
-}
-
-/** Ícono según el tipo de necesidad reportada. */
-function needIcon(tipo: string) {
-  return NEED_TYPES.find(t => t.key === needKey(tipo))?.icon ?? '🆘'
 }
 
 /** Mini-mapa sin marcadores para colocar el punto del reporte manualmente. */
@@ -184,7 +152,7 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const { ciudad, sectores, necesidades, puntosApoyo, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
-    addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado,
+    addSector, addNecesidad, addMascota, addDano, updateNecesidad, ayudarNecesidad, getSectorEstado,
     eliminarNecesidad, updateOfrecimiento, eliminarOfrecimiento, updateMascota, eliminarMascota,
     updateVivienda, eliminarVivienda, editarDano, eliminarDano } = store
 
@@ -202,7 +170,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const openDetailRef = useRef<(key: string) => void>(() => {})
   const [mapReady, setMapReady] = useState(false)
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
-    ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
+    ...Object.fromEntries(NEED_LAYERS.map(t => [t.key, true])),
     puntos: true,
     mascotas: true,
     danos: true,
@@ -231,6 +199,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [deleteReport, setDeleteReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
   const [deletePin, setDeletePin] = useState('')
   const [pinResult, setPinResult] = useState<string | null>(null)
+  const [radicadoResult, setRadicadoResult] = useState<string | null>(null)
   // Popup temporal (toast) que se autodespide: no usa alert() bloqueante
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
   const toastTimer = useRef<number | null>(null)
@@ -250,13 +219,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   // Report form state
   const [rForm, setRForm] = useState({
-    nombre: '', barrio: '', tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const,
-    detalles: '', contactoNombre: '', contactoTel: '',
-    nivel: 'leve' as const, descripcion: '', imagen: null as string | null
+    nombre: '', detalles: '', contactoTel: '',
+    imagen: null as string | null,
+    tipoAyuda: 'Otro',
   })
   // Need form
   const [nForm, setNForm] = useState({
-    tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const,
+    tipo: 'Comida y agua', cantidad: '', prioridad: 'alta' as const,
     detalles: '', reportado_por: '', telefono: '', imagen: null as string | null
   })
   // Help form — solo teléfono (el backend envía por WhatsApp los datos de quien necesita)
@@ -715,30 +684,89 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       return
     }
 
+    const tipoAyuda = rForm.tipoAyuda || 'Otro'
+    const tel = rForm.contactoTel.trim()
+    const desc = rForm.detalles.trim()
+
     // Si no se pudo obtener la ubicación, usa el centro de la ciudad actual
     // para que el reporte quede geolocalizado y pueda localizarse en el mapa.
     const fallback = cityCenter[ciudad] || cityCenter.Manizales
     const coords = pickedLatLng || { lat: fallback[0], lng: fallback[1] }
+    const resetForm = () => setRForm({ nombre: '', detalles: '', contactoTel: '', imagen: null, tipoAyuda: 'Otro' })
 
+    // 🐾 Mascotas perdidas → se guarda como mascota (tiene su propio tab y marcadores).
+    if (tipoAyuda === 'Mascotas perdidas') {
+      const pin = await addMascota({
+        ciudad,
+        nombre: '',
+        tipo_animal: 'No especificado',
+        senas: desc,
+        imagen: rForm.imagen,
+        lat: coords.lat, lng: coords.lng,
+        lugar_visto: direccion || 'Ubicación en el mapa',
+        fecha_visto: new Date().toISOString(),
+        estado: 'perdido',
+        nombre_reporta: 'Persona que reporta',
+        telefono_reporta: tel,
+        avistado_por: null,
+      })
+      if (!pin) return
+      setShowReportModal(false)
+      setRadicadoResult(null)
+      setPinResult(pin)
+      resetForm()
+      return
+    }
+
+    // 🏚️ Daños → se guarda como reporte de daños (tab de daños, con radicado).
+    if (tipoAyuda === 'Daños') {
+      const radicado = await addDano({
+        ciudad,
+        tipo_inmueble: 'No especificado',
+        direccion: direccion || 'Reporte de daños',
+        lat: coords.lat, lng: coords.lng,
+        habitado: 'si',
+        nivel_percibido: 'moderado',
+        descripcion: desc,
+        imagen: rForm.imagen,
+        estado: 'pendiente',
+        nombre_reportante: 'Persona que reporta',
+        telefono_reportante: tel,
+        cedula: null,
+        fecha: new Date().toISOString(),
+        fecha_visita: null,
+        resultado_visita: null,
+        notas_admin: null,
+      })
+      if (!radicado) return
+      setShowReportModal(false)
+      setPinResult(null)
+      setRadicadoResult(radicado)
+      resetForm()
+      return
+    }
+
+    // Resto de tipos (necesidades y puntos de apoyo) → sector + necesidad.
     const sector = await addSector({
       ciudad,
       nombre: direccion || 'Reporte de ayuda',
       barrio: '',
       lat: coords.lat, lng: coords.lng,
-      descripcion: rForm.detalles, nivel_afectacion: 'leve', estado: 'activo',
-      contactos: [{ id: 0, nombre: 'Persona que reporta', telefono: rForm.contactoTel, rol: 'Coordinador' }]
+      descripcion: desc, nivel_afectacion: 'leve', estado: 'activo',
+      contactos: [{ id: 0, nombre: 'Persona que reporta', telefono: tel, rol: 'Coordinador' }]
     })
     if (!sector) return
     const pin = await addNecesidad({
-      sector_id: sector.id, tipo: 'Otro', descripcion: rForm.detalles,
+      sector_id: sector.id, tipo: tipoAyuda, descripcion: desc,
       cantidad: '', prioridad: 'alta', estado: 'requiere',
       responsable: null, reportado_por: 'Persona que reporta',
-      telefono_reporta: rForm.contactoTel, fecha: new Date().toISOString(), imagen: rForm.imagen
+      telefono_reporta: tel, fecha: new Date().toISOString(), imagen: rForm.imagen
     })
     if (!pin) return
     setShowReportModal(false)
+    setRadicadoResult(null)
     setPinResult(pin)
-    setRForm({ nombre: '', barrio: '', tipo: 'Agua potable', cantidad: '', prioridad: 'alta', detalles: '', contactoNombre: '', contactoTel: '', nivel: 'leve', descripcion: '', imagen: null })
+    resetForm()
   }
 
   const submitNeed = async () => {
@@ -1254,7 +1282,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   // compact: en móvil se muestran solo con ícono para ocupar menos espacio
   const LayerToggles = ({ bottomOffset = 60, compact = false }: { bottomOffset?: number; compact?: boolean }) => {
     const buttons = [
-      ...NEED_TYPES.filter(t => t.key !== 'mascotas').map(t => ({
+      ...NEED_LAYERS.filter(t => t.key !== 'mascotas').map(t => ({
         key: t.key,
         icon: t.icon,
         label: t.label.split(' ').slice(1).join(' ') || t.label,
@@ -1715,7 +1743,19 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             </div>
           )}
           <div className="form-group">
-            <label className="form-label">¿Qué necesitas? <span className="req">*</span></label>
+            <label className="form-label">Tipo de ayuda <span style={{ color: '#9AA0AC', fontWeight: 600 }}>(opcional — por defecto "Otro")</span></label>
+            <select className="form-select" value={rForm.tipoAyuda} onChange={e => setRForm(p => ({ ...p, tipoAyuda: e.target.value }))}>
+              {TIPOS_AYUDA.map(g => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.items.map(t => (
+                    <option key={t.value} value={t.value}>{t.icon} {t.value}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Descripción <span className="req">*</span></label>
             <textarea className="form-input" rows={3} value={rForm.detalles} onChange={e => setRForm(p => ({ ...p, detalles: e.target.value }))} placeholder="Describe tu situación, por ejemplo: se nos acabó el agua potable..." />
           </div>
           <div className="form-group">
@@ -1814,7 +1854,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         )
       })()}
 
-      {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
+      {pinResult || radicadoResult ? <PinModal pin={pinResult ?? undefined} radicado={radicadoResult ?? undefined} onClose={() => { setPinResult(null); setRadicadoResult(null) }} /> : null}
 
       {/* Popup temporal de confirmación (se autodespide a los 4s) */}
       {toast && (

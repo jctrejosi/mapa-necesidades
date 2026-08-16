@@ -44,7 +44,7 @@ export default function ViviendaPage({ store }: Props) {
       precio: pForm.tipo === 'alquiler' ? pForm.precio : null,
       capacidad: pForm.capacidad, tiempo_disponible: pForm.tiempo_disponible,
       sector_referencia: pForm.sector_referencia, descripcion: pForm.descripcion,
-      imagen: pForm.imagen, estado: 'disponible',
+      imagen: pForm.imagen, estado: 'disponible', fecha: new Date().toISOString(),
       nombre_ofrece: pForm.nombre, telefono_ofrece: pForm.telefono, interesado: null
     })
     if (!pin) return

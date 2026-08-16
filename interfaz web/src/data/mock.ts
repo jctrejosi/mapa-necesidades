@@ -3,8 +3,8 @@
 export const CITIES = ['Colombia', 'Manizales', 'Pereira', 'Cali', 'Quibdó', 'Norte del Valle', 'Armenia']
 
 export const TIPOS_NECESIDAD = [
-  'Agua potable', 'Alimentos', 'Refugio/Carpas', 'Medicamentos',
-  'Atención médica', 'Ropa/Cobijas', 'Maquinaria/Rescate', 'Mascotas', 'Otro'
+  'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
+  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otro'
 ]
 
 export const CATEGORIAS_OFRECIMIENTO = [
@@ -31,3 +31,107 @@ export const ICONO_PUNTO_APOYO: Record<string, string> = {
   'ONG': '🤝',
   'Otro': '🏪',
 }
+
+// ── Necesidades: capas del mapa + clasificadores compartidos ──────────────
+
+/** Capas de marcadores por tipo de necesidad (orden y etiquetas de los toggles). */
+export const NEED_LAYERS = [
+  { key: 'agua', icon: '💧', label: '💧 Agua' },
+  { key: 'alimentos', icon: '🍞', label: '🍞 Comida y agua' },
+  { key: 'refugio', icon: '⛺', label: '⛺ Refugio y abrigo' },
+  { key: 'medicamentos', icon: '💊', label: '💊 Medicamentos' },
+  { key: 'salud', icon: '🩺', label: '🩺 Servicios médicos' },
+  { key: 'ropa', icon: '🧥', label: '🧥 Ropa / Cobijas' },
+  { key: 'maquinaria', icon: '🚜', label: '🚜 Maquinaria y rescate' },
+  { key: 'mascotas', icon: '🐾', label: '🐾 Mascotas' },
+  { key: 'otro', icon: '🆘', label: '🆘 Otros' },
+]
+
+/**
+ * Capa del mapa a la que pertenece un tipo de necesidad.
+ * Soporta los tipos legacy ('Agua potable', 'Alimentos', ...) y los nuevos
+ * ('Comida y agua', 'Farmacia / Dispensario', ...).
+ */
+export function needKey(tipo: string): string {
+  const t = (tipo || '').toLowerCase()
+  if (t.includes('agua') && !t.includes('comida') && !t.includes('aliment')) return 'agua'
+  if (t.includes('aliment') || t.includes('comida')) return 'alimentos'
+  if (t.includes('refugio') || t.includes('carpa') || t.includes('albergue') || t.includes('ancianato')) return 'refugio'
+  if (t.includes('medicament') || t.includes('farmacia') || t.includes('dispensario')) return 'medicamentos'
+  if (t.includes('médic') || t.includes('medic') || t.includes('salud') || t.includes('psico') || t.includes('sangre') || t.includes('hospital')) return 'salud'
+  if (t.includes('ropa') || t.includes('cobija') || t.includes('abrigo')) return 'ropa'
+  if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'maquinaria'
+  if (t.includes('mascota') || t.includes('veterinaria')) return 'mascotas'
+  return 'otro'
+}
+
+/** Emoji específico para popups y detalle, según el texto crudo del tipo. */
+export function needIcon(tipo: string): string {
+  const t = (tipo || '').toLowerCase()
+  const specific: [string, string][] = [
+    ['farmacia', '💊'], ['dispensario', '💊'], ['sangre', '🩸'], ['veterinaria', '🐾'],
+    ['ancianato', '👵'], ['albergue', '🛏️'], ['fundaci', '🏛️'], ['acopio', '📦'],
+    ['líder', '👤'], ['lider', '👤'], ['hospital', '🏥'], ['ong', '🤝'],
+    ['transporte', '🚗'], ['voluntariado', '🤝'], ['psico', '🧠'],
+    ['comida', '🍞'], ['rescate', '🚜'], ['maquinaria', '🚜'],
+  ]
+  for (const [k, icon] of specific) if (t.includes(k)) return icon
+  return NEED_LAYERS.find(l => l.key === needKey(t))?.icon ?? '🆘'
+}
+
+/** Categoría canónica para estadísticas (agrupa tipos legacy y nuevos). */
+export function needLabel(tipo: string): string {
+  const t = (tipo || '').toLowerCase()
+  if (t.includes('agua') || t.includes('aliment') || t.includes('comida')) return 'Comida y agua'
+  if (t.includes('medicament') || t.includes('farmacia') || t.includes('dispensario') || t.includes('médic') || t.includes('medic') || t.includes('salud') || t.includes('psico') || t.includes('sangre') || t.includes('hospital')) return 'Servicios médicos'
+  if (t.includes('refugio') || t.includes('carpa') || t.includes('albergue') || t.includes('ancianato') || t.includes('abrigo') || t.includes('ropa') || t.includes('cobija')) return 'Refugio y abrigo'
+  if (t.includes('mascota') || t.includes('veterinaria')) return 'Mascotas'
+  if (t.includes('transporte')) return 'Transporte'
+  if (t.includes('voluntariado')) return 'Voluntariado'
+  if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'Maquinaria y rescate'
+  return 'Otro'
+}
+
+/**
+ * Selector del modal "NECESITO AYUDA": todas las formas de pedir ayuda,
+ * organizadas en grupos. 'Mascotas perdidas' y 'Daños' se guardan como
+ * sus propias entidades; el resto se guarda como necesidad (tipo libre).
+ */
+export const TIPOS_AYUDA: { group: string; items: { value: string; icon: string }[] }[] = [
+  {
+    group: 'Necesidades',
+    items: [
+      { value: 'Comida y agua', icon: '🍞' },
+      { value: 'Servicios médicos', icon: '🏥' },
+      { value: 'Atención psicosocial', icon: '🧠' },
+      { value: 'Mascotas', icon: '🐾' },
+      { value: 'Transporte', icon: '🚗' },
+      { value: 'Voluntariado', icon: '🤝' },
+      { value: 'Refugio y abrigo', icon: '🛏️' },
+      { value: 'Maquinaria y rescate', icon: '🚜' },
+      { value: 'Otro', icon: '🏪' },
+    ],
+  },
+  {
+    group: 'Puntos de apoyo',
+    items: [
+      { value: 'Farmacia / Dispensario', icon: '💊' },
+      { value: 'Banco de sangre', icon: '🩸' },
+      { value: 'Veterinaria', icon: '🐾' },
+      { value: 'Ancianato', icon: '👵' },
+      { value: 'Albergue', icon: '🛏️' },
+      { value: 'Fundación', icon: '🏛️' },
+      { value: 'Centro de acopio', icon: '📦' },
+      { value: 'Líder de barrio', icon: '👤' },
+      { value: 'Hospital', icon: '🏥' },
+      { value: 'ONG', icon: '🤝' },
+    ],
+  },
+  {
+    group: 'Otros reportes',
+    items: [
+      { value: 'Mascotas perdidas', icon: '🐾' },
+      { value: 'Daños', icon: '🏚️' },
+    ],
+  },
+]
