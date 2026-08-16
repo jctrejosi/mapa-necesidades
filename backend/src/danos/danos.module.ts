@@ -190,6 +190,7 @@ class DanosService {
     const set: Partial<typeof reportesDanos.$inferInsert> = {};
     if (b.direccion !== undefined) set.direccion = str(b.direccion);
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
+    if (b.imagen !== undefined) set.imagen = str(b.imagen) || null;
     if (b.telefono_reportante !== undefined) set.telefonoReporta = str(b.telefono_reportante);
     if (b.habitado !== undefined) set.habitado = b.habitado === 'no' || b.habitado === 'evacuado' ? b.habitado : 'si';
     const [d] = await this.db.update(reportesDanos).set(set).where(eq(reportesDanos.id, id)).returning();

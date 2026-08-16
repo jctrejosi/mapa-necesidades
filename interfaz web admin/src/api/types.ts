@@ -46,6 +46,12 @@ export interface CentroAcopio {
   lat: number; lng: number; estado: 'abierto' | 'cerrado'
 }
 
+export interface PuntoApoyo {
+  id: number; ciudad: string; nombre: string; tipo: string
+  direccion: string; telefono: string; imagen: string | null
+  lat: number; lng: number
+}
+
 export interface Noticia {
   id: number; ciudad: string | null; titulo: string; contenido: string
   imagen: string | null; autor: string; fecha: string

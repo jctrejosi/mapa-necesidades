@@ -359,6 +359,26 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Popup temporal de confirmación del mapa (autodespide) */
+.map-toast {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2430;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  z-index: 2500;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+  animation: toast-in 0.2s ease;
+  max-width: 90vw;
+  text-align: center;
+}
+.map-toast-error { background: #CE1126; }
+
 /* Botón NECESITO AYUDA: llamativo, con gradiente y pulso */
 @keyframes ayuda-pulse {
   0%, 100% { box-shadow: 0 2px 10px rgba(206,17,38,0.45); }

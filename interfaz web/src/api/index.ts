@@ -5,7 +5,7 @@
  */
 import { getVisitorId, request } from './client'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
+  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './types'
 
@@ -146,6 +146,27 @@ export const updateCentro = (id: number, b: Record<string, unknown>): Promise<Ce
 
 export const deleteCentro = (id: number): Promise<{ ok: boolean }> =>
   request(`/centros/${id}`, { method: 'DELETE' })
+
+// ── Puntos de apoyo ──────────────────────────────────────────────────────────
+
+export const listPuntosApoyo = (ciudadLabel: string): Promise<PuntoApoyo[]> =>
+  request(`/puntos-apoyo?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
+
+export const createPuntoApoyo = (b: Partial<PuntoApoyo>): Promise<PuntoApoyo & { pin: string }> =>
+  request('/puntos-apoyo', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales'), visitor_id: getVisitorId() } })
+
+export const updatePuntoApoyo = (id: number, b: Record<string, unknown>): Promise<PuntoApoyo> =>
+  request(`/puntos-apoyo/${id}`, { method: 'PATCH', body: b })
+
+export const updatePuntoApoyoAdmin = (id: number, b: Record<string, unknown>): Promise<PuntoApoyo> =>
+  request(`/puntos-apoyo/${id}/admin`, { method: 'PATCH', body: b })
+
+export const deletePuntoApoyo = (id: number): Promise<{ ok: boolean }> =>
+  request(`/puntos-apoyo/${id}`, { method: 'DELETE' })
+
+/** Borrado público con el PIN que se le dio al usuario al publicar. */
+export const eliminarPuntoApoyo = (id: number, pin: string): Promise<{ ok: boolean }> =>
+  request(`/puntos-apoyo/${id}/eliminar`, { method: 'POST', body: { pin } })
 
 // ── Noticias ────────────────────────────────────────────────────────────────
 

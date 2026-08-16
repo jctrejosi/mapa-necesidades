@@ -294,3 +294,27 @@ export const auditoria = pgTable(
 );
 
 export type Auditoria = typeof auditoria.$inferSelect;
+
+// ── Puntos de apoyo (lugares físicos que ofrece la red solidaria) ──────────
+// Cada punto tiene dirección, teléfono e imagen; aparece como marcador en el mapa.
+
+export const puntosApoyo = pgTable(
+  'puntos_apoyo',
+  {
+    id: serial('id').primaryKey(),
+    pin: varchar('pin', { length: 10 }),
+    ciudad: varchar('ciudad', { length: 50 }).notNull().default('manizales'),
+    nombre: varchar('nombre', { length: 150 }).notNull(),
+    tipo: varchar('tipo', { length: 80 }).notNull().default('Otro'),
+    direccion: varchar('direccion', { length: 200 }).notNull(),
+    telefono: varchar('telefono', { length: 50 }),
+    imagen: varchar('imagen', { length: 255 }),
+    lat: numeric('lat', { precision: 10, scale: 7 }).notNull(),
+    lng: numeric('lng', { precision: 10, scale: 7 }).notNull(),
+    visitorId: varchar('visitor_id', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_puntos_apoyo_ciudad').on(t.ciudad)],
+);
+
+export type PuntoApoyo = typeof puntosApoyo.$inferSelect;

@@ -5,7 +5,7 @@
  */
 import { request } from './client'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
+  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './types'
 
@@ -125,6 +125,20 @@ export const updateCentro = (id: number, b: Record<string, unknown>): Promise<Ce
 
 export const deleteCentro = (id: number): Promise<{ ok: boolean }> =>
   request(`/centros/${id}`, { method: 'DELETE' })
+
+// ── Puntos de apoyo ──────────────────────────────────────────────────────────
+
+export const listPuntosApoyo = (ciudadLabel: string): Promise<PuntoApoyo[]> =>
+  request(`/puntos-apoyo?ciudad=${encodeURIComponent(cityId(ciudadLabel))}`)
+
+export const createPuntoApoyo = (b: Partial<PuntoApoyo>): Promise<PuntoApoyo> =>
+  request('/puntos-apoyo', { method: 'POST', body: { ...b, ciudad: cityId(b.ciudad ?? 'Manizales') } })
+
+export const updatePuntoApoyo = (id: number, b: Record<string, unknown>): Promise<PuntoApoyo> =>
+  request(`/puntos-apoyo/${id}/admin`, { method: 'PATCH', body: b })
+
+export const deletePuntoApoyo = (id: number): Promise<{ ok: boolean }> =>
+  request(`/puntos-apoyo/${id}`, { method: 'DELETE' })
 
 // ── Noticias ────────────────────────────────────────────────────────────────
 

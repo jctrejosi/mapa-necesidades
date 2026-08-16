@@ -3,11 +3,12 @@ import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store, Necesidad } from '../store'
-import { TIPOS_NECESIDAD } from '../data/mock'
+import { TIPOS_NECESIDAD, ICONO_PUNTO_APOYO } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
 import ChatbotWidget from '../components/ChatbotWidget'
+import { uploadImage } from '../api'
 
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -90,6 +91,54 @@ function needIcon(tipo: string) {
   return NEED_TYPES.find(t => t.key === needKey(tipo))?.icon ?? '🆘'
 }
 
+/** Mini-mapa sin marcadores para colocar el punto del reporte manualmente. */
+function MiniMapPicker({ initial, onPick }: {
+  initial: [number, number]
+  onPick: (lat: number, lng: number) => void
+}) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInst = useRef<L.Map | null>(null)
+  const markerRef = useRef<L.Marker | null>(null)
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || mapInst.current) return
+    const map = L.map(mapRef.current, { zoomControl: true }).setView(initial, 14)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map)
+    const place = (lat: number, lng: number) => {
+      if (markerRef.current) markerRef.current.setLatLng([lat, lng])
+      else {
+        const mk = L.marker([lat, lng], { draggable: true }).addTo(map)
+        mk.on('dragend', () => {
+          const p = mk.getLatLng()
+          setPoint({ lat: p.lat, lng: p.lng })
+          onPick(p.lat, p.lng)
+        })
+        markerRef.current = mk
+      }
+      setPoint({ lat, lng })
+      // Actualiza el formulario (coordenadas + dirección) en el mismo instante.
+      onPick(lat, lng)
+    }
+    map.on('click', (e: L.LeafletMouseEvent) => place(e.latlng.lat, e.latlng.lng))
+    mapInst.current = map
+    setTimeout(() => map.invalidateSize(), 120)
+    return () => { map.remove(); mapInst.current = null; markerRef.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden', marginTop: 8 }}>
+      <div ref={mapRef} style={{ height: 210, width: '100%' }} />
+      <div style={{ padding: 10, background: '#f8f9fb', fontSize: 11.5, color: '#6b7280' }}>
+        {point ? `📍 ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}` : 'Haz clic en el mapa para colocar el marcador'}
+      </div>
+    </div>
+  )
+}
+
 /** Carousel simple para mostrar las imágenes del detalle de un reporte. */
 function DetailImageCarousel({ images }: { images: string[] }) {
   const [idx, setIdx] = useState(0)
@@ -133,7 +182,7 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 
 
 export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
-  const { ciudad, sectores, necesidades, centros, mascotas, danos, noticias, ofrecimientos, viviendas,
+  const { ciudad, sectores, necesidades, puntosApoyo, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
     addSector, addNecesidad, updateNecesidad, ayudarNecesidad, getSectorEstado,
     eliminarNecesidad, updateOfrecimiento, eliminarOfrecimiento, updateMascota, eliminarMascota,
@@ -145,13 +194,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
   const markersRef = useRef<any[]>([])
-  const centroMarkersRef = useRef<any[]>([])
   const mascotaMarkersRef = useRef<any[]>([])
   const danoMarkersRef = useRef<any[]>([])
+  const puntoMarkersRef = useRef<any[]>([])
   const [mapReady, setMapReady] = useState(false)
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
     ...Object.fromEntries(NEED_TYPES.map(t => [t.key, true])),
-    centros: true,
+    puntos: true,
     mascotas: true,
     danos: true,
   }))
@@ -162,22 +211,31 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [reportesModalOpen, setReportesModalOpen] = useState(false)
   // Detalle del reporte seleccionado (se abre al hacer click en un ítem)
   const [detailItem, setDetailItem] = useState<any | null>(null)
-  const [pickingLocation, setPickingLocation] = useState(false)
   // Intentos fallidos de ubicación (tras 3 se muestra el modal de aviso)
   const [locationAttempts, setLocationAttempts] = useState(0)
   const locationAttemptsRef = useRef(0)
   const [showLocationWarning, setShowLocationWarning] = useState(false)
   const [pickedLatLng, setPickedLatLng] = useState<{ lat: number; lng: number } | null>(null)
   const [showReportModal, setShowReportModal] = useState(false)
+  const geoAddrTimer = useRef<number | null>(null)
   const [showNeedModal, setShowNeedModal] = useState<number | null>(null) // sector_id
   const [showHelpModal, setShowHelpModal] = useState<number | null>(null) // need_id
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null) // need_id
   // Editar/eliminar cualquier reporte público con el código (PIN/radicado)
-  const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
-  const [editForm, setEditForm] = useState({ pin: '', campo1: '', campo2: '' })
+  const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string; sectorId?: number } | null>(null)
+  const [editStep, setEditStep] = useState<'pin' | 'form'>('pin')
+  const [editForm, setEditForm] = useState({ pin: '', direccion: '', descripcion: '', imagen: null as string | null })
   const [deleteReport, setDeleteReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
   const [deletePin, setDeletePin] = useState('')
   const [pinResult, setPinResult] = useState<string | null>(null)
+  // Popup temporal (toast) que se autodespide: no usa alert() bloqueante
+  const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null)
+  const toastTimer = useRef<number | null>(null)
+  const showToast = (msg: string, tone: 'success' | 'error' = 'success') => {
+    setToast({ msg, tone })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000)
+  }
 
   // Centro de reportes (panel de notificaciones por secciones)
   const [openSection, setOpenSection] = useState<string | null>('actividad')
@@ -227,7 +285,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       const t = new Date(iso.length <= 10 ? `${iso}T00:00:00Z` : iso).getTime()
       return Number.isFinite(t) ? t : 0
     }
-    const items: Array<{ key: string; type: string; mensaje: string; ciudad: string | null; at: string; ts: number }> = []
+    const items: Array<{ key: string; type: string; mensaje: string; ciudad: string | null; at: string; ts: number; detail?: any }> = []
 
     necesidades.forEach(n => {
       const s = sectores.find(x => x.id === n.sector_id)
@@ -238,23 +296,72 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         ciudad: s?.ciudad ?? ciudad,
         at: n.fecha,
         ts: ts(n.fecha),
+        detail: {
+          titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+          detalle: n.descripcion || undefined,
+          ubicacion: s?.nombre,
+          telefono: n.telefono_reporta,
+          lat: s?.lat, lng: s?.lng,
+          imagenes: n.imagen ? [n.imagen] : undefined,
+          editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
+        },
       })
     })
     ofrecimientos.forEach(o => {
       if (!matchesCiudad(o.ciudad)) return
-      items.push({ key: `o${o.id}`, type: 'ofrecimiento', mensaje: `Nuevo ofrecimiento: ${o.tipo}`, ciudad: o.ciudad, at: o.fecha, ts: ts(o.fecha) })
+      items.push({
+        key: `o${o.id}`, type: 'ofrecimiento', mensaje: `Nuevo ofrecimiento: ${o.tipo}`, ciudad: o.ciudad, at: o.fecha, ts: ts(o.fecha),
+        detail: {
+          titulo: `🤝 ${o.tipo}`,
+          detalle: o.descripcion || undefined,
+          telefono: o.telefono_ofrece,
+          imagenes: o.imagen ? [o.imagen] : undefined,
+          editable: { tipo: 'ofrecimiento', id: o.id },
+        },
+      })
     })
     mascotas.forEach(m => {
       if (!matchesCiudad(m.ciudad)) return
-      items.push({ key: `m${m.id}`, type: 'mascota', mensaje: `Mascota reportada: ${m.nombre || m.tipo_animal}`, ciudad: m.ciudad, at: m.fecha_visto, ts: ts(m.fecha_visto) })
+      items.push({
+        key: `m${m.id}`, type: 'mascota', mensaje: `Mascota reportada: ${m.nombre || m.tipo_animal}`, ciudad: m.ciudad, at: m.fecha_visto, ts: ts(m.fecha_visto),
+        detail: {
+          titulo: `🐾 ${m.nombre || m.tipo_animal}`,
+          detalle: m.senas || undefined,
+          ubicacion: m.lugar_visto || undefined,
+          telefono: m.telefono_reporta,
+          lat: m.lat, lng: m.lng,
+          imagenes: m.imagen ? [m.imagen] : undefined,
+          editable: { tipo: 'mascota', id: m.id },
+        },
+      })
     })
     viviendas.forEach(v => {
       if (!matchesCiudad(v.ciudad)) return
-      items.push({ key: `v${v.id}`, type: 'vivienda', mensaje: 'Nueva oferta de vivienda', ciudad: v.ciudad, at: v.fecha, ts: ts(v.fecha) })
+      items.push({
+        key: `v${v.id}`, type: 'vivienda', mensaje: 'Nueva oferta de vivienda', ciudad: v.ciudad, at: v.fecha, ts: ts(v.fecha),
+        detail: {
+          titulo: `🏠 ${v.sector_referencia || 'Vivienda'}`,
+          detalle: v.descripcion || undefined,
+          telefono: v.telefono_ofrece,
+          imagenes: v.imagen ? [v.imagen] : undefined,
+          editable: { tipo: 'vivienda', id: v.id },
+        },
+      })
     })
     danos.forEach(d => {
       if (!matchesCiudad(d.ciudad)) return
-      items.push({ key: `d${d.id}`, type: 'dano', mensaje: `Nuevo reporte de daños: ${d.tipo_inmueble}`, ciudad: d.ciudad, at: d.fecha, ts: ts(d.fecha) })
+      items.push({
+        key: `d${d.id}`, type: 'dano', mensaje: `Nuevo reporte de daños: ${d.tipo_inmueble}`, ciudad: d.ciudad, at: d.fecha, ts: ts(d.fecha),
+        detail: {
+          titulo: `🏚️ ${d.tipo_inmueble} — ${d.direccion}`,
+          detalle: d.descripcion || undefined,
+          ubicacion: d.direccion,
+          telefono: d.telefono_reportante,
+          lat: d.lat, lng: d.lng,
+          imagenes: d.imagen ? [d.imagen] : undefined,
+          editable: { tipo: 'dano', id: d.id },
+        },
+      })
     })
     noticias.forEach(n => {
       if (!(n.ciudad === null || matchesCiudad(n.ciudad))) return
@@ -295,19 +402,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map)
-    map.on('click', (e: any) => {
-      if (pickingLocationRef.current) {
-        const lat = e.latlng.lat
-        const lng = e.latlng.lng
-        setPickedLatLng({ lat, lng })
-        setPickingLocation(false)
-        setShowReportModal(true)
-        // Rellena la dirección si el campo está vacío
-        reverseGeocode(lat, lng).then(addr => {
-          if (addr) setRForm(p => (p.nombre.trim() ? p : { ...p, nombre: addr }))
-        })
-      }
-    })
     mapInstance.current = map
     setMapReady(true)
     return () => {
@@ -324,9 +418,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     mapInstance.current.setView(target, isColombia ? 6 : 13)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ciudad])
-
-  const pickingLocationRef = useRef(false)
-  useEffect(() => { pickingLocationRef.current = pickingLocation }, [pickingLocation])
 
   // Invalidate map size when the bottom sheet changes so tiles fill correctly
   useEffect(() => {
@@ -396,34 +487,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       markersRef.current.push(marker)
     })
 
-    // — Centro de acopio markers
-    centroMarkersRef.current.forEach(m => m.remove())
-    centroMarkersRef.current = []
-    if (layers.centros) {
-      const curCentros = centros.filter(c => matchesCiudad(c.ciudad))
-      curCentros.forEach(c => {
-        const emoji = c.es_sangre ? '🩸' : c.es_alojamiento ? '🏠' : '📦'
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:28px;height:28px;border-radius:50%;background:#003893;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px">${emoji}</div>`,
-          iconSize: [28, 28], iconAnchor: [14, 14],
-        })
-        const m = L.marker([c.lat, c.lng], { icon }).addTo(mapInstance.current)
-        m.bindPopup(`
-          <div style="min-width:180px">
-            <div style="margin-bottom:6px"><span style="background:#e6f5ec;color:#2E9E5B;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${c.estado === 'abierto' ? '🟢 ABIERTO' : '⚪ CERRADO'}</span></div>
-            <h4 style="margin:0 0 4px;font-size:14px;font-weight:700">${c.nombre}</h4>
-            <p style="font-size:12px;color:#6b7280;margin:0 0 6px">${c.organizacion}</p>
-            <p style="font-size:12px;margin:0 0 4px"><strong>Recibe:</strong> ${c.que_recibe}</p>
-            <p style="font-size:12px;margin:0 0 4px">📍 ${c.direccion}</p>
-            <p style="font-size:12px;margin:0 0 4px">🕒 ${c.horario}</p>
-            <a href="https://maps.google.com/?q=${c.lat},${c.lng}" target="_blank" style="display:block;text-align:center;margin-top:8px;background:#003893;color:#fff;border-radius:6px;padding:6px;font-size:12px;text-decoration:none;font-weight:600">🗺️ Cómo llegar</a>
-          </div>
-        `)
-        centroMarkersRef.current.push(m)
-      })
-    }
-
     // — Mascota markers
     mascotaMarkersRef.current.forEach(m => m.remove())
     mascotaMarkersRef.current = []
@@ -472,7 +535,33 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         danoMarkersRef.current.push(mk)
       })
     }
-  }, [sectores, necesidades, centros, mascotas, danos, ciudad, getSectorEstado, layers])
+
+    // — Puntos de apoyo: marcador con la imagen guardada
+    puntoMarkersRef.current.forEach(m => m.remove())
+    puntoMarkersRef.current = []
+    if (layers.puntos) {
+      puntosApoyo.filter(p => matchesCiudad(p.ciudad)).forEach(p => {
+        const img = p.imagen
+        const emoji = ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);background:#003893 url('${img}') center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:16px">${img ? '' : emoji}</div>`,
+          iconSize: [38, 38], iconAnchor: [19, 19],
+        })
+        const mk = L.marker([p.lat, p.lng], { icon }).addTo(mapInstance.current)
+        mk.bindPopup(`
+          <div style="min-width:200px">
+            <span style="background:#e8eeff;color:#003893;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${emoji} ${p.tipo}</span>
+            ${img ? `<img src="${img}" alt="${p.nombre}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;margin:6px 0" />` : ''}
+            <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${p.nombre}</h4>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${p.direccion}</p>
+            ${p.telefono ? `<p style="font-size:12px;margin:0">📞 ${p.telefono}</p>` : ''}
+          </div>
+        `)
+        puntoMarkersRef.current.push(mk)
+      })
+    }
+  }, [sectores, necesidades, puntosApoyo, mascotas, danos, ciudad, getSectorEstado, layers])
 
   useEffect(() => {
     renderMarkers()
@@ -493,14 +582,30 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     return () => clearInterval(interval)
   }, [renderMarkers])
 
-  const handlePickLocation = () => {
-    setPickingLocation(true)
-    if (mapInstance.current) mapInstance.current.getContainer().style.cursor = 'crosshair'
+  /** Aplica el punto elegido en el mini-mapa: coordenadas + dirección por geocodificación inversa. */
+  const applyMiniPoint = (lat: number, lng: number) => {
+    setPickedLatLng({ lat, lng })
+    // Mantén el mini-mapa abierto para que el usuario pueda seguir ajustando
+    // el marcador y ver la sincronización en ambos sentidos.
+    reverseGeocode(lat, lng).then(addr => {
+      if (addr) setRForm(p => ({ ...p, nombre: addr }))
+    })
   }
 
-  const cancelPick = () => {
-    setPickingLocation(false)
-    if (mapInstance.current) mapInstance.current.getContainer().style.cursor = ''
+  /** Al editar la dirección, actualiza las coordenadas del marcador (geocodificación con retardo). */
+  const onReportAddressChange = (v: string) => {
+    setRForm(p => ({ ...p, nombre: v }))
+    if (geoAddrTimer.current) clearTimeout(geoAddrTimer.current)
+    if (v.trim().length < 5) return
+    geoAddrTimer.current = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(v)}`)
+        const data = await res.json()
+        if (Array.isArray(data) && data.length) {
+          setPickedLatLng({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) })
+        }
+      } catch { /* sin conexión */ }
+    }, 900)
   }
 
   /**
@@ -555,7 +660,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     if (!rForm.contactoTel.trim()) { alert('Tu teléfono es obligatorio'); return }
     const direccion = rForm.nombre.trim()
     if (!pickedLatLng && !direccion) {
-      alert('Necesitamos una ubicación o una dirección: usa "📍 Usar mi ubicación", "🗺️ Marcar en el mapa" o escribe la dirección manualmente.')
+      alert('Necesitamos una ubicación o una dirección: usa "📍 Usar mi ubicación", el botón "🗺️" junto a la dirección o escribe la dirección manualmente.')
       return
     }
 
@@ -627,13 +732,20 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     })
     if (!r) return
     setShowUpdateModal(null)
-    alert('✅ Necesidad actualizada correctamente.')
+    showToast('✅ Necesidad actualizada correctamente.')
   }
 
   // ── Editar / eliminar reporte propio (PIN o radicado) ──
-  const openEdit = (e: { tipo: string; id: number }) => {
-    setEditForm({ pin: '', campo1: '', campo2: '' })
-    setEditReport({ ...e, titulo: detailItem?.titulo ?? '' })
+  const openEdit = (e: { tipo: string; id: number; sectorId?: number }) => {
+    const d = detailItem ?? {}
+    setEditForm({
+      pin: '',
+      direccion: d.ubicacion ?? '',
+      descripcion: d.detalle ?? '',
+      imagen: d.imagenes?.[0] ?? null,
+    })
+    setEditReport({ ...e, titulo: d.titulo ?? '' })
+    setEditStep('pin')
   }
 
   const openDelete = (e: { tipo: string; id: number }) => {
@@ -650,34 +762,55 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         : 'Ingresa el código de 4 dígitos que se te dio al publicar.')
       return
     }
+
+    // Sube la imagen a Cloudinary si el usuario eligió una nueva
+    let imagen: string | undefined
+    if (editForm.imagen) {
+      imagen = editForm.imagen.startsWith('data:')
+        ? (await uploadImage(editForm.imagen)).path
+        : editForm.imagen
+    }
+
     let r: unknown
     if (editReport.tipo === 'necesidad') {
       r = await updateNecesidad(editReport.id, {
-        descripcion: editForm.campo1 || undefined,
-        cantidad: editForm.campo2 || undefined,
+        descripcion: editForm.descripcion || undefined,
+        imagen,
+        direccion_sector: editForm.direccion || undefined,
         pin: codigo,
       })
     } else if (editReport.tipo === 'ofrecimiento') {
       r = await updateOfrecimiento(editReport.id, {
-        descripcion: editForm.campo1 || undefined,
-        cantidad: editForm.campo2 || undefined,
+        descripcion: editForm.descripcion || undefined,
+        imagen,
         pin: codigo,
       })
     } else if (editReport.tipo === 'mascota') {
-      r = await updateMascota(editReport.id, { senas: editForm.campo1 || undefined, pin: codigo })
+      r = await updateMascota(editReport.id, {
+        lugar_visto: editForm.direccion || undefined,
+        senas: editForm.descripcion || undefined,
+        imagen,
+        pin: codigo,
+      })
     } else if (editReport.tipo === 'vivienda') {
       r = await updateVivienda(editReport.id, {
-        descripcion: editForm.campo1 || undefined,
-        capacidad: editForm.campo2 || undefined,
+        sector_referencia: editForm.direccion || undefined,
+        descripcion: editForm.descripcion || undefined,
+        imagen,
         pin: codigo,
       })
     } else {
-      r = await editarDano(editReport.id, { radicado: codigo, descripcion: editForm.campo1 || undefined })
+      r = await editarDano(editReport.id, {
+        radicado: codigo,
+        direccion: editForm.direccion || undefined,
+        descripcion: editForm.descripcion || undefined,
+        imagen,
+      })
     }
     if (!r) return
     setEditReport(null)
     setDetailItem(null)
-    alert('✅ Reporte actualizado.')
+    showToast('✅ Reporte actualizado.')
   }
 
   const submitDeleteReport = async () => {
@@ -698,7 +831,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     if (!r) return
     setDeleteReport(null)
     setDetailItem(null)
-    alert('🗑 Reporte eliminado. La modificación quedó registrada en la auditoría.')
+    showToast('🗑 Reporte eliminado. La modificación quedó registrada en la auditoría.')
   }
 
   const centerOnSector = (sectorId: number) => {
@@ -725,7 +858,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   }
 
   /** Abre el detalle de un reporte y centra el mapa en su ubicación (si tiene). */
-  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[]; editable?: { tipo: string; id: number } }) => {
+  const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[]; editable?: { tipo: string; id: number; sectorId?: number } }) => {
     setReportesModalOpen(false)
     setDetailItem(item)
     if (item.lat != null && item.lng != null && mapInstance.current) {
@@ -744,7 +877,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   const NOTIF_ICONS: Record<string, string> = {
     sector: '📍', necesidad: '🆘', ofrecimiento: '🤝', mascota: '🐾',
-    noticia: '📰', vivienda: '🏠', dano: '🏚️', centro: '📦',
+    noticia: '📰', vivienda: '🏠', dano: '🏚️', centro: '📦', punto_apoyo: '🏪',
   }
 
   // Ítem de reporte pendiente reutilizable (notificaciones + centro de reportes)
@@ -758,7 +891,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         telefono: n.telefono_reporta,
         lat: sector?.lat, lng: sector?.lng,
         imagenes: n.imagen ? [n.imagen] : undefined,
-        editable: { tipo: 'necesidad', id: n.id },
+        editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
       })} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}>
         <span style={{ fontSize: 15 }}>🆘</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -867,7 +1000,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             </p>
           ) : (
             reciente.map(n => (
-              <div key={n.key} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+              <div
+                key={n.key}
+                onClick={() => {
+                  if (n.type === 'noticia') setPage('noticias')
+                  else if (n.detail) openDetail(n.detail)
+                }}
+                style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}
+              >
                 <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
@@ -900,7 +1040,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 telefono: n.telefono_reporta,
                 lat: sector?.lat, lng: sector?.lng,
                 imagenes: n.imagen ? [n.imagen] : undefined,
-                editable: { tipo: 'necesidad', id: n.id },
+                editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
               })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
@@ -1057,7 +1197,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         icon: t.icon,
         label: t.label.split(' ').slice(1).join(' ') || t.label,
       })),
-      { key: 'centros', icon: '📦', label: 'Centros' },
+      { key: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
       { key: 'mascotas', icon: '🐾', label: 'Mascotas perdidas' },
       { key: 'danos', icon: '🏚️', label: 'Daños' },
     ]
@@ -1185,14 +1325,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      {/* Picking location banner */}
-      {pickingLocation && (
-        <div style={{ background: '#003893', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, fontWeight: 600, flexShrink: 0, zIndex: 1 }}>
-          <span>📍</span>
-          <span style={{ flex: 1 }}>Haz clic en el mapa donde está el sector afectado</span>
-          <button onClick={cancelPick} className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}>Cancelar</button>
-        </div>
-      )}
 
       {/* Map wrapper */}
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
@@ -1323,7 +1455,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 </p>
               ) : (
                 reciente.map(n => (
-                  <div key={n.key} style={{ display: 'flex', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
+                  <div
+                    key={n.key}
+                    onClick={() => {
+                      if (n.type === 'noticia') setPage('noticias')
+                      else if (n.detail) openDetail(n.detail)
+                    }}
+                    style={{ display: 'flex', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start', cursor: 'pointer' }}
+                  >
                     <span style={{ fontSize: 16 }}>{NOTIF_ICONS[n.type] ?? '🔔'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{n.mensaje}</p>
@@ -1393,27 +1532,43 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </Modal>
       )}
 
-      {/* Editar reporte propio (PIN o radicado) */}
+      {/* Editar reporte propio: primero el código, luego dirección + descripción + imagen */}
       {editReport && (
-        <Modal title={`✎ Editar: ${editReport.titulo}`} onClose={() => setEditReport(null)} onConfirm={submitEditReport} confirmLabel="Guardar cambios">
-          <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>
-            Para poder editar ingresa el {editReport.tipo === 'dano' ? 'número de radicado' : 'código de 4 dígitos'} que se te dio al publicar.
-          </p>
-          <div className="form-group">
-            <label className="form-label">{editReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
-            <input className="form-input" value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value }))}
-              placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={editReport.tipo === 'dano' ? 10 : 4}
-              style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">{editReport.tipo === 'mascota' ? 'Señas / descripción' : 'Descripción'}</label>
-            <textarea className="form-input" rows={3} value={editForm.campo1} onChange={e => setEditForm(p => ({ ...p, campo1: e.target.value }))} />
-          </div>
-          {editReport.tipo !== 'dano' && editReport.tipo !== 'mascota' && (
-            <div className="form-group">
-              <label className="form-label">{editReport.tipo === 'vivienda' ? 'Capacidad' : 'Cantidad'}</label>
-              <input className="form-input" value={editForm.campo2} onChange={e => setEditForm(p => ({ ...p, campo2: e.target.value }))} />
-            </div>
+        <Modal
+          title={editStep === 'pin' ? `🔑 Código para editar: ${editReport.titulo}` : `✎ Editar: ${editReport.titulo}`}
+          onClose={() => setEditReport(null)}
+          onConfirm={editStep === 'pin' ? () => setEditStep('form') : submitEditReport}
+          confirmLabel={editStep === 'pin' ? 'Continuar' : 'Guardar cambios'}
+          hideCancel
+        >
+          {editStep === 'pin' ? (
+            <>
+              <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>
+                Ingresa el {editReport.tipo === 'dano' ? 'número de radicado' : 'código de 4 dígitos'} que se te dio al publicar.
+              </p>
+              <div className="form-group">
+                <label className="form-label">{editReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
+                <input className="form-input" autoFocus value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && editForm.pin.trim() && setEditStep('form')}
+                  placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={editReport.tipo === 'dano' ? 10 : 4}
+                  style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label">{editReport.tipo === 'mascota' ? 'Lugar visto' : editReport.tipo === 'vivienda' ? 'Sector / referencia' : 'Dirección'}</label>
+                <input className="form-input" value={editForm.direccion} onChange={e => setEditForm(p => ({ ...p, direccion: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descripción</label>
+                <textarea className="form-input" rows={3} value={editForm.descripcion} onChange={e => setEditForm(p => ({ ...p, descripcion: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Foto / imagen</label>
+                <ImageInput value={editForm.imagen ?? undefined} onChange={v => setEditForm(p => ({ ...p, imagen: v ?? null }))} />
+              </div>
+            </>
           )}
         </Modal>
       )}
@@ -1484,14 +1639,17 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             <input
               className="form-input"
               value={rForm.nombre}
-              onChange={e => setRForm(p => ({ ...p, nombre: e.target.value }))}
+              onChange={e => onReportAddressChange(e.target.value)}
               placeholder="Ej. Barrio La Linda, Manizales"
+            />
+            <MiniMapPicker
+              initial={pickedLatLng ? [pickedLatLng.lat, pickedLatLng.lng] : [center[0], center[1]]}
+              onPick={applyMiniPoint}
             />
           </div>
           {!pickedLatLng && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <button type="button" onClick={() => geolocate(false)} className="btn btn-sm btn-outline">📍 Usar mi ubicación</button>
-              <button type="button" onClick={() => { setShowReportModal(false); handlePickLocation() }} className="btn btn-sm btn-outline">🗺️ Marcar en el mapa</button>
             </div>
           )}
           <div className="form-group">
@@ -1595,6 +1753,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       })()}
 
       {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
+
+      {/* Popup temporal de confirmación (se autodespide a los 4s) */}
+      {toast && (
+        <div className={`map-toast ${toast.tone === 'error' ? 'map-toast-error' : ''}`}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* Chatbot Ibanaska — popup flotante del bot (pantalla completa en móvil) */}
       <ChatbotWidget ciudad={ciudad} />

@@ -4,12 +4,12 @@ import { getAdminPass, imgUrl, setAdminPass } from './api/client'
 import { cityLabel } from './api'
 import { subscribeEvents, type AppEvent } from './api/events'
 import type {
-  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento,
+  CentroAcopio, Mascota, Necesidad, Noticia, Ofrecimiento, PuntoApoyo,
   ReporteDano, Sector, Vivienda,
 } from './api/types'
 
 export type {
-  Contacto, Sector, Necesidad, Ofrecimiento, Mascota,
+  Contacto, Sector, Necesidad, Ofrecimiento, Mascota, PuntoApoyo,
   CentroAcopio, Noticia, Vivienda, ReporteDano,
 } from './api/types'
 
@@ -73,6 +73,7 @@ interface Data {
   ofrecimientos: Ofrecimiento[]
   mascotas: Mascota[]
   centros: CentroAcopio[]
+  puntosApoyo: PuntoApoyo[]
   noticias: Noticia[]
   viviendas: Vivienda[]
   danos: ReporteDano[]
@@ -91,7 +92,7 @@ function loadNotificaciones(): Notificacion[] {
 
 let cache: Data = {
   sectores: [], necesidades: [], ofrecimientos: [], mascotas: [],
-  centros: [], noticias: [], viviendas: [], danos: [],
+  centros: [], puntosApoyo: [], noticias: [], viviendas: [], danos: [],
   notificaciones: loadNotificaciones(),
   toasts: [],
 }
@@ -115,13 +116,14 @@ const mapItem = (x: any) => ({
 /** Carga todos los listados (admin ve sectores cerrados y campos completos). */
 async function refresh(ciudad: string): Promise<void> {
   const isAdmin = !!getAdminPass()
-  const [sectores, necesidades, ofrecimientos, mascotas, centros, noticias, viviendas, danos] =
+  const [sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, noticias, viviendas, danos] =
     await Promise.all([
       api.listSectores(ciudad, isAdmin),
       api.listNecesidades(ciudad),
       api.listOfrecimientos(ciudad),
       api.listMascotas(ciudad),
       api.listCentros(ciudad),
+      api.listPuntosApoyo(ciudad),
       api.listNoticias(ciudad),
       api.listViviendas(ciudad),
       api.listDanos(ciudad, isAdmin),
@@ -134,6 +136,7 @@ async function refresh(ciudad: string): Promise<void> {
     ofrecimientos: ofrecimientos.map(mapItem),
     mascotas: mascotas.map(mapItem),
     centros: centros.map(mapItem),
+    puntosApoyo: puntosApoyo.map(mapItem),
     noticias: noticias.map(mapItem),
     viviendas: viviendas.map(mapItem),
     danos: danos.map(mapItem),
@@ -305,6 +308,15 @@ export function useStore() {
   const deleteCentro = (id: number): Promise<unknown> =>
     mutate(() => api.deleteCentro(id), ciudad)
 
+  const addPuntoApoyo = (p: Omit<PuntoApoyo, 'id'>): Promise<unknown> =>
+    mutate(async () => api.createPuntoApoyo({ ...p, imagen: await withImage(p.imagen) }), ciudad)
+
+  const updatePuntoApoyo = (id: number, b: Partial<PuntoApoyo>): Promise<unknown> =>
+    mutate(async () => api.updatePuntoApoyo(id, { ...b, imagen: await withImage(b.imagen) }), ciudad)
+
+  const deletePuntoApoyo = (id: number): Promise<unknown> =>
+    mutate(() => api.deletePuntoApoyo(id), ciudad)
+
   const addNoticia = (n: Omit<Noticia, 'id'>): Promise<unknown> =>
     mutate(async () => api.createNoticia({ ...n, imagen: await withImage(n.imagen) }), ciudad)
 
@@ -365,6 +377,7 @@ export function useStore() {
     addOfrecimiento, updateOfrecimiento, deleteOfrecimiento,
     addMascota, updateMascota, deleteMascota,
     addCentro, updateCentro, deleteCentro,
+    addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo,
     addNoticia, updateNoticia, deleteNoticia,
     addVivienda, updateVivienda, deleteVivienda,
     addDano, updateDano, deleteDano,

@@ -87,8 +87,8 @@ export default function AyudaPage({ setPage }: Props) {
           <Step n={3} text='Con el radicado puedes consultar el estado en "Consultar mi reporte". Tus datos de contacto son privados.' />
         </Block>
 
-        <Block icon="📦🩸" title="Centros de acopio y bancos de sangre">
-          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>Los centros de acopio aparecen en el mapa como puntos azules. Solo el administrador los publica — son verificados y oficiales. Activa el toggle "Mostrar centros" en la barra lateral del mapa.</p>
+        <Block icon="🏪" title="Puntos de apoyo">
+          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>Farmacias, bancos de sangre, ancianatos, albergues, fundaciones, centros de acopio, líderes de barrio, hospitales, ONGs y más. Cualquier persona puede agregar un punto de apoyo; aparece en el mapa como un marcador con su imagen. Activa el toggle "Puntos de apoyo" en los botones del mapa.</p>
         </Block>
 
         <Block icon="🛠️" title="Panel de administración">

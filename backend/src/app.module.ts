@@ -16,6 +16,7 @@ import { ExportModule } from './export/export.module';
 import { BotModule } from './bot/bot.module';
 import { VisitasModule } from './visitas/visitas.module';
 import { AuditoriaModule } from './audit/audit.module';
+import { PuntosApoyoModule } from './puntos-apoyo/puntos-apoyo.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AuditoriaModule } from './audit/audit.module';
     BotModule,
     VisitasModule,
     AuditoriaModule,
+    PuntosApoyoModule,
   ],
 })
 export class AppModule {}

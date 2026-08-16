@@ -41,6 +41,7 @@ type NecesidadBody = {
   responsable_nombre?: string;
   responsable_telefono?: string;
   fecha_compromiso?: string;
+  direccion_sector?: string;
   visitor_id?: string;
 };
 
@@ -145,6 +146,13 @@ class NecesidadesService {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
+    // La dirección vive en el sector asociado; el PIN de la necesidad permite editarla.
+    if (str(b.direccion_sector)) {
+      await this.db
+        .update(sectores)
+        .set({ nombre: str(b.direccion_sector) })
+        .where(eq(sectores.id, row.sectorId));
+    }
     const actualizado = await this.patch(id, b, false);
     await registrarAuditoria(this.db, {
       tabla: 'necesidades', registroId: id, accion: 'update',

@@ -10,12 +10,14 @@ interface Props {
 const NAV = [
   { id: 'mapa',          label: '🗺️ Mapa' },
   { id: 'reportes',      label: '📋 Reportes' },
+  { id: 'puntos',        label: '🏪 Puntos de apoyo' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
-  { id: 'mascotas',      label: '🐾 Mascotas' },
+  { id: 'mascotas',      label: '🐾 Mascotas perdidas' },
   { id: 'noticias',      label: '📰 Noticias' },
   { id: 'vivienda',      label: '🏠 Vivienda' },
   { id: 'danos',         label: '🏚️ Daños' },
   { id: 'dashboard',     label: '📊 Estadísticas' },
+  { id: 'contacto',      label: '📞 Contáctanos' },
   { id: 'ayuda',         label: '❓ Ayuda' },
 ]
 

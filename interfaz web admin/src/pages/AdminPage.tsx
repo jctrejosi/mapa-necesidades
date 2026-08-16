@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
+import ImageInput from '../components/ImageInput'
 import { restablecerPin, verPin, cityId, CITIES, listVisitas, listAuditoria } from '../api'
 import type { Necesidad, ReporteDano } from '../api/types'
 
@@ -56,6 +57,11 @@ const TAG: Record<string, string> = {
 }
 
 const StatusTag = ({ v }: { v: string }) => <span className={`tag ${TAG[v] ?? 'tag-gray'}`}>{v.replace(/_/g, ' ')}</span>
+
+const TIPOS_PUNTO_APOYO = [
+  'Farmacia / Dispensario', 'Banco de sangre', 'Veterinaria', 'Ancianato', 'Albergue',
+  'Fundación', 'Centro de acopio', 'Líder de barrio', 'Hospital', 'ONG', 'Otro',
+]
 
 function KpiCard({ icon, label, value, tone = 'blue' }: { icon: string; label: string; value: number; tone?: string }) {
   return (
@@ -147,10 +153,11 @@ export default function AdminPage({ store }: Props) {
   const [loginError, setLoginError] = useState(false)
 
   const {
-    ciudad, sectores, necesidades, ofrecimientos, mascotas, centros, noticias, viviendas, danos,
+    ciudad, sectores, necesidades, ofrecimientos, mascotas, centros, puntosApoyo, noticias, viviendas, danos,
     updateSector, deleteSector, updateNecesidad, deleteNecesidad,
     updateOfrecimiento, deleteOfrecimiento, deleteMascota, updateMascota,
     addCentro, updateCentro, deleteCentro,
+    addPuntoApoyo, updatePuntoApoyo, deletePuntoApoyo,
     addNoticia, updateNoticia, deleteNoticia,
     deleteVivienda, updateDano, deleteDano, loginAdmin, logoutAdmin
   } = store
@@ -174,11 +181,13 @@ export default function AdminPage({ store }: Props) {
   const [showPinModal, setShowPinModal] = useState<{ pin: string | null; id: number; type: string } | null>(null)
   const [pinLoading, setPinLoading] = useState(false)
   const [showCentroForm, setShowCentroForm] = useState<any>(null)
+  const [showPuntoForm, setShowPuntoForm] = useState<any>(null)
   const [showNoticiaForm, setShowNoticiaForm] = useState<any>(null)
   const [showDanoGestionar, setShowDanoGestionar] = useState<any>(null)
   const [showAddNeed, setShowAddNeed] = useState<number | null>(null)
   const [newNeedForm, setNewNeedForm] = useState({ tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const, descripcion: '', reportado_por: '', telefono_reporta: '' })
   const [centroForm, setCentroForm] = useState<{ nombre: string; organizacion: string; es_acopio: boolean; es_sangre: boolean; es_alojamiento: boolean; que_recibe: string; direccion: string; telefono: string; horario: string; lat: number; lng: number; estado: 'abierto' | 'cerrado'; imagen: string | null }>({ nombre: '', organizacion: '', es_acopio: true, es_sangre: false, es_alojamiento: false, que_recibe: '', direccion: '', telefono: '', horario: '', lat: 5.07, lng: -75.51, estado: 'abierto', imagen: null })
+  const [puntoForm, setPuntoForm] = useState<{ nombre: string; tipo: string; direccion: string; telefono: string; imagen: string | null; lat: number; lng: number }>({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
   const [noticiaForm, setNoticiaForm] = useState({ titulo: '', contenido: '', autor: '', ciudad_noticia: '' as string | null })
   const [danoForm, setDanoForm] = useState<{ estado: 'pendiente' | 'visita_programada' | 'visitado'; fecha_visita: string; resultado_visita: string; notas_admin: string }>({ estado: 'pendiente', fecha_visita: '', resultado_visita: '', notas_admin: '' })
 
@@ -400,6 +409,34 @@ export default function AdminPage({ store }: Props) {
     setShowCentroForm(null)
   }
 
+  /** Geocodifica la dirección del punto de apoyo (Nominatim/OSM). */
+  const geocodePunto = async () => {
+    const q = `${puntoForm.direccion}, ${ciudad}`.trim()
+    if (!q) { alert('Escribe primero la dirección'); return }
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      if (Array.isArray(data) && data.length) {
+        setPuntoForm(p => ({ ...p, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }))
+      } else {
+        alert('No se encontraron coordenadas para esa dirección. Ajusta la dirección o ingresa lat/lng manualmente.')
+      }
+    } catch {
+      alert('No se pudo consultar el geocodificador. Ingresa lat/lng manualmente.')
+    }
+  }
+
+  const submitPunto = async () => {
+    if (!puntoForm.nombre.trim()) { alert('El nombre es obligatorio'); return }
+    if (!puntoForm.direccion.trim()) { alert('La dirección es obligatoria'); return }
+    const r = showPuntoForm?.id
+      ? await updatePuntoApoyo(showPuntoForm.id, puntoForm)
+      : await addPuntoApoyo({ ...puntoForm, ciudad })
+    if (!r) return
+    setShowPuntoForm(null)
+    setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+  }
+
   const submitNoticia = async () => {
     if (!noticiaForm.titulo.trim()) { alert('El título es obligatorio'); return }
     const ciudadIdNoticia = noticiaForm.ciudad_noticia ? cityId(noticiaForm.ciudad_noticia) : null
@@ -452,6 +489,7 @@ export default function AdminPage({ store }: Props) {
     { id: 'mascotas', icon: '🐾', label: 'Mascotas' },
     { id: 'viviendas', icon: '🏠', label: 'Viviendas' },
     { id: 'centros', icon: '📦', label: 'Centros' },
+    { id: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
     { id: 'noticias', icon: '📰', label: 'Noticias' },
     { id: 'visitas', icon: '👥', label: 'Visitas' },
     { id: 'auditoria', icon: '🧾', label: 'Auditoría' },
@@ -780,6 +818,49 @@ export default function AdminPage({ store }: Props) {
       )
     }
 
+    if (section === 'puntos') {
+      const pts = puntosApoyo
+        .filter(p => p.ciudad === ciudad)
+        .filter(p => !q || `${p.nombre} ${p.tipo} ${p.direccion} ${p.telefono}`.toLowerCase().includes(q))
+      return (
+        <Section title="Puntos de apoyo" icon="🏪" count={pts.length} toolbar={
+          <div className="admin-toolbar">
+            <input className="form-input admin-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, tipo, dirección o teléfono…" />
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+              setShowPuntoForm({})
+            }}>+ Agregar punto de apoyo</button>
+          </div>
+        }>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><Th>Imagen</Th><Th>Nombre</Th><Th>Tipo</Th><Th>Dirección</Th><Th>Teléfono</Th><Th>Acciones</Th></tr></thead>
+            <tbody>
+              {pts.length === 0 && <Empty text="Sin puntos de apoyo. Agrega el primero." />}
+              {pts.map(p => (
+                <tr key={p.id} className="row-hover">
+                  <Td>
+                    {p.imagen
+                      ? <img src={p.imagen} alt={p.nombre} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 8 }} />
+                      : <span style={{ fontSize: 22 }}>🏪</span>}
+                  </Td>
+                  <Td><span style={{ fontWeight: 600 }}>{p.nombre}</span></Td>
+                  <Td><span className="tag tag-blue" style={{ fontSize: 11 }}>{p.tipo || 'Otro'}</span></Td>
+                  <Td style={{ fontSize: 12.5 }}>{p.direccion}</Td>
+                  <Td style={{ fontSize: 12.5 }}>{p.telefono || '—'}</Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="btn btn-xs btn-outline" onClick={() => { setPuntoForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, lat: p.lat, lng: p.lng }); setShowPuntoForm(p) }}>✎ Editar</button>
+                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar punto de apoyo?')) deletePuntoApoyo(p.id) }}>✕</button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )
+    }
+
     if (section === 'noticias') {
       return (
         <Section title="Noticias y comunicados" icon="📰" count={noticiasRows.length} toolbar={
@@ -1063,6 +1144,45 @@ export default function AdminPage({ store }: Props) {
               <input className="form-input" type="number" value={centroForm.lng} onChange={e => setCentroForm(p => ({ ...p, lng: parseFloat(e.target.value) }))} />
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Punto de apoyo form */}
+      {showPuntoForm !== null && (
+        <Modal title={showPuntoForm.id ? '✎ Editar punto de apoyo' : '+ Agregar punto de apoyo'} onClose={() => setShowPuntoForm(null)} onConfirm={submitPunto} confirmLabel="Guardar" wide>
+          <div className="form-group">
+            <label className="form-label">Nombre <span className="req">*</span></label>
+            <input className="form-input" value={puntoForm.nombre} onChange={e => setPuntoForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. Punto solidario La Linda" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Tipo <span className="req">*</span></label>
+            <select className="form-select" value={puntoForm.tipo} onChange={e => setPuntoForm(p => ({ ...p, tipo: e.target.value }))}>
+              {TIPOS_PUNTO_APOYO.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Dirección <span className="req">*</span></label>
+            <input className="form-input" value={puntoForm.direccion} onChange={e => setPuntoForm(p => ({ ...p, direccion: e.target.value }))} placeholder="Ej. Carrera 23 # 45-67, Barrio La Linda" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Teléfono</label>
+            <input className="form-input" type="tel" value={puntoForm.telefono} onChange={e => setPuntoForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Imagen (aparece en el marcador del mapa)</label>
+            <ImageInput value={puntoForm.imagen ?? undefined} onChange={v => setPuntoForm(p => ({ ...p, imagen: v ?? null }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+            <div className="form-group">
+              <label className="form-label">Latitud</label>
+              <input className="form-input" type="number" step="any" value={puntoForm.lat} onChange={e => setPuntoForm(p => ({ ...p, lat: parseFloat(e.target.value) }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Longitud</label>
+              <input className="form-input" type="number" step="any" value={puntoForm.lng} onChange={e => setPuntoForm(p => ({ ...p, lng: parseFloat(e.target.value) }))} />
+            </div>
+          </div>
+          <button type="button" className="btn btn-outline btn-sm" onClick={geocodePunto}>📍 Buscar coordenadas por la dirección</button>
         </Modal>
       )}
 

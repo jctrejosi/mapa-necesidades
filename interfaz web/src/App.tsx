@@ -9,6 +9,8 @@ import MascotasPage from './pages/MascotasPage'
 import NoticiasPage from './pages/NoticiasPage'
 import ViviendaPage from './pages/ViviendaPage'
 import DanosPage from './pages/DanosPage'
+import PuntosApoyoPage from './pages/PuntosApoyoPage'
+import ContactoPage from './pages/ContactoPage'
 import DashboardPage from './pages/DashboardPage'
 import AyudaPage from './pages/AyudaPage'
 
@@ -18,7 +20,7 @@ const MAP_PAGES = new Set(['mapa'])
 const BOTTOM_TABS = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrece' },
-  { id: 'mascotas',      icon: '🐾', label: 'Mascotas' },
+  { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
   { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: '__more__',      icon: '☰',  label: 'Más' },
 ]
@@ -26,12 +28,14 @@ const BOTTOM_TABS = [
 const ALL_NAV = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
   { id: 'reportes',      icon: '📋', label: 'Reportes' },
+  { id: 'puntos',        icon: '🏪', label: 'Puntos de apoyo' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
-  { id: 'mascotas',      icon: '🐾', label: 'Mascotas' },
+  { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
   { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'vivienda',      icon: '🏠', label: 'Vivienda' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
   { id: 'dashboard',     icon: '📊', label: 'Estadísticas' },
+  { id: 'contacto',      icon: '📞', label: 'Contáctanos' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
 ]
 
@@ -69,12 +73,14 @@ export default function App() {
         overflow: isMapPage ? 'hidden' : 'auto',
       }}>
         {page === 'mapa'          && <MapPage store={store} setPage={navigate} reportesSignal={reportesSignal} />}
+        {page === 'puntos'        && <PuntosApoyoPage store={store} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
         {page === 'noticias'      && <NoticiasPage store={store} />}
         {page === 'vivienda'      && <ViviendaPage store={store} />}
         {page === 'danos'         && <DanosPage store={store} />}
         {page === 'dashboard'     && <DashboardPage store={store} />}
+        {page === 'contacto'      && <ContactoPage />}
         {page === 'ayuda'         && <AyudaPage setPage={navigate} />}
       </main>
 
