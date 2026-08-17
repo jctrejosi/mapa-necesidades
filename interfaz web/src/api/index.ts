@@ -203,7 +203,7 @@ export interface ResultadoBusqueda {
   tipo: string; tabla: string; id: number
   titulo: string; detalle: string; telefono: string; ciudad: string
   lat: number | null; lng: number | null; imagen: string | null
-  coincidencia: 'pin' | 'telefono'
+  coincidencia: 'pin' | 'telefono' | 'texto'
 }
 
 export const buscarReportes = (q: string): Promise<ResultadoBusqueda[]> =>

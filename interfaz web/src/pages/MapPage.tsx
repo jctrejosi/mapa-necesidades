@@ -8,6 +8,7 @@ import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
 import ChatbotWidget from '../components/ChatbotWidget'
+import MiniMapPicker from '../components/MiniMapPicker'
 import { uploadImage, listVoluntarios, buscarReportes } from '../api'
 
 // Fix Leaflet default icon paths broken by bundlers
@@ -101,7 +102,7 @@ const ESTADOS_OPCIONES: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-interface Props { store: Store; setPage: (p: string) => void; reportesSignal?: number }
+interface Props { store: Store; setPage: (p: string) => void }
 
 /**
  * Geocodificación inversa: lat/lng → dirección legible (calle/carrera/número,
@@ -140,54 +141,6 @@ function getStatusColor(estado: string) {
   if (estado === 'en_proceso') return '#E08E00'
   if (estado === 'atendido') return '#2E9E5B'
   return '#9AA0AC'
-}
-
-/** Mini-mapa sin marcadores para colocar el punto del reporte manualmente. */
-function MiniMapPicker({ initial, onPick }: {
-  initial: [number, number]
-  onPick: (lat: number, lng: number) => void
-}) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInst = useRef<L.Map | null>(null)
-  const markerRef = useRef<L.Marker | null>(null)
-  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null)
-
-  useEffect(() => {
-    if (!mapRef.current || mapInst.current) return
-    const map = L.map(mapRef.current, { zoomControl: true }).setView(initial, 14)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map)
-    const place = (lat: number, lng: number) => {
-      if (markerRef.current) markerRef.current.setLatLng([lat, lng])
-      else {
-        const mk = L.marker([lat, lng], { draggable: true }).addTo(map)
-        mk.on('dragend', () => {
-          const p = mk.getLatLng()
-          setPoint({ lat: p.lat, lng: p.lng })
-          onPick(p.lat, p.lng)
-        })
-        markerRef.current = mk
-      }
-      setPoint({ lat, lng })
-      // Actualiza el formulario (coordenadas + dirección) en el mismo instante.
-      onPick(lat, lng)
-    }
-    map.on('click', (e: L.LeafletMouseEvent) => place(e.latlng.lat, e.latlng.lng))
-    mapInst.current = map
-    setTimeout(() => map.invalidateSize(), 120)
-    return () => { map.remove(); mapInst.current = null; markerRef.current = null }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  return (
-    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden', marginTop: 8 }}>
-      <div ref={mapRef} style={{ height: 210, width: '100%' }} />
-      <div style={{ padding: 10, background: '#f8f9fb', fontSize: 11.5, color: '#6b7280' }}>
-        {point ? `📍 ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}` : 'Haz clic en el mapa para colocar el marcador'}
-      </div>
-    </div>
-  )
 }
 
 /** Carousel simple para mostrar las imágenes del detalle de un reporte. */
@@ -232,7 +185,7 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 }
 
 
-export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
+export default function MapPage({ store, setPage }: Props) {
   const { ciudad, sectores, necesidades, puntosApoyo, eventos, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
     addSector, addNecesidad, addMascota, addDano, updateNecesidad, registrarVoluntario, getSectorEstado,
@@ -275,12 +228,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   // Mobile UX
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
   const [notifPanelOpen, setNotifPanelOpen] = useState(false)
+  const [notifModalOpen, setNotifModalOpen] = useState(false)
   const [reportesModalOpen, setReportesModalOpen] = useState(false)
   // Detalle del reporte seleccionado (se abre al hacer click en un ítem)
   const [detailItem, setDetailItem] = useState<any | null>(null)
   // Voluntarios registrados para el reporte del detalle abierto
   const [detailHelpers, setDetailHelpers] = useState<any[]>([])
-  // 🔍 Buscador de reportes por PIN o teléfono
+  // 🔍 Buscador de reportes por PIN, teléfono o descripción
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
@@ -342,15 +296,24 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const ciudadSectores = sectores.filter(s => matchesCiudad(s.ciudad) && s.estado === 'activo')
   const unreadCount = notificaciones.filter(n => !n.leida).length
 
-  // Los 5 reportes pendientes más recientes (necesidades sin responsable)
-  const pendingNeeds = necesidades
+  // Reportes pendientes de ser atendidos (necesidades sin responsable), más recientes primero.
+  const pendingTodos = necesidades
     .filter(n => n.estado === 'requiere' && !n.responsable && ciudadSectores.some(s => s.id === n.sector_id))
     .sort((a, b) => {
       const ta = new Date(a.fecha || '').getTime() || 0
       const tb = new Date(b.fecha || '').getTime() || 0
       return tb - ta || b.id - a.id
     })
-    .slice(0, 5)
+
+  const todayStr = new Date().toLocaleDateString('en-CA')
+  const isToday = (iso?: string | null) => !!iso && (iso.length <= 10 ? iso : iso.slice(0, 10)) === todayStr
+
+  // Los 5 más recientes para los paneles existentes.
+  const pendingNeeds = pendingTodos.slice(0, 5)
+
+  // Campana (desktop): 10 de hoy si hubo suficiente actividad, si no 5 recientes.
+  const pendingHoy = pendingTodos.filter(n => isToday(n.fecha))
+  const pendingNotif = pendingHoy.length >= 10 ? pendingHoy.slice(0, 10) : pendingTodos.slice(0, 5)
 
   // Actividad reciente derivada de los datos reales de la API. No filtra por
   // antigüedad: muestra los últimos reportes disponibles de todas las entidades.
@@ -459,19 +422,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       })
     })
 
-    // Solo los 10 registros más recientes en la actividad reciente
-    return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 10)
+    // Solo los 3 registros más recientes en la actividad reciente
+    return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 3)
   }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, eventos, sectores, ciudad])
-
-  // Abre el modal de reportes cuando el navbar pide "Reportes"
-  useEffect(() => {
-    if (reportesSignal > 0) {
-      setNotifPanelOpen(false)
-      setReportesModalOpen(true)
-    }
-  }, [reportesSignal])
-
-
 
   // Default map center by city
   const cityCenter: Record<string, [number, number]> = {
@@ -1137,6 +1090,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   /** Abre el detalle de un reporte y centra el mapa en su ubicación (si tiene). */
   const openDetail = (item: { titulo: string; detalle?: string; ubicacion?: string; telefono?: string; lat?: number; lng?: number; imagenes?: string[]; editable?: { tipo: string; id: number; sectorId?: number } }) => {
     setReportesModalOpen(false)
+    setNotifModalOpen(false)
     setDetailItem(item)
     if (item.lat != null && item.lng != null && mapInstance.current) {
       mapInstance.current.setView([item.lat, item.lng], 15)
@@ -1193,7 +1147,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     const payload: any = {
       titulo: `${icon} ${r.titulo}`,
       detalle: r.detalle || undefined,
-      ubicacion: r.coincidencia === 'pin' ? `Coincidencia por PIN · ${r.ciudad}` : `Coincidencia por teléfono · ${r.ciudad}`,
+      ubicacion: r.coincidencia === 'pin' ? `Coincidencia por PIN · ${r.ciudad}` : r.coincidencia === 'texto' ? `Coincidencia por descripción · ${r.ciudad}` : `Coincidencia por teléfono · ${r.ciudad}`,
       telefono: r.telefono || undefined,
       lat: r.lat ?? undefined, lng: r.lng ?? undefined,
       imagenes: r.imagen ? [r.imagen] : undefined,
@@ -1682,7 +1636,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             <div className="map-search" style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 500 }}>
               <input
                 className="form-input map-search-input"
-                placeholder="🔍 Buscar por PIN o teléfono…"
+                placeholder="🔍 Buscar por PIN, teléfono o descripción…"
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
                 onFocus={() => setSearchOpen(true)}
@@ -1727,11 +1681,12 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                         <span
                           style={{
                             flexShrink: 0, fontSize: 10.5, fontWeight: 800, borderRadius: 999,
-                            padding: '3px 8px', color: r.coincidencia === 'pin' ? '#003893' : '#166534',
-                            background: r.coincidencia === 'pin' ? '#e8eeff' : '#e6f5ec',
+                            padding: '3px 8px',
+                            color: r.coincidencia === 'pin' ? '#003893' : r.coincidencia === 'texto' ? '#7C3AED' : '#166534',
+                            background: r.coincidencia === 'pin' ? '#e8eeff' : r.coincidencia === 'texto' ? '#f3e8ff' : '#e6f5ec',
                           }}
                         >
-                          {r.coincidencia === 'pin' ? '🔑 PIN' : '📞 Teléfono'}
+                          {r.coincidencia === 'pin' ? '🔑 PIN' : r.coincidencia === 'texto' ? '💬 Descripción' : '📞 Teléfono'}
                         </span>
                       </button>
                     ))
@@ -1765,7 +1720,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 if (window.matchMedia('(max-width: 720px)').matches) {
                   setNotifPanelOpen(true)
                 } else {
-                  setOpenSection('actividad')
+                  setNotifModalOpen(true)
                 }
               }}
               title="Centro de notificaciones"
@@ -1903,6 +1858,22 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Campana (desktop): modal de reportes pendientes de atención ── */}
+      {notifModalOpen && (
+        <Modal title="🔔 Reportes pendientes" onClose={() => setNotifModalOpen(false)} hideCancel>
+          {pendingNotif.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>No hay reportes pendientes de atención en este momento.</p>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>
+                {pendingNotif.length} reporte(s) pendiente(s) de atención.
+              </p>
+              {pendingNotif.map(n => renderPendingItem(n))}
+            </>
+          )}
+        </Modal>
       )}
 
       {/* Detalle del reporte seleccionado */}

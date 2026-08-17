@@ -577,6 +577,37 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   background: #fff;
   flex-shrink: 0;
 }
+
+/* Acciones rápidas: las calling functions del bot como botones seleccionables */
+.bot-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+  background: #fff;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.bot-action {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1.5px solid #003893;
+  background: #f4f7ff;
+  color: #003893;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bot-action:hover:not(:disabled) { background: #e8eefc; }
+.bot-action:active:not(:disabled) { transform: scale(0.97); }
+.bot-action:disabled { opacity: 0.5; cursor: not-allowed; }
 .bot-input {
   flex: 1;
   border: 1px solid #d1d5db;

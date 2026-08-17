@@ -11,7 +11,7 @@ interface Props { store: Store }
 const MANIZALES_CENTER: [number, number] = [5.0703, -75.5138]
 
 export default function DanosPage({ store }: Props) {
-  const { ciudad, danos, addDano } = store
+  const { ciudad, danos, addDano, editarDano } = store
   const [filter, setFilter] = useState('todos')
   const [showReportar, setShowReportar] = useState(false)
   const [showConsultar, setShowConsultar] = useState(false)
@@ -23,6 +23,15 @@ export default function DanosPage({ store }: Props) {
     tipo_inmueble: 'Casa', direccion: '', habitado: 'si' as const,
     nivel_percibido: 'leve' as const, descripcion: '', nombre: '', telefono: '', cedula: '',
     imagen: null as string | null,
+  })
+
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editStep, setEditStep] = useState<'radicado' | 'form'>('radicado')
+  const [eForm, setEForm] = useState({
+    radicado: '', direccion: '', descripcion: '',
+    imagen: null as string | null, telefono: '',
+    habitado: 'si' as 'si' | 'no' | 'evacuado',
+    estado: 'pendiente' as 'pendiente' | 'visita_programada' | 'visitado',
   })
 
   const showDanos = ciudad === 'Colombia' || ciudad === 'Manizales'
@@ -64,6 +73,49 @@ export default function DanosPage({ store }: Props) {
     } catch (e) {
       alert(e instanceof Error ? e.message : 'No se encontró un reporte con ese número de radicado.')
     }
+  }
+
+  /** Abre la edición pidiendo primero el radicado, luego el formulario. */
+  const openEdit = (d: any) => {
+    setEForm({
+      radicado: '',
+      direccion: d.direccion ?? '',
+      descripcion: d.descripcion ?? '',
+      imagen: d.imagen ?? null,
+      telefono: d.telefono_reportante ?? '',
+      habitado: d.habitado ?? 'si',
+      estado: d.estado ?? 'pendiente',
+    })
+    setEditStep('radicado')
+    setEditTarget(d)
+  }
+
+  const submitEditRadicado = () => {
+    if (!eForm.radicado.trim()) { alert('Ingresa el número de radicado para editar.'); return }
+    setEditStep('form')
+  }
+
+  const submitEdit = async () => {
+    if (!editTarget) return
+    if (!eForm.direccion.trim()) { alert('La dirección es obligatoria'); return }
+    let imagen: string | undefined
+    if (eForm.imagen) {
+      imagen = eForm.imagen.startsWith('data:')
+        ? (await api.uploadImage(eForm.imagen)).path
+        : eForm.imagen
+    }
+    const r = await editarDano(editTarget.id, {
+      radicado: eForm.radicado.trim(),
+      direccion: eForm.direccion.trim(),
+      descripcion: eForm.descripcion,
+      imagen,
+      telefono_reportante: eForm.telefono.trim(),
+      habitado: eForm.habitado,
+      estado: eForm.estado,
+    })
+    if (!r) return
+    setEditTarget(null)
+    alert('✅ Reporte de daños actualizado.')
   }
 
   if (!showDanos) {
@@ -142,6 +194,18 @@ export default function DanosPage({ store }: Props) {
                 {d.resultado_visita && (
                   <p style={{ fontSize: 12, color: '#2E9E5B', margin: '4px 0 0' }}>✅ {d.resultado_visita}</p>
                 )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                  {d.telefono_reportante && (
+                    <a
+                      className="btn btn-outline btn-sm"
+                      style={{ textDecoration: 'none' }}
+                      href={`tel:${d.telefono_reportante.replace(/\D/g, '')}`}
+                    >
+                      📞 Llamar
+                    </a>
+                  )}
+                  <button className="btn btn-primary btn-sm" onClick={() => openEdit(d)}>✎ Editar</button>
+                </div>
               </div>
             </div>
           ))}
@@ -227,6 +291,71 @@ export default function DanosPage({ store }: Props) {
                 <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Aún sin resultado de visita.</p>
               )}
             </div>
+          )}
+        </Modal>
+      )}
+
+      {editTarget && (
+        <Modal
+          title={editStep === 'radicado' ? '✎ Editar reporte de daños' : `✎ Editar: ${editTarget.direccion}`}
+          onClose={() => setEditTarget(null)}
+          onConfirm={editStep === 'radicado' ? submitEditRadicado : submitEdit}
+          confirmLabel={editStep === 'radicado' ? 'Continuar' : 'Guardar cambios'}
+          wide
+        >
+          {editStep === 'radicado' ? (
+            <>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
+                Ingresa el número de radicado que se te dio al publicar para poder editar.
+              </p>
+              <div className="form-group">
+                <label className="form-label">Número de radicado <span className="req">*</span></label>
+                <input
+                  className="form-input"
+                  autoFocus
+                  value={eForm.radicado}
+                  onChange={e => setEForm(p => ({ ...p, radicado: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && eForm.radicado.trim() && submitEditRadicado()}
+                  placeholder="DA000000"
+                  style={{ fontFamily: 'monospace', fontSize: 16, letterSpacing: 2 }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label">Dirección <span className="req">*</span></label>
+                <input className="form-input" value={eForm.direccion} onChange={e => setEForm(p => ({ ...p, direccion: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descripción</label>
+                <textarea className="form-input" rows={3} value={eForm.descripcion} onChange={e => setEForm(p => ({ ...p, descripcion: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Teléfono de contacto</label>
+                <input className="form-input" type="tel" value={eForm.telefono} onChange={e => setEForm(p => ({ ...p, telefono: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">¿El inmueble está habitado?</label>
+                <select className="form-select" value={eForm.habitado} onChange={e => setEForm(p => ({ ...p, habitado: e.target.value as any }))}>
+                  <option value="si">Sí, está habitado</option>
+                  <option value="evacuado">Fue evacuado</option>
+                  <option value="no">No, estaba desocupado</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Estado</label>
+                <select className="form-select" value={eForm.estado} onChange={e => setEForm(p => ({ ...p, estado: e.target.value as any }))}>
+                  <option value="pendiente">🔴 Pendiente</option>
+                  <option value="visita_programada">🟠 Visita programada</option>
+                  <option value="visitado">✅ Visitado</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Foto</label>
+                <ImageInput value={eForm.imagen ?? undefined} onChange={v => setEForm(p => ({ ...p, imagen: v ?? null }))} />
+              </div>
+            </>
           )}
         </Modal>
       )}

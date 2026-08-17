@@ -22,6 +22,7 @@ export interface Necesidad {
 export interface Ofrecimiento {
   id: number; ciudad: string; tipo: string; descripcion: string
   imagen: string | null; cantidad: string; fecha: string
+  lat?: number | null; lng?: number | null
   nombre_ofrece: string; telefono_ofrece: string
   estado: 'disponible' | 'entregado'
   reservado_por: { nombre: string; telefono: string; fecha: string } | null

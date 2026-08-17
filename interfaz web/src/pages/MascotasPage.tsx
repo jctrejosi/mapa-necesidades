@@ -4,6 +4,8 @@ import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
+import MiniMapPicker from '../components/MiniMapPicker'
+import { reverseGeocode } from '../api/geo'
 
 interface Props { store: Store }
 
@@ -19,6 +21,7 @@ export default function MascotasPage({ store }: Props) {
   const [filter, setFilter] = useState('todos')
   const [search, setSearch] = useState('')
   const [showReportarModal, setShowReportarModal] = useState(false)
+  const [showMap, setShowMap] = useState(false)
   const [showAvistarModal, setShowAvistarModal] = useState<number | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null)
   const [pinResult, setPinResult] = useState<string | null>(null)
@@ -27,6 +30,8 @@ export default function MascotasPage({ store }: Props) {
     tipo_animal: 'Perro', nombre: '', senas: '', lugar_visto: '',
     fecha_visto: '', nombre_reporta: '', telefono_reporta: '',
     imagen: null as string | null,
+    lat: null as number | null,
+    lng: null as number | null,
   })
   const [aForm, setAForm] = useState({ nombre: '', telefono: '' })
   const [uForm, setUForm] = useState<{ nombre: string; senas: string; estado: 'perdido' | 'encontrado'; pin: string; imagen: string | null }>({
@@ -44,20 +49,23 @@ export default function MascotasPage({ store }: Props) {
     if (!mForm.nombre_reporta.trim()) { alert('Tu nombre es obligatorio'); return }
     if (!mForm.telefono_reporta.trim()) { alert('Tu teléfono es obligatorio'); return }
     if (!mForm.fecha_visto) { alert('La fecha es obligatoria'); return }
-    const [lat, lng] = CITY_CENTER[ciudad] || [4.8133, -75.6961]
+    const [baseLat, baseLng] = CITY_CENTER[ciudad] || [4.8133, -75.6961]
+    const lat = mForm.lat ?? baseLat + (Math.random() - 0.5) * 0.01
+    const lng = mForm.lng ?? baseLng + (Math.random() - 0.5) * 0.01
     const pin = await addMascota({
       ciudad, nombre: mForm.nombre, tipo_animal: mForm.tipo_animal,
       senas: mForm.senas, imagen: mForm.imagen,
-      lat: lat + (Math.random() - 0.5) * 0.01,
-      lng: lng + (Math.random() - 0.5) * 0.01,
+      lat,
+      lng,
       lugar_visto: mForm.lugar_visto, fecha_visto: mForm.fecha_visto,
       estado: 'perdido', nombre_reporta: mForm.nombre_reporta,
       telefono_reporta: mForm.telefono_reporta, avistado_por: null,
     })
     if (!pin) return
     setShowReportarModal(false)
+    setShowMap(false)
     setPinResult(pin)
-    setMForm({ tipo_animal: 'Perro', nombre: '', senas: '', lugar_visto: '', fecha_visto: '', nombre_reporta: '', telefono_reporta: '', imagen: null })
+    setMForm({ tipo_animal: 'Perro', nombre: '', senas: '', lugar_visto: '', fecha_visto: '', nombre_reporta: '', telefono_reporta: '', imagen: null, lat: null, lng: null })
   }
 
   const submitAvistar = async () => {
@@ -161,10 +169,31 @@ export default function MascotasPage({ store }: Props) {
       </div>
 
       {showReportarModal && (
-        <Modal title="🐾 Reportar mascota perdida" onClose={() => setShowReportarModal(false)} onConfirm={submitReportar} confirmLabel="Publicar">
+        <Modal title="🐾 Reportar mascota perdida" onClose={() => setShowReportarModal(false)} onConfirm={submitReportar} confirmLabel="Publicar"
+          footerExtra={
+            <button type="button" className={`btn btn-sm ${showMap ? 'btn-primary' : 'btn-outline'}`} onClick={() => setShowMap(v => !v)}>
+              {showMap ? '🗺️ Ocultar mapa' : '🗺️ Ubicación'}
+            </button>
+          }>
           <div className="alert-yellow" style={{ marginBottom: 12, fontSize: 12 }}>
             El marcador aparecerá en el mapa principal con la ubicación aproximada de {ciudad}.
           </div>
+          {showMap && (
+            <div className="form-group">
+              <label className="form-label">Ubicación exacta en el mapa</label>
+              <MiniMapPicker
+                initial={mForm.lat && mForm.lng ? [mForm.lat, mForm.lng] : (CITY_CENTER[ciudad] || [4.8133, -75.6961])}
+                onPick={(lat, lng) => {
+                  setMForm(p => ({ ...p, lat, lng }))
+                  if (!mForm.lugar_visto.trim()) {
+                    reverseGeocode(lat, lng).then(addr => {
+                      if (addr) setMForm(prev => (prev.lugar_visto.trim() ? prev : { ...prev, lugar_visto: addr }))
+                    })
+                  }
+                }}
+              />
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Tipo <span className="req">*</span></label>
             <select className="form-select" value={mForm.tipo_animal} onChange={e => setMForm(p => ({ ...p, tipo_animal: e.target.value }))}>

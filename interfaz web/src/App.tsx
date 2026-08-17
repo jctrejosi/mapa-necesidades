@@ -28,7 +28,6 @@ const BOTTOM_TABS = [
 
 const ALL_NAV = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
-  { id: 'reportes',      icon: '📋', label: 'Reportes' },
   { id: 'puntos',        icon: '🏪', label: 'Puntos de apoyo' },
   { id: 'eventos',       icon: '📅', label: 'Eventos' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
@@ -44,20 +43,11 @@ const ALL_NAV = [
 export default function App() {
   const [page, setPage] = useState('mapa')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [reportesSignal, setReportesSignal] = useState(0)
   const store = useStore()
   const isMapPage = MAP_PAGES.has(page)
 
   const navigate = (id: string) => {
     if (id === '__more__') { setDrawerOpen(true); return }
-    if (id === 'reportes') {
-      // Va al mapa y abre el modal de reportes
-      setPage('mapa')
-      setDrawerOpen(false)
-      window.scrollTo(0, 0)
-      setReportesSignal(s => s + 1)
-      return
-    }
     setPage(id)
     setDrawerOpen(false)
     window.scrollTo(0, 0)
@@ -74,7 +64,7 @@ export default function App() {
         minHeight: 0,
         overflow: isMapPage ? 'hidden' : 'auto',
       }}>
-        {page === 'mapa'          && <MapPage store={store} setPage={navigate} reportesSignal={reportesSignal} />}
+        {page === 'mapa'          && <MapPage store={store} setPage={navigate} />}
         {page === 'puntos'        && <PuntosApoyoPage store={store} />}
         {page === 'eventos'       && <EventosPage store={store} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}

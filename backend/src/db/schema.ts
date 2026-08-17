@@ -107,6 +107,8 @@ export const ofrecimientos = pgTable(
     reservadoPorNombre: varchar('reservado_por_nombre', { length: 150 }),
     reservadoPorTelefono: varchar('reservado_por_telefono', { length: 50 }),
     fechaReserva: date('fecha_reserva'),
+    lat: numeric('lat', { precision: 10, scale: 7 }),
+    lng: numeric('lng', { precision: 10, scale: 7 }),
     visitorId: varchar('visitor_id', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

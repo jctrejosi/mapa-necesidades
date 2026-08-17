@@ -65,6 +65,14 @@ const CITY_CENTER: Record<string, [number, number]> = {
   'Armenia': [4.5339, -75.6811],
 }
 
+/** Paleta de colores agradables para los marcadores; se elige uno al azar por defecto. */
+const MARKER_COLORS = [
+  '#003893', '#CE1126', '#E08E00', '#2E9E5B', '#7C3AED',
+  '#DB2777', '#0891B2', '#65A30D', '#EA580C', '#4338CA',
+  '#0D9488', '#BE123C',
+]
+const randomColor = () => MARKER_COLORS[Math.floor(Math.random() * MARKER_COLORS.length)]
+
 export default function PuntosApoyoPage({ store }: Props) {
   const { ciudad, puntosApoyo, addPuntoApoyo, updatePuntoApoyo, eliminarPuntoApoyo } = store
   const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
@@ -78,6 +86,8 @@ export default function PuntosApoyoPage({ store }: Props) {
   const geocodeTimer = useRef<number | null>(null)
 
   const [pinResult, setPinResult] = useState<string | null>(null)
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editPin, setEditPin] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [deletePin, setDeletePin] = useState('')
 
@@ -94,13 +104,24 @@ export default function PuntosApoyoPage({ store }: Props) {
   }
 
   const openAdd = () => {
-    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: '#003893', lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
+    setPForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: randomColor(), lat: defaultCenter[0], lng: defaultCenter[1], pin: '' })
     setShowForm({})
   }
 
-  const openEdit = (p: any) => {
-    setPForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || '#003893', lat: p.lat, lng: p.lng, pin: '' })
+  /** Abre el formulario de edición ya con el PIN ingresado en el paso previo. */
+  const openEdit = (p: any, pin: string) => {
+    setPForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || '#003893', lat: p.lat, lng: p.lng, pin })
     setShowForm(p)
+  }
+
+  /** Paso previo a la edición: pide el PIN antes de mostrar el formulario. */
+  const confirmEditPin = () => {
+    if (!editTarget) return
+    const pin = editPin.trim()
+    if (!pin) { alert('Ingresa el código de 4 dígitos que se te dio al publicar.'); return }
+    openEdit(editTarget, pin)
+    setEditTarget(null)
+    setEditPin('')
   }
 
   /** Geocodifica la dirección y mueve el marcador del mini-mapa. */
@@ -259,7 +280,7 @@ export default function PuntosApoyoPage({ store }: Props) {
                       📞 WhatsApp
                     </a>
                   )}
-                  <button className="btn btn-outline btn-sm" onClick={() => openEdit(p)}>✎ Editar</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => { setEditTarget(p); setEditPin('') }}>✎ Editar</button>
                   <button className="btn btn-red btn-sm" onClick={() => { setDeleteTarget(p); setDeletePin('') }}>🗑</button>
                 </div>
               </div>
@@ -294,7 +315,7 @@ export default function PuntosApoyoPage({ store }: Props) {
             <ImageInput value={pForm.imagen ?? undefined} onChange={v => setPForm(p => ({ ...p, imagen: v ?? null }))} />
           </div>
           <div className="form-group">
-            <label className="form-label">Color del marcador (por defecto azul)</label>
+            <label className="form-label">Color del marcador (se asigna al azar; puedes cambiarlo)</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input
                 type="color"
@@ -329,12 +350,28 @@ export default function PuntosApoyoPage({ store }: Props) {
               </div>
             </div>
           </div>
-          {showForm.id && (
-            <div className="form-group">
-              <label className="form-label">Código de edición (PIN o llave de admin) <span className="req">*</span></label>
-              <input className="form-input" value={pForm.pin} onChange={e => setPForm(p => ({ ...p, pin: e.target.value }))} maxLength={32} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
-            </div>
-          )}
+        </Modal>
+      )}
+
+      {/* Paso previo a la edición: pedir el PIN */}
+      {editTarget && (
+        <Modal title={`✎ Editar: ${editTarget.nombre}`} onClose={() => setEditTarget(null)} onConfirm={confirmEditPin} confirmLabel="Continuar">
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
+            Ingresa el código de 4 dígitos que se te dio al publicar para poder editar este punto.
+          </p>
+          <div className="form-group">
+            <label className="form-label">Código de edición <span className="req">*</span></label>
+            <input
+              className="form-input"
+              autoFocus
+              value={editPin}
+              onChange={e => setEditPin(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && editPin.trim() && confirmEditPin()}
+              maxLength={32}
+              placeholder="····"
+              style={{ letterSpacing: 8, fontSize: 20 }}
+            />
+          </div>
         </Modal>
       )}
 

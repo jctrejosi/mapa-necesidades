@@ -41,6 +41,19 @@ class BuscarService {
     };
     const pinCond = (field: unknown) => ilike(field as never, query);
 
+    /** Coincidencia de texto libre en descripciones, títulos y direcciones. */
+    const textCond = (...fields: unknown[]) => or(...fields.map((f) => ilike(f as never, like)));
+
+    /** Determina el tipo de coincidencia para mostrar la etiqueta en el buscador. */
+    const coincidenceOf = (pinVal: unknown, phoneVal: unknown): string => {
+      const p = str(pinVal);
+      if (p && p.toLowerCase() === query.toLowerCase()) return 'pin';
+      const ph = str(phoneVal);
+      const phd = ph.replace(/\D/g, '');
+      if ((digits.length >= 3 && phd && phd.includes(digits)) || (ph && ph.toLowerCase().includes(query.toLowerCase()))) return 'telefono';
+      return 'texto';
+    };
+
     const results: { [k: string]: unknown }[] = [];
     const push = (r: { [k: string]: unknown }) => {
       if (results.length < MAX_RESULTS) results.push(r);
@@ -51,7 +64,7 @@ class BuscarService {
       .select({ n: necesidades, s: sectores })
       .from(necesidades)
       .leftJoin(sectores, eq(necesidades.sectorId, sectores.id))
-      .where(or(phoneCond(necesidades.telefonoReporta), pinCond(necesidades.pin)))
+      .where(or(phoneCond(necesidades.telefonoReporta), pinCond(necesidades.pin), textCond(necesidades.descripcion, necesidades.tipo)))
       .limit(20);
     for (const { n, s } of needs) {
       push({
@@ -60,7 +73,7 @@ class BuscarService {
         telefono: n.telefonoReporta ?? '', ciudad: s?.ciudad ?? 'manizales',
         lat: s ? asNum(s.lat) : null, lng: s ? asNum(s.lng) : null,
         imagen: n.imagen ?? null,
-        coincidencia: n.pin && n.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(n.pin, n.telefonoReporta),
       });
     }
 
@@ -68,7 +81,7 @@ class BuscarService {
     const ofs = await this.db
       .select()
       .from(ofrecimientos)
-      .where(or(phoneCond(ofrecimientos.telefonoOfrece), pinCond(ofrecimientos.pin)))
+      .where(or(phoneCond(ofrecimientos.telefonoOfrece), pinCond(ofrecimientos.pin), textCond(ofrecimientos.descripcion, ofrecimientos.tipo)))
       .limit(20);
     for (const o of ofs) {
       push({
@@ -76,7 +89,7 @@ class BuscarService {
         titulo: o.tipo, detalle: o.descripcion ?? '',
         telefono: o.telefonoOfrece ?? '', ciudad: o.ciudad,
         lat: null, lng: null, imagen: o.imagen ?? null,
-        coincidencia: o.pin && o.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(o.pin, o.telefonoOfrece),
       });
     }
 
@@ -84,7 +97,7 @@ class BuscarService {
     const pets = await this.db
       .select()
       .from(mascotasPerdidas)
-      .where(or(phoneCond(mascotasPerdidas.telefonoReporta), pinCond(mascotasPerdidas.pin)))
+      .where(or(phoneCond(mascotasPerdidas.telefonoReporta), pinCond(mascotasPerdidas.pin), textCond(mascotasPerdidas.senas, mascotasPerdidas.tipoAnimal, mascotasPerdidas.nombreMascota, mascotasPerdidas.lugarVisto)))
       .limit(20);
     for (const m of pets) {
       push({
@@ -92,7 +105,7 @@ class BuscarService {
         titulo: m.nombreMascota || m.tipoAnimal, detalle: m.senas ?? '',
         telefono: m.telefonoReporta, ciudad: m.ciudad,
         lat: asNum(m.lat), lng: asNum(m.lng), imagen: m.imagen ?? null,
-        coincidencia: m.pin && m.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(m.pin, m.telefonoReporta),
       });
     }
 
@@ -100,7 +113,7 @@ class BuscarService {
     const vivs = await this.db
       .select()
       .from(viviendas)
-      .where(or(phoneCond(viviendas.telefonoOfrece), pinCond(viviendas.pin)))
+      .where(or(phoneCond(viviendas.telefonoOfrece), pinCond(viviendas.pin), textCond(viviendas.descripcion, viviendas.sectorReferencia)))
       .limit(20);
     for (const v of vivs) {
       push({
@@ -108,7 +121,7 @@ class BuscarService {
         titulo: v.sectorReferencia || 'Vivienda', detalle: v.descripcion ?? '',
         telefono: v.telefonoOfrece, ciudad: v.ciudad,
         lat: null, lng: null, imagen: v.imagen ?? null,
-        coincidencia: v.pin && v.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(v.pin, v.telefonoOfrece),
       });
     }
 
@@ -116,7 +129,7 @@ class BuscarService {
     const dan = await this.db
       .select()
       .from(reportesDanos)
-      .where(or(phoneCond(reportesDanos.telefonoReporta), ilike(reportesDanos.radicado, query)))
+      .where(or(phoneCond(reportesDanos.telefonoReporta), ilike(reportesDanos.radicado, query), textCond(reportesDanos.descripcion, reportesDanos.direccion, reportesDanos.tipoInmueble)))
       .limit(20);
     for (const d of dan) {
       push({
@@ -124,7 +137,7 @@ class BuscarService {
         titulo: `${d.tipoInmueble} — ${d.direccion}`, detalle: d.descripcion ?? '',
         telefono: d.telefonoReporta, ciudad: d.ciudad,
         lat: asNum(d.lat), lng: asNum(d.lng), imagen: d.imagen ?? null,
-        coincidencia: d.radicado.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(d.radicado, d.telefonoReporta),
       });
     }
 
@@ -132,7 +145,7 @@ class BuscarService {
     const pts = await this.db
       .select()
       .from(puntosApoyo)
-      .where(or(phoneCond(puntosApoyo.telefono), pinCond(puntosApoyo.pin)))
+      .where(or(phoneCond(puntosApoyo.telefono), pinCond(puntosApoyo.pin), textCond(puntosApoyo.nombre, puntosApoyo.tipo, puntosApoyo.direccion)))
       .limit(20);
     for (const p of pts) {
       push({
@@ -140,7 +153,7 @@ class BuscarService {
         titulo: p.nombre, detalle: p.tipo,
         telefono: p.telefono ?? '', ciudad: p.ciudad,
         lat: asNum(p.lat), lng: asNum(p.lng), imagen: p.imagen ?? null,
-        coincidencia: p.pin && p.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(p.pin, p.telefono),
       });
     }
 
@@ -149,7 +162,7 @@ class BuscarService {
       .select({ e: eventos, p: puntosApoyo })
       .from(eventos)
       .innerJoin(puntosApoyo, eq(eventos.puntoApoyoId, puntosApoyo.id))
-      .where(or(pinCond(eventos.pin), phoneCond(puntosApoyo.telefono)))
+      .where(or(pinCond(eventos.pin), phoneCond(puntosApoyo.telefono), textCond(eventos.titulo, eventos.descripcion, eventos.direccion)))
       .limit(20);
     for (const { e, p } of evs) {
       push({
@@ -157,7 +170,7 @@ class BuscarService {
         titulo: e.titulo, detalle: e.descripcion ?? '',
         telefono: p.telefono ?? '', ciudad: p.ciudad,
         lat: asNum(e.lat), lng: asNum(e.lng), imagen: p.imagen ?? null,
-        coincidencia: e.pin && e.pin.toLowerCase() === query.toLowerCase() ? 'pin' : 'telefono',
+        coincidencia: coincidenceOf(e.pin, p.telefono),
       });
     }
 

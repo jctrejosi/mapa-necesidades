@@ -21,7 +21,7 @@ import { ofrecimientos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
-import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, today } from '../common/util';
+import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, toNum, today } from '../common/util';
 import { notifyReporteWhatsapp } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
 
@@ -33,11 +33,19 @@ type OfrecimientoBody = {
   imagen?: string;
   cantidad?: string;
   fecha?: string;
+  lat?: unknown;
+  lng?: unknown;
   nombre_ofrece?: string;
   telefono_ofrece?: string;
   estado?: 'disponible' | 'entregado';
   reservado_por?: { nombre?: string; telefono?: string } | null;
   visitor_id?: string;
+};
+
+/** Convierte lat/lng a string para la columna numeric (null si no es válido). */
+const toNumStr = (v: unknown): string | null => {
+  const n = toNum(v);
+  return n === null ? null : String(n);
 };
 
 @Injectable()
@@ -53,6 +61,8 @@ class OfrecimientosService {
       imagen: o.imagen ?? '',
       cantidad: o.cantidad ?? '',
       fecha: asDate(o.fecha),
+      lat: o.lat ? Number(o.lat) : null,
+      lng: o.lng ? Number(o.lng) : null,
       nombre_ofrece: o.nombreOfrece,
       telefono_ofrece: o.telefonoOfrece ?? '',
       estado: o.estado,
@@ -92,6 +102,8 @@ class OfrecimientosService {
         imagen: str(b.imagen) || null,
         cantidad: str(b.cantidad) || null,
         fecha: toDate(b.fecha) ?? today(),
+        lat: toNumStr(b.lat),
+        lng: toNumStr(b.lng),
         nombreOfrece,
         telefonoOfrece: str(b.telefono_ofrece) || null,
         estado: b.estado === 'entregado' ? 'entregado' : 'disponible',
@@ -151,6 +163,8 @@ class OfrecimientosService {
     if (b.cantidad !== undefined) set.cantidad = str(b.cantidad) || null;
     if (b.fecha !== undefined) set.fecha = toDate(b.fecha) ?? today();
     if (b.estado !== undefined) set.estado = b.estado === 'entregado' ? 'entregado' : 'disponible';
+    if (b.lat !== undefined) set.lat = toNumStr(b.lat);
+    if (b.lng !== undefined) set.lng = toNumStr(b.lng);
     const [o] = await this.db.update(ofrecimientos).set(set).where(eq(ofrecimientos.id, id)).returning();
     return this.serialize(o);
   }

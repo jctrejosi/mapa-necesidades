@@ -9,7 +9,6 @@ interface Props {
 
 const NAV = [
   { id: 'mapa',          label: '🗺️ Mapa' },
-  { id: 'reportes',      label: '📋 Reportes' },
   { id: 'puntos',        label: '🏪 Puntos de apoyo' },
   { id: 'eventos',       label: '📅 Eventos' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
@@ -19,7 +18,7 @@ const NAV = [
   { id: 'danos',         label: '🏚️ Daños' },
   { id: 'dashboard',     label: '📊 Impacto' },
   { id: 'contacto',      label: '📞 Contáctanos' },
-  { id: 'ayuda',         label: '❓ Ayuda' },
+  { id: 'ayuda',         label: '❓ Cómo usar' },
 ]
 
 export default function Header({ currentPage, setPage, ciudad, setCiudad }: Props) {

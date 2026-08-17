@@ -4,6 +4,12 @@ import { request } from '../api/client'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
+/** Acciones rápidas = las calling functions del bot, como botones seleccionables. */
+const QUICK_ACTIONS: { label: string; message: string }[] = [
+  { label: '📝 Reportar una necesidad', message: 'Quiero reportar una necesidad' },
+  { label: '🤝 Buscar ayuda', message: 'Busco ayuda' },
+]
+
 function getSessionId(): string {
   return `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
@@ -120,6 +126,21 @@ export default function ChatbotWidget({ ciudad }: Props) {
                 </div>
               ))}
               {loading && <div className="bot-msg bot-msg-assistant">Escribiendo…</div>}
+            </div>
+
+            {/* Acciones rápidas: las calling functions del bot como botones seleccionables */}
+            <div className="bot-actions">
+              {QUICK_ACTIONS.map(a => (
+                <button
+                  key={a.message}
+                  type="button"
+                  className="bot-action"
+                  disabled={loading}
+                  onClick={() => send(a.message)}
+                >
+                  {a.label}
+                </button>
+              ))}
             </div>
 
             <form

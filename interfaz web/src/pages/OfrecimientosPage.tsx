@@ -5,8 +5,16 @@ import { CATEGORIAS_OFRECIMIENTO } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
+import MiniMapPicker from '../components/MiniMapPicker'
+import { reverseGeocode } from '../api/geo'
 
 interface Props { store: Store }
+
+const CITY_CENTER: Record<string, [number, number]> = {
+  'Manizales': [5.0703, -75.5138], 'Pereira': [4.8133, -75.6961],
+  'Cali': [3.4516, -76.5320], 'Quibdó': [5.6942, -76.6583],
+  'Norte del Valle': [3.9000, -76.0000], 'Armenia': [4.5339, -75.6811],
+}
 
 export default function OfrecimientosPage({ store }: Props) {
   const { ciudad, ofrecimientos, addOfrecimiento, updateOfrecimiento } = store
@@ -15,13 +23,17 @@ export default function OfrecimientosPage({ store }: Props) {
   const [estadoFilter, setEstadoFilter] = useState('todos')
   const [search, setSearch] = useState('')
   const [showPublicar, setShowPublicar] = useState(false)
+  const [showMap, setShowMap] = useState(false)
   const [showReservar, setShowReservar] = useState<number | null>(null)
   const [showUpdate, setShowUpdate] = useState<number | null>(null)
   const [pinResult, setPinResult] = useState<string | null>(null)
+  const [ubicacionTxt, setUbicacionTxt] = useState('')
 
   const [pForm, setPForm] = useState({
     tipo: 'Comida y agua', cantidad: '', descripcion: '', nombre: '', telefono: '',
-    imagen: null as string | null
+    imagen: null as string | null,
+    lat: null as number | null,
+    lng: null as number | null,
   })
   const [rForm, setRForm] = useState({ nombre: '', telefono: '' })
   const [uForm, setUForm] = useState<{ cantidad: string; descripcion: string; estado: 'disponible' | 'entregado'; pin: string; cancelReserva: boolean }>({ cantidad: '', descripcion: '', estado: 'disponible', pin: '', cancelReserva: false })
@@ -61,12 +73,15 @@ export default function OfrecimientosPage({ store }: Props) {
       ciudad, tipo: pForm.tipo, descripcion: pForm.descripcion,
       cantidad: pForm.cantidad, nombre_ofrece: pForm.nombre,
       telefono_ofrece: pForm.telefono, fecha: new Date().toISOString(),
-      imagen: pForm.imagen, estado: 'disponible', reservado_por: null
+      imagen: pForm.imagen, estado: 'disponible', reservado_por: null,
+      lat: pForm.lat ?? undefined, lng: pForm.lng ?? undefined,
     })
     if (!pin) return
     setShowPublicar(false)
+    setShowMap(false)
     setPinResult(pin)
-    setPForm({ tipo: 'Comida y agua', cantidad: '', descripcion: '', nombre: '', telefono: '', imagen: null })
+    setUbicacionTxt('')
+    setPForm({ tipo: 'Comida y agua', cantidad: '', descripcion: '', nombre: '', telefono: '', imagen: null, lat: null, lng: null })
   }
 
   const submitReservar = async () => {
@@ -191,7 +206,29 @@ export default function OfrecimientosPage({ store }: Props) {
       </div>
 
       {showPublicar && (
-        <Modal title="🤝 Publicar ofrecimiento" onClose={() => setShowPublicar(false)} onConfirm={submitPublicar} confirmLabel="Publicar">
+        <Modal title="🤝 Publicar ofrecimiento" onClose={() => setShowPublicar(false)} onConfirm={submitPublicar} confirmLabel="Publicar"
+          footerExtra={
+            <button type="button" className={`btn btn-sm ${showMap ? 'btn-primary' : 'btn-outline'}`} onClick={() => setShowMap(v => !v)}>
+              {showMap ? '🗺️ Ocultar mapa' : '🗺️ Ubicación'}
+            </button>
+          }>
+          {showMap && (
+            <div className="form-group">
+              <label className="form-label">Ubicación del ofrecimiento (opcional)</label>
+              <MiniMapPicker
+                initial={pForm.lat && pForm.lng ? [pForm.lat, pForm.lng] : (CITY_CENTER[ciudad] || [4.8133, -75.6961])}
+                onPick={(lat, lng) => {
+                  setPForm(p => ({ ...p, lat, lng }))
+                  reverseGeocode(lat, lng).then(addr => { if (addr) setUbicacionTxt(addr) })
+                }}
+              />
+              {pForm.lat && pForm.lng && (
+                <p style={{ fontSize: 11.5, color: '#6b7280', marginTop: 6 }}>
+                  📍 {ubicacionTxt || `${pForm.lat.toFixed(5)}, ${pForm.lng.toFixed(5)}`}
+                </p>
+              )}
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Tipo <span className="req">*</span></label>
             <select className="form-select" value={pForm.tipo} onChange={e => setPForm(p => ({ ...p, tipo: e.target.value }))}>

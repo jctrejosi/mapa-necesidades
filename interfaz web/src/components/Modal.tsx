@@ -9,9 +9,11 @@ interface Props {
   children: ReactNode
   wide?: boolean
   hideCancel?: boolean
+  /** Botón(es) extra junto al de confirmar (ej. desplegar el mapa de ubicación). */
+  footerExtra?: ReactNode
 }
 
-export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guardar', confirmClass = 'btn btn-primary', children, wide, hideCancel }: Props) {
+export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guardar', confirmClass = 'btn btn-primary', children, wide, hideCancel, footerExtra }: Props) {
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-box" style={{ maxWidth: wide ? 600 : 460 }}>
@@ -23,6 +25,7 @@ export default function Modal({ title, onClose, onConfirm, confirmLabel = 'Guard
         {onConfirm && (
           <div className="modal-footer">
             {!hideCancel && <button onClick={onClose} className="btn btn-outline">Cancelar</button>}
+            {footerExtra}
             <button onClick={onConfirm} className={confirmClass}>{confirmLabel}</button>
           </div>
         )}
