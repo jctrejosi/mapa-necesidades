@@ -196,7 +196,7 @@ class VoluntariosService {
     if (to && whatsappConfigured()) {
       whatsapp = true;
       const cuerpo = [
-        '🤝 todos ayudamos — ¡Alguien quiere ayudarte!',
+        '🤝 Estamos contigo — ¡Alguien quiere ayudarte!',
         `🙋 ${nombre} · 📞 ${telefono}`,
         'Coordina la ayuda por WhatsApp o llamada.',
       ].join('\n');

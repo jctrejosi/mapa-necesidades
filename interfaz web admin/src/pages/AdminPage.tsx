@@ -1222,7 +1222,7 @@ export default function AdminPage({ store }: Props) {
           <span style={{ fontSize: 18 }}>🛠️</span>
           <div>
             <strong>Administración</strong>
-            <span style={{ fontSize: 11, color: '#9AA0AC', display: 'block' }}>todos ayudamos</span>
+            <span style={{ fontSize: 11, color: '#9AA0AC', display: 'block' }}>Estamos contigo</span>
           </div>
         </div>
         <nav className="admin-nav">

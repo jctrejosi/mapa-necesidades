@@ -49,7 +49,7 @@ export default function App() {
           }}
         >
           <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 15, color: '#003893' }}>
-            🔐 todos ayudamos · Administración
+            🔐 Estamos contigo · Administración
           </span>
           <div style={{ flex: 1 }} />
           <a href="/" style={{ fontSize: 13, color: '#003893', fontWeight: 600, textDecoration: 'none' }}>
