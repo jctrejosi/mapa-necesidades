@@ -63,9 +63,14 @@ const TIPOS_PUNTO_APOYO = [
   'Fundación', 'Centro de acopio', 'Líder de barrio', 'Hospital', 'ONG', 'Otro',
 ]
 
-const TIPOS_NECESIDAD = [
-  'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
-  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otro',
+const TIPOS_NECESIDAD_GRUPOS: { group: string; items: string[] }[] = [
+  { group: '🍞 Alimentación', items: ['Comida y agua'] },
+  { group: '🩺 Salud y bienestar', items: ['Servicios médicos', 'Atención psicosocial'] },
+  { group: '🏠 Hogar y reconstrucción', items: ['Refugio y abrigo', 'Maquinaria y rescate'] },
+  { group: '🚗 Movilidad', items: ['Transporte'] },
+  { group: '🤝 Apoyo comunitario', items: ['Voluntariado'] },
+  { group: '🐾 Mascotas', items: ['Mascotas'] },
+  { group: 'Otros', items: ['Otro'] },
 ]
 
 const CATEGORIAS_OFRECIMIENTO = [
@@ -187,17 +192,28 @@ const Empty = ({ text }: { text: string }) => (
 )
 
 /** Select inline para cambiar el tipo de un reporte desde la tabla (con confirmación). */
-const TipoSelect = ({ value, options, onPick }: { value: string; options: string[]; onPick: (v: string) => void }) => (
-  <select
-    className="form-select"
-    value={value}
-    onChange={e => { if (window.confirm(`¿Cambiar el tipo a "${e.target.value}"?`)) onPick(e.target.value) }}
-    style={{ padding: '3px 6px', fontSize: 12, fontWeight: 700, width: 'auto', maxWidth: 190, display: 'inline-block' }}
-  >
-    {!options.includes(value) && <option value={value}>{value}</option>}
-    {options.map(t => <option key={t} value={t}>{t}</option>)}
-  </select>
-)
+const TipoSelect = ({ value, options, groups, onPick }: { value: string; options?: string[]; groups?: { group: string; items: string[] }[]; onPick: (v: string) => void }) => {
+  const flat = groups ? groups.flatMap(g => g.items) : (options ?? [])
+  return (
+    <select
+      className="form-select"
+      value={value}
+      onChange={e => { if (window.confirm(`¿Cambiar el tipo a "${e.target.value}"?`)) onPick(e.target.value) }}
+      style={{ padding: '3px 6px', fontSize: 12, fontWeight: 700, width: 'auto', maxWidth: 190, display: 'inline-block' }}
+    >
+      {!flat.includes(value) && <option value={value}>{value}</option>}
+      {groups ? (
+        groups.map(g => (
+          <optgroup key={g.group} label={g.group}>
+            {g.items.map(t => <option key={t} value={t}>{t}</option>)}
+          </optgroup>
+        ))
+      ) : (
+        options?.map(t => <option key={t} value={t}>{t}</option>)
+      )}
+    </select>
+  )
+}
 
 // ── Página ───────────────────────────────────────────────────────────────────
 
@@ -640,7 +656,7 @@ export default function AdminPage({ store }: Props) {
                 <tr key={n.id} className="row-hover">
                   <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtFecha(n.fecha)}</Td>
                   <Td>
-                    <TipoSelect value={n.tipo} options={TIPOS_NECESIDAD} onPick={v => updateNecesidad(n.id, { tipo: v })} />
+                    <TipoSelect value={n.tipo} groups={TIPOS_NECESIDAD_GRUPOS} onPick={v => updateNecesidad(n.id, { tipo: v })} />
                     {n.cantidad && <><br /><span style={{ color: '#6b7280', fontSize: 12 }}>{n.cantidad}</span></>}
                     <br /><span style={{ fontSize: 12, color: '#6b7280' }}>{n.descripcion?.slice(0, 90)}</span>
                   </Td>

@@ -2,10 +2,25 @@
 
 export const CITIES = ['Colombia', 'Manizales', 'Pereira', 'Cali', 'Quibdó', 'Norte del Valle', 'Armenia']
 
-export const TIPOS_NECESIDAD = [
-  'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
-  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otro'
+/** Tipos de necesidad organizados por familia para los dropdowns (con ícono). */
+export const TIPOS_NECESIDAD_GRUPOS: { group: string; items: { value: string; icon: string }[] }[] = [
+  { group: '🍞 Alimentación', items: [{ value: 'Comida y agua', icon: '🍞' }] },
+  { group: '🩺 Salud y bienestar', items: [
+    { value: 'Servicios médicos', icon: '🏥' },
+    { value: 'Atención psicosocial', icon: '🧠' },
+  ] },
+  { group: '🏠 Hogar y reconstrucción', items: [
+    { value: 'Refugio y abrigo', icon: '🛏️' },
+    { value: 'Maquinaria y rescate', icon: '🚜' },
+  ] },
+  { group: '🚗 Movilidad', items: [{ value: 'Transporte', icon: '🚗' }] },
+  { group: '🤝 Apoyo comunitario', items: [{ value: 'Voluntariado', icon: '🤝' }] },
+  { group: '🐾 Mascotas', items: [{ value: 'Mascotas', icon: '🐾' }] },
+  { group: 'Otros', items: [{ value: 'Otro', icon: '🏪' }] },
 ]
+
+/** Lista plana (mismo orden) para usos que no necesitan agrupar. */
+export const TIPOS_NECESIDAD: string[] = TIPOS_NECESIDAD_GRUPOS.flatMap(g => g.items.map(i => i.value))
 
 export const CATEGORIAS_OFRECIMIENTO = [
   'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas', 'Transporte',
@@ -98,20 +113,8 @@ export function needLabel(tipo: string): string {
  * sus propias entidades; el resto se guarda como necesidad (tipo libre).
  */
 export const TIPOS_AYUDA: { group: string; items: { value: string; icon: string }[] }[] = [
-  {
-    group: 'Necesidades',
-    items: [
-      { value: 'Comida y agua', icon: '🍞' },
-      { value: 'Servicios médicos', icon: '🏥' },
-      { value: 'Atención psicosocial', icon: '🧠' },
-      { value: 'Mascotas', icon: '🐾' },
-      { value: 'Transporte', icon: '🚗' },
-      { value: 'Voluntariado', icon: '🤝' },
-      { value: 'Refugio y abrigo', icon: '🛏️' },
-      { value: 'Maquinaria y rescate', icon: '🚜' },
-      { value: 'Otro', icon: '🏪' },
-    ],
-  },
+  // Necesidades divididas por familia
+  ...TIPOS_NECESIDAD_GRUPOS,
   {
     group: 'Puntos de apoyo',
     items: [

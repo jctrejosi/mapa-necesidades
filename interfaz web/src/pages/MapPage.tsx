@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store, Necesidad } from '../store'
-import { TIPOS_NECESIDAD, ICONO_PUNTO_APOYO, TIPOS_AYUDA, NEED_LAYERS, needKey, needIcon } from '../data/mock'
+import { TIPOS_NECESIDAD, TIPOS_NECESIDAD_GRUPOS, ICONO_PUNTO_APOYO, TIPOS_AYUDA, NEED_LAYERS, needKey, needIcon } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
@@ -2124,7 +2124,11 @@ export default function MapPage({ store, setPage }: Props) {
           <div className="form-group">
             <label className="form-label">Tipo de necesidad <span className="req">*</span></label>
             <select className="form-select" value={nForm.tipo} onChange={e => setNForm(p => ({ ...p, tipo: e.target.value }))}>
-              {TIPOS_NECESIDAD.map(t => <option key={t} value={t}>{t}</option>)}
+              {TIPOS_NECESIDAD_GRUPOS.map(g => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.items.map(t => <option key={t.value} value={t.value}>{t.icon} {t.value}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <div className="form-group">
