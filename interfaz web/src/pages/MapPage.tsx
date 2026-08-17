@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store, Necesidad } from '../store'
-import { TIPOS_NECESIDAD, TIPOS_NECESIDAD_GRUPOS, ICONO_PUNTO_APOYO, TIPOS_AYUDA, NEED_LAYERS, needKey, needIcon } from '../data/mock'
+import { TIPOS_NECESIDAD, TIPOS_NECESIDAD_GRUPOS, ICONO_PUNTO_APOYO, TIPOS_AYUDA, NEED_LAYERS, needKey, needIcon, needLabel } from '../data/mock'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
@@ -1320,33 +1320,50 @@ export default function MapPage({ store, setPage }: Props) {
             { id: 'todos', label: 'Todas' },
           ]} />
           {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro.</p>}
-          {nsFiltered.map(n => {
-            const sector = sectores.find(s => s.id === n.sector_id)
-            const urgente = n.estado === 'requiere' && !n.responsable
-            return (
-              <div key={n.id} onClick={() => openDetail({
-                titulo: `${needIcon(n.tipo)} ${n.tipo}`,
-                detalle: n.descripcion || undefined,
-                ubicacion: sector?.nombre,
-                telefono: n.telefono_reporta,
-                lat: sector?.lat, lng: sector?.lng,
-                imagenes: n.imagen ? [n.imagen] : undefined,
-                editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
-              })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
-                  <span className={urgente ? 'tag tag-red' : n.estado === 'atendida' ? 'tag tag-green' : 'tag tag-orange'} style={{ fontSize: 10, flexShrink: 0 }}>
-                    {urgente ? '🔴 Urgente' : n.estado === 'atendida' ? '✅ Atendida' : '🟠 En proceso'}
-                  </span>
-                </div>
-                <p style={{ margin: '2px 0', fontSize: 11.5, color: '#6b7280' }}>📍 {sector?.nombre ?? 'Sector'}</p>
-                {urgente && (
-                  <button onClick={(e) => { e.stopPropagation(); setHelpTarget({ tabla: 'necesidades', id: n.id, titulo: n.tipo }) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
-                )}
-                {n.responsable && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>}
+          {(() => {
+            // Agrupa por tipo (canónico) para mostrar cada familia junta, separada por una línea gris
+            const grupos = new Map<string, typeof nsFiltered>()
+            for (const n of nsFiltered) {
+              const k = needLabel(n.tipo)
+              const arr = grupos.get(k)
+              if (arr) arr.push(n)
+              else grupos.set(k, [n])
+            }
+            return Array.from(grupos.entries()).map(([tipo, items], idx) => (
+              <div key={tipo} style={{ borderTop: idx === 0 ? 'none' : '1px solid #d1d5db', marginTop: idx === 0 ? 0 : 10, paddingTop: idx === 0 ? 0 : 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px', margin: '0 0 4px' }}>
+                  {needIcon(items[0]?.tipo)} {tipo} ({items.length})
+                </p>
+                {items.map(n => {
+                  const sector = sectores.find(s => s.id === n.sector_id)
+                  const urgente = n.estado === 'requiere' && !n.responsable
+                  return (
+                    <div key={n.id} onClick={() => openDetail({
+                      titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+                      detalle: n.descripcion || undefined,
+                      ubicacion: sector?.nombre,
+                      telefono: n.telefono_reporta,
+                      lat: sector?.lat, lng: sector?.lng,
+                      imagenes: n.imagen ? [n.imagen] : undefined,
+                      editable: { tipo: 'necesidad', id: n.id, sectorId: n.sector_id },
+                    })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{needIcon(n.tipo)} {n.tipo}{n.cantidad ? ` — ${n.cantidad}` : ''}</span>
+                        <span className={urgente ? 'tag tag-red' : n.estado === 'atendida' ? 'tag tag-green' : 'tag tag-orange'} style={{ fontSize: 10, flexShrink: 0 }}>
+                          {urgente ? '🔴 Urgente' : n.estado === 'atendida' ? '✅ Atendida' : '🟠 En proceso'}
+                        </span>
+                      </div>
+                      <p style={{ margin: '2px 0', fontSize: 11.5, color: '#6b7280' }}>📍 {sector?.nombre ?? 'Sector'}</p>
+                      {urgente && (
+                        <button onClick={(e) => { e.stopPropagation(); setHelpTarget({ tabla: 'necesidades', id: n.id, titulo: n.tipo }) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
+                      )}
+                      {n.responsable && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            ))
+          })()}
         </ReportSection>
 
         {/* 🤝 Ofrecimientos */}

@@ -55,6 +55,56 @@ function MiniMap({ lat, lng, onChange }: { lat: number; lng: number; onChange: (
   return <div ref={mapRef} style={{ height: 230, width: '100%', borderRadius: 10, border: '1.5px solid #e1e4e9', marginTop: 4 }} />
 }
 
+/** Mapa con los marcadores de todos los puntos de apoyo (imagen, color e info al tocar). */
+function MapaPuntos({ puntos }: { puntos: any[] }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInst = useRef<L.Map | null>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || mapInst.current) return
+    const p0 = puntos[0]
+    const map = L.map(mapRef.current, { zoomControl: true })
+      .setView(p0 ? [Number(p0.lat), Number(p0.lng)] : [5.0703, -75.5138], p0 ? 13 : 12)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map)
+
+    const bounds: [number, number][] = []
+    puntos.forEach(p => {
+      const lat = Number(p.lat)
+      const lng = Number(p.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      const img = p.imagen
+      const emoji = ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);background:${p.color || '#003893'} url('${img}') center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:16px">${img ? '' : emoji}</div>`,
+        iconSize: [38, 38], iconAnchor: [19, 19],
+      })
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup(`
+        <div style="min-width:200px;max-width:260px">
+          <h4 style="margin:0 0 4px;font-size:14px;font-weight:700">${emoji} ${p.nombre}</h4>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">${p.tipo}</p>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${p.direccion}</p>
+          ${p.telefono ? `<p style="font-size:12px;margin:0">📞 ${p.telefono}</p>` : ''}
+        </div>
+      `, { maxWidth: 280 })
+      bounds.push([lat, lng])
+    })
+    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] })
+    mapInst.current = map
+    setTimeout(() => map.invalidateSize(), 120)
+    return () => { map.remove(); mapInst.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden' }}>
+      <div ref={mapRef} style={{ height: 420, width: '100%' }} />
+    </div>
+  )
+}
+
 const CITY_CENTER: Record<string, [number, number]> = {
   'Colombia': [4.2, -74.0],
   'Manizales': [5.0703, -75.5138],
@@ -86,6 +136,7 @@ export default function PuntosApoyoPage({ store }: Props) {
   const geocodeTimer = useRef<number | null>(null)
 
   const [pinResult, setPinResult] = useState<string | null>(null)
+  const [showMapa, setShowMapa] = useState(false)
   const [editTarget, setEditTarget] = useState<any | null>(null)
   const [editPin, setEditPin] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
@@ -209,7 +260,10 @@ export default function PuntosApoyoPage({ store }: Props) {
               Lugares de la red solidaria donde puedes recibir o entregar ayuda en {ciudad}
             </p>
           </div>
-          <button className="btn btn-primary" onClick={openAdd}>+ Agregar punto de apoyo</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" onClick={() => setShowMapa(true)}>🗺️ Ver mapa</button>
+            <button className="btn btn-primary" onClick={openAdd}>+ Agregar punto de apoyo</button>
+          </div>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -385,6 +439,22 @@ export default function PuntosApoyoPage({ store }: Props) {
             <label className="form-label">Código de edición <span className="req">*</span></label>
             <input className="form-input" value={deletePin} onChange={e => setDeletePin(e.target.value)} maxLength={32} placeholder="····" style={{ letterSpacing: 8, fontSize: 20 }} />
           </div>
+        </Modal>
+      )}
+
+      {/* Mapa con los marcadores de los puntos de apoyo */}
+      {showMapa && (
+        <Modal title={`🗺️ Puntos de apoyo — ${ciudad}`} onClose={() => setShowMapa(false)} hideCancel wide>
+          {items.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>No hay puntos de apoyo para mostrar con el filtro actual.</p>
+          ) : (
+            <>
+              <MapaPuntos puntos={items} />
+              <p style={{ fontSize: 11.5, color: '#9AA0AC', margin: '8px 0 0' }}>
+                Toca un marcador para ver los datos del punto de apoyo.
+              </p>
+            </>
+          )}
         </Modal>
       )}
 

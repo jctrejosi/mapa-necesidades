@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { Store } from '../store'
-import { TIPOS_NECESIDAD, needLabel } from '../data/mock'
+import { TIPOS_NECESIDAD, needLabel, needIcon } from '../data/mock'
+import Modal from '../components/Modal'
 
 interface Props { store: Store }
 
@@ -9,6 +10,7 @@ export default function DashboardPage({ store }: Props) {
   const { ciudad, sectores, necesidades, ofrecimientos } = store
   const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [tick, setTick] = useState(0)
+  const [listModal, setListModal] = useState<{ title: string; items: { titulo: string; subtitulo?: string }[] } | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setTick(x => x + 1), 30000)
@@ -32,13 +34,45 @@ export default function DashboardPage({ store }: Props) {
   ].filter(d => d.value > 0)
 
   const stats = [
-    { icon: '📍', label: 'Sectores activos', value: ciudadSectores.length, color: '#003893' },
-    { icon: '📋', label: 'Necesidades reportadas', value: total, color: '#1f2430' },
-    { icon: '🟥', label: 'Sin asignar', value: sinAsignar, color: '#CE1126' },
-    { icon: '🟧', label: 'En proceso', value: enProceso, color: '#E08E00' },
-    { icon: '✅', label: 'Atendidas', value: atendidas, color: '#2E9E5B' },
-    { icon: '🤝', label: 'Ofrecimientos disponibles', value: ciudadOfrecimientos.length, color: '#003893' },
+    { key: 'sectores', icon: '📍', label: 'Sectores activos', value: ciudadSectores.length, color: '#003893' },
+    { key: 'necesidades', icon: '📋', label: 'Necesidades reportadas', value: total, color: '#1f2430' },
+    { key: 'sin_asignar', icon: '🟥', label: 'Sin asignar', value: sinAsignar, color: '#CE1126' },
+    { key: 'en_proceso', icon: '🟧', label: 'En proceso', value: enProceso, color: '#E08E00' },
+    { key: 'atendidas', icon: '✅', label: 'Atendidas', value: atendidas, color: '#2E9E5B' },
+    { key: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos disponibles', value: ciudadOfrecimientos.length, color: '#003893' },
   ]
+
+  const sectorNombre = (id: number) => sectores.find(s => s.id === id)?.nombre ?? 'Sector'
+  const needItem = (n: any) => ({
+    titulo: `${needIcon(n.tipo)} ${n.tipo}`,
+    subtitulo: `${(n.descripcion || 'Sin descripción').slice(0, 90)} · ${sectorNombre(n.sector_id)}`,
+  })
+
+  /** Abre el modal con el listado de reportes de la tarjeta tocada. */
+  const openStat = (key: string) => {
+    let title = ''
+    let items: { titulo: string; subtitulo?: string }[] = []
+    if (key === 'sectores') {
+      title = '📍 Sectores activos'
+      items = ciudadSectores.map(s => ({ titulo: s.nombre, subtitulo: s.nivel_afectacion ? `Nivel de afectación: ${s.nivel_afectacion}` : undefined }))
+    } else if (key === 'necesidades') {
+      title = '📋 Necesidades reportadas'
+      items = ciudadNecesidades.map(needItem)
+    } else if (key === 'sin_asignar') {
+      title = '🟥 Sin asignar'
+      items = ciudadNecesidades.filter(n => n.estado === 'requiere' && !n.responsable).map(needItem)
+    } else if (key === 'en_proceso') {
+      title = '🟧 En proceso'
+      items = ciudadNecesidades.filter(n => n.estado === 'requiere' && n.responsable).map(needItem)
+    } else if (key === 'atendidas') {
+      title = '✅ Atendidas'
+      items = ciudadNecesidades.filter(n => n.estado === 'atendida').map(needItem)
+    } else if (key === 'ofrecimientos') {
+      title = '🤝 Ofrecimientos disponibles'
+      items = ciudadOfrecimientos.map(o => ({ titulo: o.tipo, subtitulo: `${o.nombre_ofrece}${o.telefono_ofrece ? ` · ${o.telefono_ofrece}` : ''}` }))
+    }
+    setListModal({ title, items })
+  }
 
   // By type (agrupa tipos legacy y nuevos en las categorías canónicas)
   const byType = TIPOS_NECESIDAD.map(tipo => {
@@ -55,12 +89,25 @@ export default function DashboardPage({ store }: Props) {
   const bySector = ciudadSectores.map(s => {
     const ns = ciudadNecesidades.filter(n => n.sector_id === s.id)
     return {
-      nombre: s.nombre, total: ns.length,
+      id: s.id, nombre: s.nombre, total: ns.length,
       sinAsignar: ns.filter(n => n.estado === 'requiere' && !n.responsable).length,
       enProceso: ns.filter(n => n.estado === 'requiere' && n.responsable).length,
       atendidas: ns.filter(n => n.estado === 'atendida').length,
     }
   }).filter(s => s.total > 0).sort((a, b) => b.sinAsignar - a.sinAsignar)
+
+  /** Abre el modal con las necesidades de un tipo específico. */
+  const openTipo = (tipo: string) => {
+    const ns = ciudadNecesidades.filter(n => needLabel(n.tipo) === tipo)
+    setListModal({ title: `Necesidades — ${tipo}`, items: ns.map(needItem) })
+  }
+
+  /** Abre el modal con las necesidades de un sector específico. */
+  const openSector = (sectorId: number) => {
+    const s = sectores.find(x => x.id === sectorId)
+    const ns = ciudadNecesidades.filter(n => n.sector_id === sectorId)
+    setListModal({ title: `Sector: ${s?.nombre ?? 'Sector'}`, items: ns.map(needItem) })
+  }
 
   return (
     <div style={{ background: '#f4f5f7', minHeight: '100%' }}>
@@ -82,7 +129,7 @@ export default function DashboardPage({ store }: Props) {
             {/* Stats cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 28 }}>
               {stats.map(s => (
-                <div key={s.label} className="stat-card">
+                <div key={s.label} className="stat-card" onClick={() => openStat(s.key)} title={`Ver ${s.label}`} style={{ cursor: 'pointer' }}>
                   <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
                   <div style={{ fontSize: 34, fontWeight: 800, color: s.color, fontFamily: "'Work Sans', sans-serif", lineHeight: 1 }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 700, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
@@ -128,10 +175,10 @@ export default function DashboardPage({ store }: Props) {
             {/* By type */}
             {byType.length > 0 && (
               <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Avance por tipo de necesidad — lo más pendiente primero</h2>
+                <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Avance por tipo de necesidad</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {byType.map(t => (
-                    <div key={t.tipo}>
+                    <div key={t.tipo} onClick={() => openTipo(t.tipo)} title={`Ver reportes de ${t.tipo}`} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{t.tipo}</span>
                         {t.sinAsignar > 0 && <span className="tag tag-red">{t.sinAsignar} sin asignar</span>}
@@ -154,7 +201,7 @@ export default function DashboardPage({ store }: Props) {
                 <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Avance por sector — lo más urgente primero</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {bySector.map(s => (
-                    <div key={s.nombre}>
+                    <div key={s.id} onClick={() => openSector(s.id)} title={`Ver reportes de ${s.nombre}`} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{s.nombre}</span>
                         {s.sinAsignar > 0 && <span className="tag tag-red">{s.sinAsignar} sin asignar</span>}
@@ -171,6 +218,24 @@ export default function DashboardPage({ store }: Props) {
               </div>
             )}
           </>
+        )}
+
+        {/* Modal con el listado de la tarjeta seleccionada */}
+        {listModal && (
+          <Modal title={listModal.title} onClose={() => setListModal(null)} hideCancel>
+            {listModal.items.length === 0 ? (
+              <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>No hay registros.</p>
+            ) : (
+              <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                {listModal.items.map((it, i) => (
+                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1f2430' }}>{it.titulo}</div>
+                    {it.subtitulo && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{it.subtitulo}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Modal>
         )}
       </div>
     </div>

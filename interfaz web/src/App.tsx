@@ -32,12 +32,12 @@ const ALL_NAV = [
   { id: 'eventos',       icon: '📅', label: 'Eventos' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
   { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
-  { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'vivienda',      icon: '🏠', label: 'Vivienda' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
   { id: 'dashboard',     icon: '📊', label: 'Impacto' },
-  { id: 'contacto',      icon: '📞', label: 'Contáctanos' },
+  { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
+  { id: 'contacto',      icon: '📞', label: 'Contáctanos' },
 ]
 
 export default function App() {

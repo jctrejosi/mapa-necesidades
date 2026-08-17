@@ -13,12 +13,12 @@ const NAV = [
   { id: 'eventos',       label: '📅 Eventos' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
   { id: 'mascotas',      label: '🐾 Mascotas perdidas' },
-  { id: 'noticias',      label: '📰 Noticias' },
   { id: 'vivienda',      label: '🏠 Vivienda' },
   { id: 'danos',         label: '🏚️ Daños' },
   { id: 'dashboard',     label: '📊 Impacto' },
-  { id: 'contacto',      label: '📞 Contáctanos' },
+  { id: 'noticias',      label: '📰 Noticias' },
   { id: 'ayuda',         label: '❓ Cómo usar' },
+  { id: 'contacto',      label: '📞 Contáctanos' },
 ]
 
 export default function Header({ currentPage, setPage, ciudad, setCiudad }: Props) {
