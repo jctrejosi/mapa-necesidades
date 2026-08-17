@@ -13,7 +13,7 @@ interface Props {
 }
 
 /**
- * Chatbot "Ibanaska" de SolidaridadCO.
+ * Chatbot "Anay" de SolidaridadCO.
  * - Botón flotante con el ícono del bot sobre el mapa.
  * - En escritorio abre un panel flotante; en móvil el chat ocupa TODA la pantalla.
  * - El backend del bot tiene 2 funciones: realizar_reporte y buscar_ayuda.
@@ -31,7 +31,7 @@ export default function ChatbotWidget({ ciudad }: Props) {
   // Bienvenida del bot al abrir por primera vez
   useEffect(() => {
     if (open && messages.length === 0) {
-      setMessages([{ role: 'assistant', content: '¡Hola! Soy Ibanaska, tu asistente solidaria 😊 ¿Necesitas reportar algo o buscas quién te ayude?' }])
+      setMessages([{ role: 'assistant', content: '¡Hola! Soy Anay, tu asistente solidaria 😊 ¿Necesitas reportar algo o buscas quién te ayude?' }])
       historyRef.current = []
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,16 +83,16 @@ export default function ChatbotWidget({ ciudad }: Props) {
         <button
           onClick={openWidget}
           className="bot-fab"
-          aria-label="Abrir chat con Ibanaska"
+          aria-label="Abrir chat con Anay"
         >
-          <img src={botImg} alt="Ibanaska" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+          <img src={botImg} alt="Anay" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
         </button>
       )}
 
       {/* ── Burbuja de atención ── */}
       {showHint && !open && (
         <div className="bot-hint" onClick={openWidget}>
-          ¡Hola! Soy Ibanaska 😊 ¿Necesitas ayuda?
+          ¡Hola! Soy Anay 😊 ¿Necesitas ayuda?
         </div>
       )}
 
@@ -102,9 +102,9 @@ export default function ChatbotWidget({ ciudad }: Props) {
           <div className="bot-panel" onClick={e => e.stopPropagation()}>
             <div className="bot-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <img src={botImg} alt="Ibanaska" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                <img src={botImg} alt="Anay" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: '#003893' }}>Ibanaska</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: '#003893' }}>Anay</div>
                   <div style={{ fontSize: 11, color: '#2E9E5B' }}>● En línea — SolidaridadCO</div>
                 </div>
               </div>

@@ -374,7 +374,7 @@ ${c.green}${c.bold}  ✔ Servicios dev arriba${c.reset}
   ${c.bold}Interfaz web${c.reset}  ${c.cyan}http://localhost:8080${c.reset}
   ${c.bold}Panel admin${c.reset}   ${c.cyan}http://localhost:8081${c.reset}
   ${c.bold}API${c.reset}          ${c.cyan}http://localhost:3000/api${c.reset}
-  ${c.bold}Bot Ibanaska${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
+  ${c.bold}Bot Anay${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
 
   ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 4 servicios.${c.reset}
 `);

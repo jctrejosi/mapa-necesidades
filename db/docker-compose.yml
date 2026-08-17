@@ -88,7 +88,7 @@ services:
     ports:
       - "8081:80"
 
-  # ── Chatbot Ibanaska (FastAPI + DeepSeek) — lo usa el frontend vía /bot/* ──
+  # ── Chatbot Anay (FastAPI + DeepSeek) — lo usa el frontend vía /bot/* ──
   bot:
     build: ../bot
     container_name: redsolidaria-bot

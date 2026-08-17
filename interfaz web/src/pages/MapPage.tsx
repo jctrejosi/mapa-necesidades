@@ -2118,7 +2118,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         </div>
       )}
 
-      {/* Chatbot Ibanaska — popup flotante del bot (pantalla completa en móvil) */}
+      {/* Chatbot Anay — popup flotante del bot (pantalla completa en móvil) */}
       <ChatbotWidget ciudad={ciudad} />
     </div>
   )
