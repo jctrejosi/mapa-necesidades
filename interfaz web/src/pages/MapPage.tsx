@@ -260,7 +260,18 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     danos: true,
     eventos: true,
   }))
-  const toggleLayer = (key: string) => setLayers(prev => ({ ...prev, [key]: !prev[key] }))
+  const toggleLayer = (key: string) => {
+    setLayers(prev => {
+      const keys = Object.keys(prev)
+      const allOn = keys.every(k => prev[k])
+      if (allOn) {
+        // "Solo este": con todas activas, un clic deja activa SOLO esta capa
+        return Object.fromEntries(keys.map(k => [k, k === key]))
+      }
+      // Con algunas inactivas: se activa/desactiva una por una
+      return { ...prev, [key]: !prev[key] }
+    })
+  }
   // Mobile UX
   const [sheetState, setSheetState] = useState<'collapsed' | 'peek' | 'full'>('collapsed')
   const [notifPanelOpen, setNotifPanelOpen] = useState(false)
@@ -1578,6 +1589,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
           cursor: 'pointer', boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
           fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap', opacity: active ? 1 : 0.82,
+          // Alineación: ícono siempre a la misma altura a la izquierda y el texto al lado
+          width: '100%', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left',
         }
 
     return (
@@ -1595,8 +1608,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
               color: allOn ? '#1f2430' : '#6B7280',
               border: '1px solid ' + (allOn ? '#E8B800' : '#D1D5DB'),
               borderRadius: compact ? 18 : 20,
-              width: compact ? 34 : undefined, height: compact ? 34 : undefined, padding: compact ? 0 : '4px 10px',
-              display: compact ? 'flex' : undefined, alignItems: compact ? 'center' : undefined, justifyContent: compact ? 'center' : undefined,
+              width: compact ? 34 : '100%', height: compact ? 34 : undefined, padding: compact ? 0 : '5px 10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
               fontSize: compact ? 16 : 11, lineHeight: compact ? 1 : undefined, fontWeight: 800,
               cursor: 'pointer',
               boxShadow: '0 1px 5px rgba(0,0,0,0.18)', backdropFilter: 'blur(4px)',
@@ -1608,8 +1621,13 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           {buttons.map(btn => {
             const active = layers[btn.key]
             return (
-              <button key={btn.key} onClick={() => toggleLayer(btn.key)} title={btn.label} style={chipStyle(active)}>
-                {compact ? btn.icon : `${btn.icon} ${btn.label}`}
+              <button key={btn.key} onClick={() => toggleLayer(btn.key)} title={allOn ? `${btn.label} (solo este)` : btn.label} style={chipStyle(active)}>
+                {compact ? btn.icon : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{btn.icon}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{btn.label}</span>
+                  </span>
+                )}
               </button>
             )
           })}
