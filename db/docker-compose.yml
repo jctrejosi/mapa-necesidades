@@ -95,9 +95,11 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    # Las credenciales de DeepSeek viven en bot/.env (el compose no las
+    # duplica en db/.env para no mezclar secretos de proyectos).
+    env_file: ../bot/.env
     environment:
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      # Dentro de la red Docker el backend NO es localhost
       BACKEND_URL: http://backend:3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081,http://localhost:8443}
     ports:

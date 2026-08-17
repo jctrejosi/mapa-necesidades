@@ -280,9 +280,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [detailItem, setDetailItem] = useState<any | null>(null)
   // Voluntarios registrados para el reporte del detalle abierto
   const [detailHelpers, setDetailHelpers] = useState<any[]>([])
-  // Cambio de estado con PIN desde el detalle
-  const [estadoPin, setEstadoPin] = useState('')
-  const [estadoNuevo, setEstadoNuevo] = useState('')
   // 🔍 Buscador de reportes por PIN o teléfono
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -301,7 +298,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   // Editar/eliminar cualquier reporte público con el código (PIN/radicado)
   const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string; sectorId?: number } | null>(null)
   const [editStep, setEditStep] = useState<'pin' | 'form'>('pin')
-  const [editForm, setEditForm] = useState({ pin: '', direccion: '', descripcion: '', imagen: null as string | null })
+  const [editForm, setEditForm] = useState({ pin: '', direccion: '', descripcion: '', imagen: null as string | null, estado: '' })
   const [deleteReport, setDeleteReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
   const [deletePin, setDeletePin] = useState('')
   const [pinResult, setPinResult] = useState<string | null>(null)
@@ -462,7 +459,8 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
       })
     })
 
-    return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 50)
+    // Solo los 10 registros más recientes en la actividad reciente
+    return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 10)
   }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, eventos, sectores, ciudad])
 
   // Abre el modal de reportes cuando el navbar pide "Reportes"
@@ -1000,11 +998,15 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   // ── Editar / eliminar reporte propio (PIN o radicado) ──
   const openEdit = (e: { tipo: string; id: number; sectorId?: number }) => {
     const d = detailItem ?? {}
+    const live = liveItem as any
+    const actual = e.tipo === 'evento' ? (live?.activo ? 'activo' : 'inactivo') : live?.estado
+    const opts = ESTADOS_OPCIONES[e.tipo]
     setEditForm({
       pin: '',
       direccion: d.ubicacion ?? '',
       descripcion: d.detalle ?? '',
       imagen: d.imagenes?.[0] ?? null,
+      estado: opts && opts.some(o => o.value === actual) ? actual : (opts?.[0]?.value ?? ''),
     })
     setEditReport({ ...e, titulo: d.titulo ?? '' })
     setEditStep('pin')
@@ -1039,12 +1041,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         descripcion: editForm.descripcion || undefined,
         imagen,
         direccion_sector: editForm.direccion || undefined,
+        estado: (editForm.estado || undefined) as any,
         pin: codigo,
       })
     } else if (editReport.tipo === 'ofrecimiento') {
       r = await updateOfrecimiento(editReport.id, {
         descripcion: editForm.descripcion || undefined,
         imagen,
+        estado: (editForm.estado || undefined) as any,
         pin: codigo,
       })
     } else if (editReport.tipo === 'mascota') {
@@ -1052,6 +1056,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         lugar_visto: editForm.direccion || undefined,
         senas: editForm.descripcion || undefined,
         imagen,
+        estado: (editForm.estado || undefined) as any,
         pin: codigo,
       })
     } else if (editReport.tipo === 'vivienda') {
@@ -1059,12 +1064,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         sector_referencia: editForm.direccion || undefined,
         descripcion: editForm.descripcion || undefined,
         imagen,
+        estado: (editForm.estado || undefined) as any,
         pin: codigo,
       })
     } else if (editReport.tipo === 'evento') {
       r = await updateEvento(editReport.id, {
         direccion: editForm.direccion || undefined,
         descripcion: editForm.descripcion || undefined,
+        activo: editForm.estado ? editForm.estado === 'activo' : undefined,
         pin: codigo,
       })
     } else {
@@ -1073,6 +1080,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         direccion: editForm.direccion || undefined,
         descripcion: editForm.descripcion || undefined,
         imagen,
+        estado: editForm.estado || undefined,
       })
     }
     if (!r) return
@@ -1155,18 +1163,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     listVoluntarios(tabla, id).then(setDetailHelpers).catch(() => setDetailHelpers([]))
   }, [detailItem])
 
-  // Al abrir un detalle, prepara el cambio de estado (opción por defecto = estado actual)
-  useEffect(() => {
-    setEstadoPin('')
-    const tipo = detailItem?.editable?.tipo ?? (detailItem?.ayuda ? 'punto' : null)
-    const live = liveItem as any
-    if (tipo && ESTADOS_OPCIONES[tipo]) {
-      const actual = live?.estado ?? (tipo === 'evento' ? (live?.activo ? 'activo' : 'inactivo') : undefined)
-      setEstadoNuevo(ESTADOS_OPCIONES[tipo].some(o => o.value === actual) ? actual : ESTADOS_OPCIONES[tipo][0].value)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailItem])
-
   // Objeto vivo del reporte abierto (se refresca solo tras cada actualización SSE)
   const liveItem = useMemo(() => {
     if (!detailItem) return null
@@ -1175,30 +1171,6 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     const list = e.tipo === 'necesidad' ? necesidades : e.tipo === 'ofrecimiento' ? ofrecimientos : e.tipo === 'mascota' ? mascotas : e.tipo === 'vivienda' ? viviendas : e.tipo === 'dano' ? danos : e.tipo === 'evento' ? eventos : e.tipo === 'punto' ? puntosApoyo : []
     return list.find(x => x.id === e.id) ?? null
   }, [detailItem, necesidades, ofrecimientos, mascotas, viviendas, danos, eventos, puntosApoyo])
-
-  /** Cambia el estado del reporte abierto usando su PIN/radicado. */
-  const cambiarEstado = async () => {
-    if (!detailItem || !liveItem) return
-    const e = detailItem.editable ?? detailItem.ayuda
-    const tipo = detailItem.editable?.tipo ?? 'punto'
-    if (!e || !ESTADOS_OPCIONES[tipo]) return
-    const pin = estadoPin.trim()
-    if (!pin) { alert('Ingresa el código de edición (PIN o radicado) para cambiar el estado.'); return }
-    let r: unknown
-    const nuevo = estadoNuevo as any
-    switch (tipo) {
-      case 'necesidad': r = await updateNecesidad(e.id, { estado: nuevo, pin }); break
-      case 'ofrecimiento': r = await updateOfrecimiento(e.id, { estado: nuevo, pin }); break
-      case 'mascota': r = await updateMascota(e.id, { estado: nuevo, pin }); break
-      case 'vivienda': r = await updateVivienda(e.id, { estado: nuevo, pin }); break
-      case 'dano': r = await editarDano(e.id, { radicado: pin, estado: nuevo }); break
-      case 'evento': r = await updateEvento(e.id, { activo: estadoNuevo === 'activo', pin }); break
-      default: return
-    }
-    if (!r) return
-    setEstadoPin('')
-    showToast('✅ Estado actualizado.')
-  }
 
   // 🔍 Búsqueda con retardo (300ms) mientras se escribe
   useEffect(() => {
@@ -1958,31 +1930,11 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           {liveItem && (() => {
             const tipo = detailItem.editable?.tipo ?? (detailItem.ayuda ? 'punto' : null)
             const est = tipo ? estadoDe(liveItem, tipo) : null
-            const opts = tipo ? ESTADOS_OPCIONES[tipo] : null
-            if (!est || !opts) return null
+            if (!est) return null
             return (
-              <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8f9fb', border: '1px solid #e1e4e9', borderRadius: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 800, color: '#1f2430' }}>Estado:</span>
-                  <span className={`tag ${est.cls}`} style={{ fontSize: 11 }}>{est.label}</span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select className="form-select" style={{ flex: 1, minWidth: 150, fontSize: 12.5 }} value={estadoNuevo} onChange={e => setEstadoNuevo(e.target.value)}>
-                    {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <input
-                    className="form-input"
-                    style={{ width: 120, fontSize: 12.5, letterSpacing: 2, fontFamily: 'monospace' }}
-                    placeholder={detailItem.editable?.tipo === 'dano' ? 'Radicado' : 'PIN'}
-                    value={estadoPin}
-                    onChange={e => setEstadoPin(e.target.value)}
-                    maxLength={32}
-                  />
-                  <button className="btn btn-outline btn-sm" onClick={cambiarEstado}>💾 Cambiar estado</button>
-                </div>
-                <p style={{ fontSize: 11, color: '#9AA0AC', margin: '6px 0 0' }}>
-                  El {detailItem.editable?.tipo === 'dano' ? 'radicado' : 'PIN'} que recibiste al publicar es el único modo de cambiar el estado.
-                </p>
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: '#1f2430' }}>Estado:</span>
+                <span className={`tag ${est.cls}`} style={{ fontSize: 11 }}>{est.label}</span>
               </div>
             )
           })()}
@@ -2069,6 +2021,14 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
                 <label className="form-label">Descripción</label>
                 <textarea className="form-input" rows={3} value={editForm.descripcion} onChange={e => setEditForm(p => ({ ...p, descripcion: e.target.value }))} />
               </div>
+              {ESTADOS_OPCIONES[editReport.tipo] && (
+                <div className="form-group">
+                  <label className="form-label">Estado</label>
+                  <select className="form-select" value={editForm.estado} onChange={e => setEditForm(p => ({ ...p, estado: e.target.value }))}>
+                    {ESTADOS_OPCIONES[editReport.tipo].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Foto / imagen</label>
                 <ImageInput value={editForm.imagen ?? undefined} onChange={v => setEditForm(p => ({ ...p, imagen: v ?? null }))} />
