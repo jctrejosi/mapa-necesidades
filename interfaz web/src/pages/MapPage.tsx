@@ -40,6 +40,67 @@ const RESULT_ICONS: Record<string, string> = {
   punto: '🏪',
 }
 
+/** Etiqueta + tono del estado actual de un reporte (para el detalle y popups). */
+function estadoDe(live: any, tipo: string): { label: string; cls: string } | null {
+  switch (tipo) {
+    case 'necesidad':
+      if (live.estado === 'atendida') return { label: '✅ Atendida', cls: 'tag-green' }
+      if (live.responsable) return { label: '🟠 En proceso', cls: 'tag-orange' }
+      return { label: '🔴 Sin ayuda', cls: 'tag-red' }
+    case 'ofrecimiento':
+      if (live.estado === 'entregado') return { label: '✅ Entregado', cls: 'tag-green' }
+      if (live.reservado_por) return { label: '🟠 Reservado', cls: 'tag-orange' }
+      return { label: '🟢 Disponible', cls: 'tag-green' }
+    case 'mascota':
+      return live.estado === 'encontrado'
+        ? { label: '✅ Encontrada', cls: 'tag-green' }
+        : { label: '🔴 Perdida', cls: 'tag-red' }
+    case 'vivienda':
+      return live.estado === 'ocupado'
+        ? { label: '⚪ Ocupada', cls: 'tag-gray' }
+        : { label: '🟢 Disponible', cls: 'tag-green' }
+    case 'dano':
+      if (live.estado === 'visitado') return { label: '✅ Visitado', cls: 'tag-green' }
+      if (live.estado === 'visita_programada') return { label: '🟠 Visita programada', cls: 'tag-orange' }
+      return { label: '🔴 Pendiente', cls: 'tag-red' }
+    case 'evento':
+      return live.activo
+        ? { label: '🟢 Activo', cls: 'tag-green' }
+        : { label: '⚪ Inactivo', cls: 'tag-gray' }
+    default:
+      return null
+  }
+}
+
+/** Estados a los que se puede cambiar con el PIN desde el detalle. */
+const ESTADOS_OPCIONES: Record<string, { value: string; label: string }[]> = {
+  necesidad: [
+    { value: 'requiere', label: '🔴 Requiere ayuda' },
+    { value: 'atendida', label: '✅ Atendida' },
+  ],
+  ofrecimiento: [
+    { value: 'disponible', label: '🟢 Disponible' },
+    { value: 'entregado', label: '✅ Entregado' },
+  ],
+  mascota: [
+    { value: 'perdido', label: '🔴 Perdida' },
+    { value: 'encontrado', label: '✅ Encontrada' },
+  ],
+  vivienda: [
+    { value: 'disponible', label: '🟢 Disponible' },
+    { value: 'ocupado', label: '⚪ Ocupada' },
+  ],
+  dano: [
+    { value: 'pendiente', label: '🔴 Pendiente' },
+    { value: 'visita_programada', label: '🟠 Visita programada' },
+    { value: 'visitado', label: '✅ Visitado' },
+  ],
+  evento: [
+    { value: 'activo', label: '🟢 Activo' },
+    { value: 'inactivo', label: '⚪ Inactivo' },
+  ],
+}
+
 interface Props { store: Store; setPage: (p: string) => void; reportesSignal?: number }
 
 /**
@@ -208,6 +269,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
   const [detailItem, setDetailItem] = useState<any | null>(null)
   // Voluntarios registrados para el reporte del detalle abierto
   const [detailHelpers, setDetailHelpers] = useState<any[]>([])
+  // Cambio de estado con PIN desde el detalle
+  const [estadoPin, setEstadoPin] = useState('')
+  const [estadoNuevo, setEstadoNuevo] = useState('')
   // 🔍 Buscador de reportes por PIN o teléfono
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -500,8 +564,9 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           return `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;gap:6px">
               <span style="font-size:12px;font-weight:600;color:#1f2430;flex:1">${needIcon(n.tipo)} ${n.tipo}${n.cantidad ? ' — ' + n.cantidad : ''}</span>
+              <span style="font-size:10px;font-weight:800;border-radius:999px;padding:2px 6px;flex-shrink:0;${n.estado === 'atendida' ? 'background:#e6f5ec;color:#2E9E5B' : n.responsable ? 'background:#fff4e0;color:#E08E00' : 'background:#fde8eb;color:#CE1126'}">${n.estado === 'atendida' ? '✅' : n.responsable ? '🟠' : '🔴'}</span>
               <div style="display:flex;gap:4px;flex-shrink:0">
-                ${!n.responsable ? `<button onclick="window.__helpNeed('${n.id}')" style="background:#003893;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">🙋 Yo ayudo</button>` : '<span style="font-size:11px;color:#2E9E5B;white-space:nowrap">🙋 En proceso</span>'}
+                ${!n.responsable && n.estado !== 'atendida' ? `<button onclick="window.__helpNeed('${n.id}')" style="background:#003893;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">🙋 Yo ayudo</button>` : '<span style="font-size:11px;color:#2E9E5B;white-space:nowrap">🙋 En proceso</span>'}
                 <button onclick="window.__openDetail('n${n.id}')" style="background:#f0f4ff;color:#003893;border:none;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:Nunito,sans-serif">Ver detalle</button>
               </div>
             </div>`
@@ -543,7 +608,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         }
         mk.bindPopup(`
           <div style="min-width:180px">
-            <span style="background:#f3e8ff;color:#7C3AED;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">🐾 PERDIDA</span>
+            <span style="background:${m.estado === 'encontrado' ? '#e6f5ec' : '#f3e8ff'};color:${m.estado === 'encontrado' ? '#2E9E5B' : '#7C3AED'};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${m.estado === 'encontrado' ? '✅ ENCONTRADA' : '🐾 PERDIDA'}</span>
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${m.nombre || m.tipo_animal}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">${m.senas}</p>
             <p style="font-size:12px;margin:0 0 4px">📍 ${m.lugar_visto}</p>
@@ -580,6 +645,7 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
         mk.bindPopup(`
           <div style="min-width:180px">
             <span style="background:#fde8eb;color:#CE1126;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">🏚 ${d.nivel_percibido.toUpperCase()}</span>
+            <span style="font-size:10px;font-weight:800;border-radius:999px;padding:2px 6px;margin-left:4px;${d.estado === 'pendiente' ? 'background:#fde8eb;color:#CE1126' : d.estado === 'visita_programada' ? 'background:#fff4e0;color:#E08E00' : 'background:#e6f5ec;color:#2E9E5B'}">${d.estado === 'pendiente' ? '🔴 Pendiente' : d.estado === 'visita_programada' ? '🟠 Visita' : '✅ Visitado'}</span>
             <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${d.tipo_inmueble}</h4>
             <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${d.direccion}</p>
             <p style="font-size:12px;color:#6b7280;margin:0 0 8px">${d.descripcion}</p>
@@ -1077,6 +1143,51 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
     if (!tabla || !id) { setDetailHelpers([]); return }
     listVoluntarios(tabla, id).then(setDetailHelpers).catch(() => setDetailHelpers([]))
   }, [detailItem])
+
+  // Al abrir un detalle, prepara el cambio de estado (opción por defecto = estado actual)
+  useEffect(() => {
+    setEstadoPin('')
+    const tipo = detailItem?.editable?.tipo ?? (detailItem?.ayuda ? 'punto' : null)
+    const live = liveItem as any
+    if (tipo && ESTADOS_OPCIONES[tipo]) {
+      const actual = live?.estado ?? (tipo === 'evento' ? (live?.activo ? 'activo' : 'inactivo') : undefined)
+      setEstadoNuevo(ESTADOS_OPCIONES[tipo].some(o => o.value === actual) ? actual : ESTADOS_OPCIONES[tipo][0].value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailItem])
+
+  // Objeto vivo del reporte abierto (se refresca solo tras cada actualización SSE)
+  const liveItem = useMemo(() => {
+    if (!detailItem) return null
+    const e = detailItem.editable ?? (detailItem.ayuda ? { tipo: 'punto', id: detailItem.ayuda.id } : null)
+    if (!e) return null
+    const list = e.tipo === 'necesidad' ? necesidades : e.tipo === 'ofrecimiento' ? ofrecimientos : e.tipo === 'mascota' ? mascotas : e.tipo === 'vivienda' ? viviendas : e.tipo === 'dano' ? danos : e.tipo === 'evento' ? eventos : e.tipo === 'punto' ? puntosApoyo : []
+    return list.find(x => x.id === e.id) ?? null
+  }, [detailItem, necesidades, ofrecimientos, mascotas, viviendas, danos, eventos, puntosApoyo])
+
+  /** Cambia el estado del reporte abierto usando su PIN/radicado. */
+  const cambiarEstado = async () => {
+    if (!detailItem || !liveItem) return
+    const e = detailItem.editable ?? detailItem.ayuda
+    const tipo = detailItem.editable?.tipo ?? 'punto'
+    if (!e || !ESTADOS_OPCIONES[tipo]) return
+    const pin = estadoPin.trim()
+    if (!pin) { alert('Ingresa el código de edición (PIN o radicado) para cambiar el estado.'); return }
+    let r: unknown
+    const nuevo = estadoNuevo as any
+    switch (tipo) {
+      case 'necesidad': r = await updateNecesidad(e.id, { estado: nuevo, pin }); break
+      case 'ofrecimiento': r = await updateOfrecimiento(e.id, { estado: nuevo, pin }); break
+      case 'mascota': r = await updateMascota(e.id, { estado: nuevo, pin }); break
+      case 'vivienda': r = await updateVivienda(e.id, { estado: nuevo, pin }); break
+      case 'dano': r = await editarDano(e.id, { radicado: pin, estado: nuevo }); break
+      case 'evento': r = await updateEvento(e.id, { activo: estadoNuevo === 'activo', pin }); break
+      default: return
+    }
+    if (!r) return
+    setEstadoPin('')
+    showToast('✅ Estado actualizado.')
+  }
 
   // 🔍 Búsqueda con retardo (300ms) mientras se escribe
   useEffect(() => {
@@ -1826,6 +1937,37 @@ export default function MapPage({ store, setPage, reportesSignal = 0 }: Props) {
           ) : (
             <p style={{ fontSize: 12.5, color: '#9AA0AC', margin: 0 }}>No hay teléfono registrado para este reporte.</p>
           )}
+          {liveItem && (() => {
+            const tipo = detailItem.editable?.tipo ?? (detailItem.ayuda ? 'punto' : null)
+            const est = tipo ? estadoDe(liveItem, tipo) : null
+            const opts = tipo ? ESTADOS_OPCIONES[tipo] : null
+            if (!est || !opts) return null
+            return (
+              <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8f9fb', border: '1px solid #e1e4e9', borderRadius: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 800, color: '#1f2430' }}>Estado:</span>
+                  <span className={`tag ${est.cls}`} style={{ fontSize: 11 }}>{est.label}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select className="form-select" style={{ flex: 1, minWidth: 150, fontSize: 12.5 }} value={estadoNuevo} onChange={e => setEstadoNuevo(e.target.value)}>
+                    {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <input
+                    className="form-input"
+                    style={{ width: 120, fontSize: 12.5, letterSpacing: 2, fontFamily: 'monospace' }}
+                    placeholder={detailItem.editable?.tipo === 'dano' ? 'Radicado' : 'PIN'}
+                    value={estadoPin}
+                    onChange={e => setEstadoPin(e.target.value)}
+                    maxLength={32}
+                  />
+                  <button className="btn btn-outline btn-sm" onClick={cambiarEstado}>💾 Cambiar estado</button>
+                </div>
+                <p style={{ fontSize: 11, color: '#9AA0AC', margin: '6px 0 0' }}>
+                  El {detailItem.editable?.tipo === 'dano' ? 'radicado' : 'PIN'} que recibiste al publicar es el único modo de cambiar el estado.
+                </p>
+              </div>
+            )
+          })()}
           {(() => {
             const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
             if (!tabla) return null

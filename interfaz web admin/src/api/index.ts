@@ -223,6 +223,10 @@ export const restablecerPin = (tabla: string, id: number): Promise<{ pin: string
 export const listVisitas = (limit = 100): Promise<any[]> =>
   request(`/visitas/admin?limit=${limit}`)
 
+/** Contadores de visitas para el resumen del admin. */
+export const visitasResumen = (): Promise<{ total: number; hoy: number; unicos: number; ultima_visita: string | null }> =>
+  request('/visitas/admin/resumen')
+
 // ── Auditoría (rastro de modificaciones) ─────────────────────────────────────
 
 export const listAuditoria = (limit = 200): Promise<any[]> =>

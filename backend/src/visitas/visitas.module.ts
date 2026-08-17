@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { desc } from 'drizzle-orm';
+import { desc, sql, count, countDistinct } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { visitas } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -62,6 +62,29 @@ class VisitasService {
       .limit(Math.min(Math.max(limit, 1), 200));
     return rows;
   }
+
+  /** Contadores para el panel admin: total, de hoy (día calendario) y visitantes únicos. */
+  async resumen() {
+    const rows = await this.db
+      .select({
+        total: count(),
+        hoy: count(sql`CASE WHEN ${visitas.createdAt} >= date_trunc('day', now()) THEN 1 END`),
+        unicos: countDistinct(visitas.visitorId),
+      })
+      .from(visitas);
+    const r = rows[0] ?? { total: 0, hoy: 0, unicos: 0 };
+    const last = await this.db
+      .select({ at: visitas.createdAt })
+      .from(visitas)
+      .orderBy(desc(visitas.createdAt))
+      .limit(1);
+    return {
+      total: Number(r.total),
+      hoy: Number(r.hoy),
+      unicos: Number(r.unicos),
+      ultima_visita: last[0]?.at?.toISOString() ?? null,
+    };
+  }
 }
 
 @Controller('visitas')
@@ -71,6 +94,12 @@ export class VisitasController {
   @Post()
   create(@Req() req: Request, @Body() b: VisitaBody) {
     return this.svc.create(req, b);
+  }
+
+  @Get('admin/resumen')
+  @UseGuards(AdminGuard)
+  resumen() {
+    return this.svc.resumen();
   }
 
   @Get('admin')

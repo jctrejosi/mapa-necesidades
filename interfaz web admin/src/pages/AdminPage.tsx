@@ -3,7 +3,7 @@ import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
 import ImageInput from '../components/ImageInput'
-import { restablecerPin, verPin, cityId, CITIES, listVisitas, listAuditoria } from '../api'
+import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria } from '../api'
 import type { Necesidad, ReporteDano } from '../api/types'
 
 interface Props { store: Store }
@@ -91,13 +91,26 @@ const fromLocalInput = (s: string) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
-function KpiCard({ icon, label, value, tone = 'blue' }: { icon: string; label: string; value: number; tone?: string }) {
+function KpiCard({ icon, label, value, tone = 'blue', sub, onClick }: { icon: string; label: string; value: number; tone?: string; sub?: string; onClick?: () => void }) {
+  const clickable = !!onClick
   return (
-    <div className="kpi-card">
+    <div
+      className="kpi-card"
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.() } } : undefined}
+      title={clickable ? 'Ver estos reportes' : undefined}
+      style={clickable ? { cursor: 'pointer', transition: 'box-shadow .15s, transform .15s' } : undefined}
+      onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,56,147,0.18)'; e.currentTarget.style.transform = 'translateY(-1px)' } : undefined}
+      onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = '' } : undefined}
+    >
       <div className="kpi-icon" style={{ background: `var(--kpi-${tone})` }}>{icon}</div>
       <div>
         <div className="kpi-value">{value}</div>
         <div className="kpi-label">{label}</div>
+        {sub && <div style={{ fontSize: 10.5, color: '#9AA0AC', marginTop: 2 }}>{sub}</div>}
+        {clickable && <div style={{ fontSize: 10.5, color: '#003893', fontWeight: 800, marginTop: 4 }}>Ver reportes →</div>}
       </div>
     </div>
   )
@@ -216,6 +229,7 @@ export default function AdminPage({ store }: Props) {
   const [dChip, setDChip] = useState('pendientes')
   const [visitas, setVisitas] = useState<any[]>([])
   const [visitasLoading, setVisitasLoading] = useState(false)
+  const [visitasKpi, setVisitasKpi] = useState<{ total: number; hoy: number; unicos: number; ultima_visita: string | null }>({ total: 0, hoy: 0, unicos: 0, ultima_visita: null })
   const [auditoria, setAuditoria] = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditDetail, setAuditDetail] = useState<any | null>(null)
@@ -265,6 +279,11 @@ export default function AdminPage({ store }: Props) {
 
   useEffect(() => { if (authed && section === 'visitas') loadVisitas() }, [authed, section])
   useEffect(() => { if (authed && section === 'auditoria') loadAuditoria() }, [authed, section])
+  // Contador de visitas para el resumen (se refresca al entrar y al visitar la sección)
+  useEffect(() => {
+    if (!authed) return
+    visitasResumen().then(setVisitasKpi).catch(() => { /* silencioso */ })
+  }, [authed])
 
   if (!authed) {
     return (
@@ -1128,12 +1147,13 @@ export default function AdminPage({ store }: Props) {
     return (
       <>
         <div className="kpi-grid">
-          <KpiCard icon="🔴" label="Urgentes (sin ayuda)" value={kpis.urgentes} tone="red" />
-          <KpiCard icon="🟠" label="En proceso" value={kpis.enProceso} tone="orange" />
-          <KpiCard icon="✅" label="Atendidas" value={kpis.atendidas} tone="green" />
-          <KpiCard icon="🤝" label="Ofrecimientos libres" value={kpis.disponibles} tone="blue" />
-          <KpiCard icon="🏚️" label="Daños pendientes" value={kpis.danosPendientes} tone="red" />
-          <KpiCard icon="🏠" label="Viviendas disponibles" value={kpis.viviendas} tone="blue" />
+          <KpiCard icon="🔴" label="Urgentes (sin ayuda)" value={kpis.urgentes} tone="red" onClick={() => { setSearch(''); setNChip('urgentes'); setSection('necesidades') }} />
+          <KpiCard icon="🟠" label="En proceso" value={kpis.enProceso} tone="orange" onClick={() => { setSearch(''); setNChip('en_proceso'); setSection('necesidades') }} />
+          <KpiCard icon="✅" label="Atendidas" value={kpis.atendidas} tone="green" onClick={() => { setSearch(''); setNChip('atendidas'); setSection('necesidades') }} />
+          <KpiCard icon="🤝" label="Ofrecimientos libres" value={kpis.disponibles} tone="blue" onClick={() => { setSearch(''); setOChip('disponibles'); setSection('ofrecimientos') }} />
+          <KpiCard icon="🏚️" label="Daños pendientes" value={kpis.danosPendientes} tone="red" onClick={() => { setSearch(''); setDChip('pendientes'); setSection('danos') }} />
+          <KpiCard icon="🏠" label="Viviendas disponibles" value={kpis.viviendas} tone="blue" onClick={() => { setSearch(''); setVChip('disponibles'); setSection('viviendas') }} />
+          <KpiCard icon="👥" label="Visitas al sitio" value={visitasKpi.total} tone="yellow" sub={`hoy ${visitasKpi.hoy} · ${visitasKpi.unicos} visitantes únicos`} onClick={() => { setSearch(''); setSection('visitas') }} />
         </div>
 
         <div className="card admin-section">

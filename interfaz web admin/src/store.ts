@@ -376,7 +376,9 @@ export function useStore() {
     const { ok } = await api.verifyAdmin(password)
     if (!ok) return false
     setAdminPass(password)
-    await refresh(ciudad)
+    // Si un listado falla al refrescar, igual se entra al panel y los datos
+    // se recargan con el SSE / al navegar.
+    try { await refresh(ciudad) } catch { /* silencioso */ }
     return true
   }, [ciudad])
 

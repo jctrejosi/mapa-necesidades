@@ -195,6 +195,12 @@ class DanosService {
     if (b.imagen !== undefined) set.imagen = str(b.imagen) || null;
     if (b.telefono_reportante !== undefined) set.telefonoReporta = str(b.telefono_reportante);
     if (b.habitado !== undefined) set.habitado = b.habitado === 'no' || b.habitado === 'evacuado' ? b.habitado : 'si';
+    if (b.estado !== undefined) {
+      if (!['pendiente', 'visita_programada', 'visitado'].includes(b.estado)) {
+        throw new BadRequestException({ error: 'Estado inválido' });
+      }
+      set.estado = b.estado;
+    }
     const [d] = await this.db.update(reportesDanos).set(set).where(eq(reportesDanos.id, id)).returning();
     const nuevo = this.serializePublic(d);
     await registrarAuditoria(this.db, {

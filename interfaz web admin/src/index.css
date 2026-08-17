@@ -469,6 +469,7 @@ button:active { opacity: 0.8; }
   --kpi-orange: #fff3e0;
   --kpi-green: #e6f5ec;
   --kpi-blue: #e8eeff;
+  --kpi-yellow: #fff4c2;
 }
 .kpi-grid {
   display: grid;
