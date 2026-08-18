@@ -2,6 +2,14 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import favicon from '../assets/favicon.png'
+
+// Favicon del sitio (desde assets/favicon.png)
+const favLink = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.createElement('link')
+favLink.rel = 'icon'
+favLink.type = 'image/png'
+favLink.href = favicon
+document.head.appendChild(favLink)
 
 /**
  * Limpieza de caché al ingresar:

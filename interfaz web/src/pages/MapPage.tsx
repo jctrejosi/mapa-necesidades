@@ -416,7 +416,7 @@ export default function MapPage({ store, setPage }: Props) {
           ubicacion: e.direccion || undefined,
           telefono: e.punto?.telefono || undefined,
           lat: e.lat, lng: e.lng,
-          imagenes: e.punto?.imagen ? [e.punto.imagen] : undefined,
+          imagenes: e.imagenes?.length ? e.imagenes : (e.punto?.imagen ? [e.punto.imagen] : undefined),
           editable: { tipo: 'evento', id: e.id },
         },
       })
@@ -686,7 +686,7 @@ export default function MapPage({ store, setPage }: Props) {
           ubicacion: e.direccion || undefined,
           telefono: e.punto?.telefono || undefined,
           lat: e.lat, lng: e.lng,
-          imagenes: e.punto?.imagen ? [e.punto.imagen] : undefined,
+          imagenes: e.imagenes?.length ? e.imagenes : (e.punto?.imagen ? [e.punto.imagen] : undefined),
           editable: { tipo: 'evento', id: e.id },
         }
         mk.bindPopup(`

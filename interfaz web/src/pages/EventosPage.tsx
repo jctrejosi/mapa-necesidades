@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Store } from '../store'
+import { compressImage } from '../store'
 import Modal from '../components/Modal'
 import PinModal from '../components/PinModal'
 import { ICONO_PUNTO_APOYO } from '../data/mock'
+import { uploadImage } from '../api'
 
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -89,6 +91,7 @@ export default function EventosPage({ store }: Props) {
   const defaultCenter = CITY_CENTER[ciudad] ?? CITY_CENTER.Manizales
   const [search, setSearch] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('todos')
+  const [puntoFilter, setPuntoFilter] = useState('todos')
   const [tick, setTick] = useState(0)
 
   const [showForm, setShowForm] = useState<any>(null)
@@ -97,8 +100,10 @@ export default function EventosPage({ store }: Props) {
     lat: defaultCenter[0], lng: defaultCenter[1],
     fechaInicio: defaultInicio(), fechaFin: defaultFin(),
     activo: true, pin: '',
+    imagenes: [] as string[],
   })
   const geocodeTimer = useRef<number | null>(null)
+  const evidenciaRef = useRef<HTMLInputElement>(null)
 
   const [pinResult, setPinResult] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
@@ -109,6 +114,9 @@ export default function EventosPage({ store }: Props) {
     return () => clearInterval(t)
   }, [])
 
+  // Al cambiar de ciudad se reinicia el filtro por punto de apoyo.
+  useEffect(() => { setPuntoFilter('todos') }, [ciudad])
+
   /** ¿Visible en el mapa ahora mismo? */
   const isVigente = (e: any) => {
     if (!e.activo) return false
@@ -118,8 +126,18 @@ export default function EventosPage({ store }: Props) {
     return now >= ini && now <= fin
   }
 
+  // Puntos de apoyo de la ciudad, para el dropdown de filtro.
+  const puntosDeCiudad = Array.from(
+    new Map(
+      eventos
+        .filter(e => matchesCiudad(e.ciudad) && e.punto)
+        .map(e => [e.punto.id, e.punto] as const),
+    ).values(),
+  )
+
   const items = eventos
     .filter(e => matchesCiudad(e.ciudad))
+    .filter(e => puntoFilter === 'todos' || String(e.punto?.id ?? '') === puntoFilter)
     .filter(e => {
       if (estadoFilter === 'todos') return true
       const vigente = isVigente(e)
@@ -135,7 +153,7 @@ export default function EventosPage({ store }: Props) {
       titulo: '', descripcion: '', puntoPin: '', direccion: '',
       lat: defaultCenter[0], lng: defaultCenter[1],
       fechaInicio: defaultInicio(), fechaFin: defaultFin(),
-      activo: true, pin: '',
+      activo: true, pin: '', imagenes: [],
     })
     setShowForm({})
   }
@@ -145,7 +163,7 @@ export default function EventosPage({ store }: Props) {
       titulo: e.titulo, descripcion: e.descripcion, puntoPin: '',
       direccion: e.direccion, lat: e.lat, lng: e.lng,
       fechaInicio: toLocalInput(e.fecha_inicio), fechaFin: toLocalInput(e.fecha_fin),
-      activo: e.activo, pin: '',
+      activo: e.activo, pin: '', imagenes: e.imagenes ?? [],
     })
     setShowForm(e)
   }
@@ -177,18 +195,38 @@ export default function EventosPage({ store }: Props) {
     }, 900)
   }
 
+  /** Adjunta una evidencia a la galería (comprime y la agrega a eForm.imagenes). */
+  const handleEvidencia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 25 * 1024 * 1024) { alert('La imagen es demasiado grande (máx. 25MB)'); return }
+    try {
+      const b64 = await compressImage(file)
+      if (b64.length > 6 * 1024 * 1024) { alert('La imagen sigue siendo muy pesada después de comprimirla. Intenta con otra foto.'); return }
+      setEForm(p => ({ ...p, imagenes: [...p.imagenes, b64] }))
+    } catch {
+      alert('No se pudo procesar la imagen')
+    }
+    if (evidenciaRef.current) evidenciaRef.current.value = ''
+  }
+
   const submit = async () => {
     if (!eForm.titulo.trim()) { alert('El título del evento es obligatorio'); return }
     const inicio = fromLocalInput(eForm.fechaInicio)
     const fin = fromLocalInput(eForm.fechaFin)
     if (!inicio) { alert('Indica la fecha de inicio del evento'); return }
 
+    // Sube las evidencias nuevas (data:) a Cloudinary; las URLs ya guardadas se conservan.
+    const imagenes = await Promise.all(
+      eForm.imagenes.map(async (img) => (img.startsWith('data:') ? (await uploadImage(img)).path : img)),
+    )
+
     if (showForm?.id) {
       if (!eForm.pin.trim()) { alert('Ingresa el código de 4 dígitos que se te dio al publicar el evento.'); return }
       const r = await updateEvento(showForm.id, {
         titulo: eForm.titulo, descripcion: eForm.descripcion, direccion: eForm.direccion,
         lat: eForm.lat, lng: eForm.lng, activo: eForm.activo,
-        fecha_inicio: inicio, fecha_fin: fin,
+        fecha_inicio: inicio, fecha_fin: fin, imagenes,
         pin: eForm.pin.trim(),
       })
       if (!r) return
@@ -200,7 +238,7 @@ export default function EventosPage({ store }: Props) {
         titulo: eForm.titulo, descripcion: eForm.descripcion,
         lat: eForm.lat, lng: eForm.lng, direccion: eForm.direccion,
         activo: eForm.activo, fecha_inicio: inicio, fecha_fin: fin,
-        punto_pin: eForm.puntoPin.trim(),
+        punto_pin: eForm.puntoPin.trim(), imagenes,
       })
       if (!pin) return
       setShowForm(null)
@@ -240,13 +278,26 @@ export default function EventosPage({ store }: Props) {
           <button className="btn btn-primary" onClick={openAdd}>+ Crear evento</button>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <input
             className="form-input"
             placeholder="🔍 Buscar por título, descripción, dirección o punto de apoyo..."
             value={search}
             onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 220 }}
           />
+          <select
+            className="form-select"
+            value={puntoFilter}
+            onChange={e => setPuntoFilter(e.target.value)}
+            style={{ width: 'auto', maxWidth: 280 }}
+            aria-label="Filtrar por punto de apoyo"
+          >
+            <option value="todos">🏪 Todos los puntos de apoyo</option>
+            {puntosDeCiudad.map(p => (
+              <option key={p.id} value={p.id}>{ICONO_PUNTO_APOYO[p.tipo] ?? '🏪'} {p.nombre}</option>
+            ))}
+          </select>
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -268,50 +319,75 @@ export default function EventosPage({ store }: Props) {
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-          {items.map(e => {
-            const vigente = isVigente(e)
-            return (
-              <div key={e.id} className="card card-hover">
-                <div style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1f2430' }}>{e.titulo}</h3>
-                    <span className={`tag ${vigente ? 'tag-green' : 'tag-gray'}`} style={{ fontSize: 10.5 }}>
-                      {vigente ? '🟢 Vigente' : '⚪ Inactivo'}
-                    </span>
-                  </div>
-                  <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>
-                    🕒 {fmtPeriodo(e)}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: e.punto?.color ?? '#003893', flexShrink: 0, border: '2px solid #fff', boxShadow: '0 0 0 1px #e1e4e9' }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>
-                      {e.punto?.nombre ?? 'Punto de apoyo'}
-                    </span>
-                    <span className="tag tag-blue" style={{ fontSize: 10.5 }}>
-                      {ICONO_PUNTO_APOYO[e.punto?.tipo ?? ''] ?? '🏪'} {e.punto?.tipo}
-                    </span>
-                  </div>
-                  {e.descripcion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px' }}>{e.descripcion}</p>}
-                  {e.direccion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>📍 {e.direccion}</p>}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <a
-                      className="btn btn-outline btn-sm"
-                      style={{ textDecoration: 'none' }}
-                      href={`https://maps.google.com/?q=${e.lat},${e.lng}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      🗺️ Cómo llegar
-                    </a>
-                    <button className="btn btn-outline btn-sm" onClick={() => openEdit(e)}>✎ Editar / activar</button>
-                    <button className="btn btn-red btn-sm" onClick={() => { setDeleteTarget(e); setDeletePin('') }}>🗑</button>
-                  </div>
-                </div>
+        {/* Eventos agrupados por punto de apoyo */}
+        {(() => {
+          const grupos = new Map<string, { punto: any; eventos: typeof items }>()
+          for (const e of items) {
+            const key = e.punto?.id ? `p${e.punto.id}` : 'sin_punto'
+            const g = grupos.get(key)
+            if (g) g.eventos.push(e)
+            else grupos.set(key, { punto: e.punto ?? null, eventos: [e] })
+          }
+          return Array.from(grupos.values()).map(({ punto, eventos }) => (
+            <div key={punto?.id ?? 'sin_punto'} style={{ marginBottom: 28 }}>
+              {/* Encabezado del punto de apoyo */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                <span style={{ width: 14, height: 14, borderRadius: '50%', background: punto?.color ?? '#003893', flexShrink: 0, border: '2px solid #fff', boxShadow: '0 0 0 1px #e1e4e9' }} />
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: '#1f2430', margin: 0 }}>
+                  {punto ? `${ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} ${punto.nombre}` : '🏪 Puntos de apoyo'}
+                </h2>
+                {punto?.tipo && (
+                  <span className="tag tag-blue" style={{ fontSize: 11 }}>{ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} {punto.tipo}</span>
+                )}
+                <span style={{ fontSize: 12, color: '#9AA0AC' }}>{eventos.length} evento{eventos.length === 1 ? '' : 's'}</span>
               </div>
-            )
-          })}
-        </div>
+              <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+                {eventos.map(e => {
+                  const vigente = isVigente(e)
+                  return (
+                    <div key={e.id} className="card card-hover">
+                      <div style={{ padding: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1f2430' }}>{e.titulo}</h3>
+                          <span className={`tag ${vigente ? 'tag-green' : 'tag-gray'}`} style={{ fontSize: 10.5 }}>
+                            {vigente ? '🟢 Vigente' : '⚪ Inactivo'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>
+                          🕒 {fmtPeriodo(e)}
+                        </p>
+                        {e.descripcion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px' }}>{e.descripcion}</p>}
+                        {e.direccion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>📍 {e.direccion}</p>}
+                        {e.imagenes && e.imagenes.length > 0 && (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 10px' }}>
+                            {e.imagenes.map((img, i) => (
+                              <a key={i} href={img} target="_blank" rel="noreferrer" title={`Evidencia ${i + 1}`}>
+                                <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #e1e4e9' }} />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <a
+                            className="btn btn-outline btn-sm"
+                            style={{ textDecoration: 'none' }}
+                            href={`https://maps.google.com/?q=${e.lat},${e.lng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            🗺️ Cómo llegar
+                          </a>
+                          <button className="btn btn-outline btn-sm" onClick={() => openEdit(e)}>✎ Editar / activar</button>
+                          <button className="btn btn-red btn-sm" onClick={() => { setDeleteTarget(e); setDeletePin('') }}>🗑</button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        })()}
       </div>
 
       {/* Formulario con mini-mapa para ubicar el evento */}
@@ -336,6 +412,34 @@ export default function EventosPage({ store }: Props) {
           <div className="form-group">
             <label className="form-label">Descripción</label>
             <textarea className="form-input" rows={3} value={eForm.descripcion} onChange={e => setEForm(p => ({ ...p, descripcion: e.target.value }))} placeholder="Detalles de la actividad: qué habrá, requisitos, horarios..." />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Evidencias (galería de imágenes)</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {eForm.imagenes.map((img, i) => (
+                <div key={i} style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e1e4e9' }} />
+                  <button
+                    type="button"
+                    onClick={() => setEForm(p => ({ ...p, imagenes: p.imagenes.filter((_, j) => j !== i) }))}
+                    style={{ position: 'absolute', top: -6, right: -6, background: '#CE1126', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', lineHeight: 1 }}
+                    aria-label={`Quitar evidencia ${i + 1}`}
+                  >✕</button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => evidenciaRef.current?.click()}
+                style={{ width: 96, height: 72, borderRadius: 8, borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                📷 Agregar
+              </button>
+            </div>
+            <span style={{ fontSize: 11.5, color: '#9AA0AC', display: 'block', marginTop: 6 }}>
+              JPG, PNG, WEBP — adjunta fotos de la actividad como evidencia.
+            </span>
+            <input ref={evidenciaRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleEvidencia} />
           </div>
           {!showForm.id && (
             <div className="form-group">

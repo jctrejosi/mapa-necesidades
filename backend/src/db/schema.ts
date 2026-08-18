@@ -340,6 +340,7 @@ export const eventos = pgTable(
     lat: numeric('lat', { precision: 10, scale: 7 }).notNull(),
     lng: numeric('lng', { precision: 10, scale: 7 }).notNull(),
     direccion: varchar('direccion', { length: 200 }),
+    imagenes: text('imagenes').array(),
     activo: boolean('activo').notNull().default(true),
     fechaInicio: timestamp('fecha_inicio', { withTimezone: true }).notNull(),
     fechaFin: timestamp('fecha_fin', { withTimezone: true }),

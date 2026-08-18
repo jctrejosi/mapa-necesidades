@@ -33,11 +33,19 @@ type EventoBody = {
   lat?: unknown;
   lng?: unknown;
   direccion?: string;
+  imagenes?: unknown;
   activo?: unknown;
   fecha_inicio?: string;
   fecha_fin?: string;
   visitor_id?: string;
 };
+
+/** Convierte un array de URLs de imágenes a un array limpio (o null si está vacío). */
+function toStrArray(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const arr = v.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean);
+  return arr.length ? arr : null;
+}
 
 /** Acepta timestamps ISO; null si la entrada no es una fecha válida. */
 function toTs(v: unknown): Date | null {
@@ -82,6 +90,7 @@ class EventosService {
       lat: asNum(e.lat),
       lng: asNum(e.lng),
       direccion: e.direccion ?? '',
+      imagenes: e.imagenes ?? [],
       activo: e.activo,
       vigente: this.vigente(e),
       fecha_inicio: tsIso(e.fechaInicio),
@@ -163,6 +172,7 @@ class EventosService {
         lat: String(lat),
         lng: String(lng),
         direccion: str(b.direccion) || null,
+        imagenes: toStrArray(b.imagenes),
         activo: toBool(b.activo, true),
         fechaInicio,
         fechaFin,
@@ -226,6 +236,7 @@ class EventosService {
     }
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
     if (b.direccion !== undefined) set.direccion = str(b.direccion) || null;
+    if (b.imagenes !== undefined) set.imagenes = toStrArray(b.imagenes);
     if (b.activo !== undefined) set.activo = toBool(b.activo, true);
     if (b.fecha_inicio !== undefined) {
       const d = toTs(b.fecha_inicio);

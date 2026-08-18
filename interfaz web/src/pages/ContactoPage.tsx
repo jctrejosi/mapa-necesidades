@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import logoDsi from '../../assets/logo-dsi.png'
 
 /**
  * ⚠️ CONFIGURACIÓN DEL CAFÉ ☕
@@ -10,8 +11,8 @@ const CAFE_LINK = ''
 const CAFE_QR_IMAGE = '/qr-cafe.png'
 
 const TELEFONOS = [
-  { numero: '314 885 4358', raw: '3148854358', label: 'Línea de apoyo solidario' },
   { numero: '310 381 7213', raw: '3103817213', label: 'Coordinación general' },
+  { numero: '314 885 4358', raw: '3148854358', label: 'Línea de apoyo' },
 ]
 
 export default function ContactoPage() {
@@ -88,6 +89,26 @@ export default function ContactoPage() {
             </div>
           )}
         </div>
+
+        {/* Franjas de créditos */}
+        <a
+          href="https://dsi-software.co/"
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none', marginBottom: 10 }}
+        >
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Desarrollo patrocinado por</span>
+          <img src={logoDsi} alt="DSI" style={{ height: 28, objectFit: 'contain' }} />
+        </a>
+        <a
+          href="https://www.jcti.xyz"
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none' }}
+        >
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Colaborador</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#003893' }}>www.jcti.xyz</span>
+        </a>
       </div>
     </div>
   )
