@@ -11,6 +11,7 @@ export const TIPOS_NECESIDAD_GRUPOS: { group: string; items: { value: string; ic
   ] },
   { group: '🏠 Hogar y reconstrucción', items: [
     { value: 'Refugio y abrigo', icon: '🛏️' },
+    { value: 'Escombros', icon: '🧱' },
     { value: 'Maquinaria y rescate', icon: '🚜' },
   ] },
   { group: '🚗 Movilidad', items: [{ value: 'Transporte', icon: '🚗' }] },
@@ -24,7 +25,7 @@ export const TIPOS_NECESIDAD: string[] = TIPOS_NECESIDAD_GRUPOS.flatMap(g => g.i
 
 export const CATEGORIAS_OFRECIMIENTO = [
   'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas', 'Transporte',
-  'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otros'
+  'Voluntariado', 'Refugio y abrigo', 'Escombros', 'Maquinaria y rescate', 'Otros'
 ]
 
 export const TIPOS_PUNTO_APOYO = [
@@ -58,6 +59,7 @@ export const NEED_LAYERS = [
   { key: 'salud', icon: '🩺', label: '🩺 Servicios médicos' },
   { key: 'ropa', icon: '🧥', label: '🧥 Ropa / Cobijas' },
   { key: 'maquinaria', icon: '🚜', label: '🚜 Maquinaria y rescate' },
+  { key: 'escombros', icon: '🧱', label: '🧱 Escombros' },
   { key: 'mascotas', icon: '🐾', label: '🐾 Mascotas' },
   { key: 'otro', icon: '🆘', label: '🆘 Otros' },
 ]
@@ -76,6 +78,7 @@ export function needKey(tipo: string): string {
   if (t.includes('médic') || t.includes('medic') || t.includes('salud') || t.includes('psico') || t.includes('sangre') || t.includes('hospital')) return 'salud'
   if (t.includes('ropa') || t.includes('cobija') || t.includes('abrigo')) return 'ropa'
   if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'maquinaria'
+  if (t.includes('escombro') || t.includes('cascajo') || t.includes('derrumbe') || t.includes('remoci')) return 'escombros'
   if (t.includes('mascota') || t.includes('veterinaria')) return 'mascotas'
   return 'otro'
 }
@@ -89,6 +92,7 @@ export function needIcon(tipo: string): string {
     ['líder', '👤'], ['lider', '👤'], ['hospital', '🏥'], ['ong', '🤝'],
     ['transporte', '🚗'], ['voluntariado', '🤝'], ['psico', '🧠'],
     ['comida', '🍞'], ['rescate', '🚜'], ['maquinaria', '🚜'],
+    ['escombro', '🧱'], ['cascajo', '🧱'], ['derrumbe', '🧱'], ['remoci', '🧱'],
   ]
   for (const [k, icon] of specific) if (t.includes(k)) return icon
   return NEED_LAYERS.find(l => l.key === needKey(t))?.icon ?? '🆘'
@@ -104,6 +108,7 @@ export function needLabel(tipo: string): string {
   if (t.includes('transporte')) return 'Transporte'
   if (t.includes('voluntariado')) return 'Voluntariado'
   if (t.includes('maquinaria') || t.includes('rescate') || t.includes('herramienta')) return 'Maquinaria y rescate'
+  if (t.includes('escombro') || t.includes('cascajo') || t.includes('derrumbe') || t.includes('remoci')) return 'Escombros'
   return 'Otro'
 }
 

@@ -261,7 +261,7 @@ export default function PuntosApoyoPage({ store }: Props) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline" onClick={() => setShowMapa(true)}>🗺️ Ver mapa</button>
+            <button className="btn btn-outline" onClick={() => setShowMapa(true)}>🗺️ Ver puntos de apoyo</button>
             <button className="btn btn-primary" onClick={openAdd}>+ Agregar punto de apoyo</button>
           </div>
         </div>

@@ -33,17 +33,36 @@ function clientIp(req: Request): string | null {
   return (req.ip || req.socket?.remoteAddress || '').replace('::ffff:', '').slice(0, 45) || null;
 }
 
+/** ¿La IP es localhost/loopback? Estas visitas no deben registrarse ni contarse nunca. */
+function isLoopback(ip: string | null | undefined): boolean {
+  if (!ip) return false;
+  const p = ip.replace('::ffff:', '').toLowerCase();
+  return p === 'localhost' || p === '::1' || p === '0.0.0.0' || p.startsWith('127.');
+}
+
+/** Filtro SQL: excluye las visitas con IP de loopback (incluye filas viejas). */
+const noLoopback = sql`(
+  ${visitas.ip} IS NULL OR (
+    ${visitas.ip} NOT IN ('127.0.0.1', '::1', '0.0.0.0', 'localhost')
+    AND ${visitas.ip} NOT LIKE '127.%'
+    AND ${visitas.ip} NOT LIKE '::ffff:127.%'
+  )
+)`;
+
 @Injectable()
 class VisitasService {
   constructor(@Inject(DB) private db: Db) {}
 
   /** Registra una visita con la info disponible sin permisos (IP, UA, referrer...). */
   async create(req: Request, b: VisitaBody) {
+    const ip = clientIp(req);
+    // Las visitas desde localhost/loopback no se registran (y por tanto no cuentan nunca).
+    if (isLoopback(ip)) return { ok: true, skipped: true };
     const [v] = await this.db
       .insert(visitas)
       .values({
         visitorId: str(b.visitor_id)?.slice(0, 64) || 'anon',
-        ip: clientIp(req),
+        ip,
         userAgent: str(req.headers['user-agent'])?.slice(0, 2000) || null,
         referrer: str(req.headers['referer'] || req.headers['referrer'])?.slice(0, 2000) || null,
         path: str(b.path)?.slice(0, 200) || null,
@@ -58,6 +77,7 @@ class VisitasService {
     const rows = await this.db
       .select()
       .from(visitas)
+      .where(noLoopback)
       .orderBy(desc(visitas.createdAt))
       .limit(Math.min(Math.max(limit, 1), 200));
     return rows;
@@ -71,11 +91,13 @@ class VisitasService {
         hoy: count(sql`CASE WHEN ${visitas.createdAt} >= date_trunc('day', now()) THEN 1 END`),
         unicos: countDistinct(visitas.visitorId),
       })
-      .from(visitas);
+      .from(visitas)
+      .where(noLoopback);
     const r = rows[0] ?? { total: 0, hoy: 0, unicos: 0 };
     const last = await this.db
       .select({ at: visitas.createdAt })
       .from(visitas)
+      .where(noLoopback)
       .orderBy(desc(visitas.createdAt))
       .limit(1);
     return {

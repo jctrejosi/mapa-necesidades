@@ -39,7 +39,7 @@ export default function AyudaPage({ setPage }: Props) {
           <Step n={2} text="Si das el permiso, tu ubicación se captura y el formulario se abre con la dirección ya llenada (verás «📍 Ubicación capturada correctamente»)." />
           <Step n={3} text="Si no das el permiso o falla, verás un aviso… pero puedes continuar igual: escribe la dirección a mano, coloca el marcador en el mini-mapa (clic o arrastra) o usa «📍 Usar mi ubicación»." />
           <Step n={4} text="La dirección y el marcador del mapa van sincronizados: si mueves el marcador se actualiza la dirección, y si corriges la dirección se mueve el marcador." />
-          <Step n={5} text="Elige el tipo de ayuda (opcional, por defecto «Otro»): Comida y agua, Servicios médicos, Atención psicosocial, Mascotas, Transporte, Voluntariado, Refugio y abrigo, Maquinaria y rescate… también tipos de puntos de apoyo (farmacia, banco de sangre, hospital…) y «Mascotas perdidas» o «Daños», que tienen su propio flujo." />
+          <Step n={5} text="Elige el tipo de ayuda (opcional, por defecto «Otro»): Comida y agua, Servicios médicos, Atención psicosocial, Mascotas, Transporte, Voluntariado, Refugio y abrigo, Escombros, Maquinaria y rescate… también tipos de puntos de apoyo (farmacia, banco de sangre, hospital…) y «Mascotas perdidas» o «Daños», que tienen su propio flujo." />
           <Step n={6} text="Escribe la descripción y tu teléfono (obligatorios) y, si quieres, adjunta una foto." />
           <Step n={7} text='Toca "Publicar". Recibirás un código de 4 dígitos (PIN) que debes guardar para editar o borrar tu reporte. Si elegiste «Daños», en su lugar se genera un radicado.' />
         </Block>
@@ -77,7 +77,7 @@ export default function AyudaPage({ setPage }: Props) {
 
         <Block icon="🔔" title="Reportes y actividad reciente">
           <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-            El panel <strong>📋 Reportes</strong> (botón sobre el mapa) muestra la <strong>actividad reciente</strong>: los últimos 10 reportes de la plataforma (necesidades, ofrecimientos, mascotas, viviendas, daños, noticias y eventos) en tiempo real, sin importar hace cuánto se publicaron. Al tocar uno se abre su detalle. También llegará una notificación cuando alguien publique algo nuevo.
+            El panel <strong>📋 Reportes</strong> (botón sobre el mapa) muestra la <strong>actividad reciente</strong>: los 3 reportes más recientes de la plataforma (necesidades, ofrecimientos, mascotas, viviendas, daños, noticias y eventos) en tiempo real. Al tocar uno se abre su detalle. También llegará una notificación cuando alguien publique algo nuevo.
           </p>
         </Block>
 

@@ -24,6 +24,7 @@ const CATEGORIAS = [
   'Transporte',
   'Voluntariado',
   'Refugio y abrigo',
+  'Escombros',
   'Maquinaria y rescate',
   'Otro',
 ];
@@ -38,7 +39,8 @@ Debes clasificar cada reporte en EXACTAMENTE una de estas categorías:
 - "Transporte": vehículos, combustible, traslados, mudanzas/trasteos con vehículo.
 - "Voluntariado": pedir personas/manos para ayudar, desalojar, jornadas de voluntarios.
 - "Refugio y abrigo": alojamiento, vivienda, arriendo, albergue, local comercial, ropa, cobijas, lonas.
-- "Maquinaria y rescate": materiales de construcción (cemento, tejas, varillas, ladrillos), escombros, remoción, herramientas, maquinaria, reparación o revisión estructural.
+- "Escombros": retiro, recogida o remoción de escombros, cascajo, derrumbes, palear o limpiar escombros.
+- "Maquinaria y rescate": materiales de construcción (cemento, tejas, varillas, ladrillos), herramientas, maquinaria, reparación o revisión estructural.
 - "Otro": SOLO si de verdad no corresponde a ninguna de las anteriores.
 
 Reglas:

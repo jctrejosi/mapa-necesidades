@@ -3,7 +3,7 @@ import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
 import ImageInput from '../components/ImageInput'
-import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria } from '../api'
+import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria, verifyAdmin } from '../api'
 import type { Necesidad, ReporteDano } from '../api/types'
 
 interface Props { store: Store }
@@ -73,10 +73,14 @@ const TIPOS_PUNTO_APOYO = [
   'Fundación', 'Centro de acopio', 'Líder de barrio', 'Hospital', 'ONG', 'Otro',
 ]
 
+/** Paleta de colores para los marcadores de puntos de apoyo (aleatorio por defecto). */
+const MARKER_COLORS = ['#003893', '#CE1126', '#E08E00', '#2E9E5B', '#7C3AED', '#0D9488', '#BE123C']
+const randomColor = () => MARKER_COLORS[Math.floor(Math.random() * MARKER_COLORS.length)]
+
 const TIPOS_NECESIDAD_GRUPOS: { group: string; items: string[] }[] = [
   { group: '🍞 Alimentación', items: ['Comida y agua'] },
   { group: '🩺 Salud y bienestar', items: ['Servicios médicos', 'Atención psicosocial'] },
-  { group: '🏠 Hogar y reconstrucción', items: ['Refugio y abrigo', 'Maquinaria y rescate'] },
+  { group: '🏠 Hogar y reconstrucción', items: ['Refugio y abrigo', 'Escombros', 'Maquinaria y rescate'] },
   { group: '🚗 Movilidad', items: ['Transporte'] },
   { group: '🤝 Apoyo comunitario', items: ['Voluntariado'] },
   { group: '🐾 Mascotas', items: ['Mascotas'] },
@@ -85,7 +89,7 @@ const TIPOS_NECESIDAD_GRUPOS: { group: string; items: string[] }[] = [
 
 const CATEGORIAS_OFRECIMIENTO = [
   'Comida y agua', 'Servicios médicos', 'Atención psicosocial', 'Mascotas',
-  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Maquinaria y rescate', 'Otros',
+  'Transporte', 'Voluntariado', 'Refugio y abrigo', 'Escombros', 'Maquinaria y rescate', 'Otros',
 ]
 
 const TIPOS_ANIMAL = ['Perro', 'Gato', 'Ave', 'Conejo', 'Equino', 'Bovino', 'Cerdo', 'Otro']
@@ -260,6 +264,12 @@ export default function AdminPage({ store }: Props) {
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditDetail, setAuditDetail] = useState<any | null>(null)
 
+  // Confirmación de acciones destructivas: pide la contraseña de admin antes de eliminar.
+  const [confirmDel, setConfirmDel] = useState<{ label: string; fn: () => Promise<unknown> | unknown } | null>(null)
+  const [confirmPass, setConfirmPass] = useState('')
+  const [confirmError, setConfirmError] = useState(false)
+  const [confirmLoading, setConfirmLoading] = useState(false)
+
   const [showPinModal, setShowPinModal] = useState<{ pin: string | null; id: number; type: string } | null>(null)
   const [pinLoading, setPinLoading] = useState(false)
   const [showCentroForm, setShowCentroForm] = useState<any>(null)
@@ -269,7 +279,7 @@ export default function AdminPage({ store }: Props) {
   const [showAddNeed, setShowAddNeed] = useState<number | null>(null)
   const [newNeedForm, setNewNeedForm] = useState({ tipo: 'Agua potable', cantidad: '', prioridad: 'alta' as const, descripcion: '', reportado_por: '', telefono_reporta: '' })
   const [centroForm, setCentroForm] = useState<{ nombre: string; organizacion: string; es_acopio: boolean; es_sangre: boolean; es_alojamiento: boolean; que_recibe: string; direccion: string; telefono: string; horario: string; lat: number; lng: number; estado: 'abierto' | 'cerrado'; imagen: string | null }>({ nombre: '', organizacion: '', es_acopio: true, es_sangre: false, es_alojamiento: false, que_recibe: '', direccion: '', telefono: '', horario: '', lat: 5.07, lng: -75.51, estado: 'abierto', imagen: null })
-  const [puntoForm, setPuntoForm] = useState<{ nombre: string; tipo: string; direccion: string; telefono: string; imagen: string | null; lat: number; lng: number }>({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+  const [puntoForm, setPuntoForm] = useState<{ nombre: string; tipo: string; direccion: string; telefono: string; imagen: string | null; color: string; lat: number; lng: number }>({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: randomColor(), lat: 5.07, lng: -75.51 })
   const [showEventoForm, setShowEventoForm] = useState<any>(null)
   const [eventoForm, setEventoForm] = useState<{ punto_id: number; titulo: string; descripcion: string; direccion: string; lat: number; lng: number; fechaInicio: string; fechaFin: string; activo: boolean }>({ punto_id: 0, titulo: '', descripcion: '', direccion: '', lat: 5.07, lng: -75.51, fechaInicio: '', fechaFin: '', activo: true })
   const [noticiaForm, setNoticiaForm] = useState({ titulo: '', contenido: '', autor: '', ciudad_noticia: '' as string | null })
@@ -289,6 +299,30 @@ export default function AdminPage({ store }: Props) {
     sessionStorage.removeItem('cr_admin')
     await logoutAdmin()
     setAuthed(false)
+  }
+
+  /** Abre el modal que pide la contraseña de admin antes de ejecutar la acción destructiva. */
+  const requireAdmin = (label: string, fn: () => Promise<unknown> | unknown) => {
+    setConfirmPass('')
+    setConfirmError(false)
+    setConfirmLoading(false)
+    setConfirmDel({ label, fn })
+  }
+
+  /** Verifica la contraseña contra el backend y, si es válida, ejecuta el borrado. */
+  const confirmDelExecute = async () => {
+    if (!confirmDel) return
+    if (!confirmPass.trim()) { setConfirmError(true); return }
+    setConfirmLoading(true)
+    try {
+      const { ok } = await verifyAdmin(confirmPass.trim())
+      if (!ok) { setConfirmError(true); setConfirmLoading(false); return }
+      await confirmDel.fn()
+      setConfirmDel(null)
+    } catch {
+      setConfirmError(true)
+    }
+    setConfirmLoading(false)
   }
 
   const loadVisitas = async () => {
@@ -430,7 +464,7 @@ export default function AdminPage({ store }: Props) {
       if (dChip === 'visita' && d.estado !== 'visita_programada') return false
       if (dChip === 'visitados' && d.estado !== 'visitado') return false
       if (hasDate && !inDateRange(d.fecha, dateFrom, dateTo)) return false
-      if (q && `${d.radicado} ${d.tipo_inmueble} ${d.direccion} ${d.nombre_reportante} ${d.telefono_reportante} ${d.cedula ?? ''}`.toLowerCase().includes(q) === false) return false
+      if (q && `${d.radicado} ${d.tipo_inmueble} ${d.direccion} ${d.descripcion} ${d.nombre_reportante} ${d.telefono_reportante} ${d.cedula ?? ''}`.toLowerCase().includes(q) === false) return false
       return true
     })
     return byDateDesc(rows, d => d.fecha)
@@ -523,7 +557,7 @@ export default function AdminPage({ store }: Props) {
       : await addPuntoApoyo({ ...puntoForm, ciudad })
     if (!r) return
     setShowPuntoForm(null)
-    setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+    setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: randomColor(), lat: 5.07, lng: -75.51 })
   }
 
   // ── Eventos (edición con la llave de admin, sin PIN) ──
@@ -685,7 +719,7 @@ export default function AdminPage({ store }: Props) {
                       )}
                       {n.responsable && <span style={{ fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</span>}
                       <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(n.pin, n.id, 'necesidad')}>🔑 PIN</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar necesidad?')) deleteNecesidad(n.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar esta necesidad? Esta acción no se puede deshacer.', () => deleteNecesidad(n.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -730,7 +764,7 @@ export default function AdminPage({ store }: Props) {
                         <button className="btn btn-xs btn-green" onClick={() => updateOfrecimiento(o.id, { estado: 'entregado' })}>✓ Entregado</button>
                       )}
                       <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(o.pin, o.id, 'ofrecimiento')}>🔑 PIN</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteOfrecimiento(o.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este ofrecimiento? Esta acción no se puede deshacer.', () => deleteOfrecimiento(o.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -778,7 +812,7 @@ export default function AdminPage({ store }: Props) {
                             </label>
                             <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(n.pin, n.id, 'necesidad')}>🔑</button>
                             {n.responsable && <button className="btn btn-xs btn-outline" onClick={() => updateNecesidad(n.id, { responsable: null })}>Liberar</button>}
-                            <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar necesidad?')) deleteNecesidad(n.id) }}>✕</button>
+                            <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar esta necesidad? Esta acción no se puede deshacer.', () => deleteNecesidad(n.id))}>✕</button>
                           </div>
                         ))}
                         <button className="btn btn-xs btn-outline" style={{ marginTop: 4, width: 'fit-content' }} onClick={() => setShowAddNeed(s.id)}>+ Agregar necesidad</button>
@@ -793,7 +827,7 @@ export default function AdminPage({ store }: Props) {
                         <button className="btn btn-xs" style={{ background: '#f0f4ff', color: '#003893' }} onClick={() => updateSector(s.id, { estado: s.estado === 'activo' ? 'cerrado' : 'activo' })}>
                           {s.estado === 'activo' ? 'Cerrar' : 'Reactivar'}
                         </button>
-                        <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar sector y sus necesidades?')) deleteSector(s.id) }}>✕</button>
+                        <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este sector y sus necesidades? Esta acción no se puede deshacer.', () => deleteSector(s.id))}>✕</button>
                       </div>
                     </Td>
                   </tr>
@@ -845,7 +879,7 @@ export default function AdminPage({ store }: Props) {
                         setDanoForm({ estado: d.estado, fecha_visita: d.fecha_visita || '', resultado_visita: d.resultado_visita || '', notas_admin: d.notas_admin || '' })
                         setShowDanoGestionar(d)
                       }}>✎ Gestionar</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar reporte?')) deleteDano(d.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este reporte de daños? Esta acción no se puede deshacer.', () => deleteDano(d.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -887,7 +921,7 @@ export default function AdminPage({ store }: Props) {
                         <button className="btn btn-xs btn-green" onClick={() => { if (confirm('¿Marcar como encontrada?')) updateMascota(m.id, { estado: 'encontrado' }) }}>✓ Encontrada</button>
                       )}
                       <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(m.pin, m.id, 'mascota')}>🔑 PIN</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteMascota(m.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este registro de mascota? Esta acción no se puede deshacer.', () => deleteMascota(m.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -924,7 +958,7 @@ export default function AdminPage({ store }: Props) {
                   <Td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(v.pin, v.id, 'vivienda')}>🔑 PIN</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar?')) deleteVivienda(v.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar esta vivienda? Esta acción no se puede deshacer.', () => deleteVivienda(v.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -967,7 +1001,7 @@ export default function AdminPage({ store }: Props) {
                       <button className="btn btn-xs" style={{ background: '#f0f4ff', color: '#003893' }} onClick={() => updateCentro(c.id, { estado: c.estado === 'abierto' ? 'cerrado' : 'abierto' })}>
                         {c.estado === 'abierto' ? 'Cerrar' : 'Abrir'}
                       </button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar centro?')) deleteCentro(c.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este centro? Esta acción no se puede deshacer.', () => deleteCentro(c.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -987,7 +1021,7 @@ export default function AdminPage({ store }: Props) {
           <div className="admin-toolbar">
             <input className="form-input admin-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, tipo, dirección o teléfono…" />
             <button className="btn btn-primary btn-sm" onClick={() => {
-              setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, lat: 5.07, lng: -75.51 })
+              setPuntoForm({ nombre: '', tipo: 'Centro de acopio', direccion: '', telefono: '', imagen: null, color: randomColor(), lat: 5.07, lng: -75.51 })
               setShowPuntoForm({})
             }}>+ Agregar punto de apoyo</button>
           </div>
@@ -1011,8 +1045,8 @@ export default function AdminPage({ store }: Props) {
                   <Td style={{ fontSize: 12.5 }}>{p.telefono || '—'}</Td>
                   <Td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      <button className="btn btn-xs btn-outline" onClick={() => { setPuntoForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, lat: p.lat, lng: p.lng }); setShowPuntoForm(p) }}>✎ Editar</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar punto de apoyo?')) deletePuntoApoyo(p.id) }}>✕</button>
+                      <button className="btn btn-xs btn-outline" onClick={() => { setPuntoForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || randomColor(), lat: p.lat, lng: p.lng }); setShowPuntoForm(p) }}>✎ Editar</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este punto de apoyo? Esta acción no se puede deshacer.', () => deletePuntoApoyo(p.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -1063,7 +1097,7 @@ export default function AdminPage({ store }: Props) {
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs btn-outline" onClick={() => openEventoEdit(e)}>✎ Editar</button>
                       <button className="btn btn-xs btn-outline" onClick={() => updateEvento(e.id, { activo: !e.activo })}>{e.activo ? '⏸ Desactivar' : '▶ Activar'}</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar evento?')) deleteEvento(e.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este evento? Esta acción no se puede deshacer.', () => deleteEvento(e.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -1097,7 +1131,7 @@ export default function AdminPage({ store }: Props) {
                   <Td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs btn-outline" onClick={() => { setNoticiaForm({ titulo: n.titulo, contenido: n.contenido, autor: n.autor, ciudad_noticia: n.ciudad }); setShowNoticiaForm(n) }}>✎ Editar</button>
-                      <button className="btn btn-xs btn-red" onClick={() => { if (confirm('¿Eliminar noticia?')) deleteNoticia(n.id) }}>✕</button>
+                      <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar esta noticia? Esta acción no se puede deshacer.', () => deleteNoticia(n.id))}>✕</button>
                     </div>
                   </Td>
                 </tr>
@@ -1121,8 +1155,8 @@ export default function AdminPage({ store }: Props) {
               {visitas.length === 0 && <Empty text="Sin visitas registradas." />}
               {visitas.map((v, i) => (
                 <tr key={v.id ?? i} className="row-hover">
-                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDate(v.created_at)}</Td>
-                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtTime(v.created_at)}</Td>
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDate(v.createdAt)}</Td>
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtTime(v.createdAt)}</Td>
                   <Td><code style={{ fontSize: 12 }}>{v.path ?? '/'}</code></Td>
                   <Td>{v.ciudad ?? '—'}</Td>
                   <Td style={{ fontSize: 12 }}>{v.lang ?? '—'}</Td>
@@ -1148,7 +1182,7 @@ export default function AdminPage({ store }: Props) {
               {auditoria.length === 0 && <Empty text="Sin modificaciones registradas todavía." />}
               {auditoria.map(a => (
                 <tr key={a.id} className="row-hover">
-                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(a.created_at)}</Td>
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(a.createdAt)}</Td>
                   <Td><code style={{ fontSize: 12 }}>{a.tabla}</code></Td>
                   <Td>#{a.registro_id}</Td>
                   <Td>
@@ -1266,7 +1300,7 @@ export default function AdminPage({ store }: Props) {
           <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 10px' }}>
             {auditDetail.accion === 'create' ? 'Creado' : auditDetail.accion === 'update' ? 'Editado' : 'Borrado'} ·{' '}
             {auditDetail.autor === 'admin' ? '🔐 Admin' : auditDetail.autor === 'usuario' ? '👤 Usuario' : '⚙️ Sistema'} ·{' '}
-            {fmtDateTime(auditDetail.created_at)}
+            {fmtDateTime(auditDetail.createdAt)}
           </p>
           {auditDetail.datos_previos && (
             <div className="form-group">
@@ -1525,6 +1559,35 @@ export default function AdminPage({ store }: Props) {
           <div className="form-group">
             <label className="form-label">Teléfono</label>
             <input className="form-input" type="tel" value={newNeedForm.telefono_reporta} onChange={e => setNewNeedForm(p => ({ ...p, telefono_reporta: e.target.value }))} />
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirmar eliminación: pide la contraseña de admin */}
+      {confirmDel && (
+        <Modal
+          title="🗑 Confirmar eliminación"
+          onClose={() => setConfirmDel(null)}
+          onConfirm={confirmDelExecute}
+          confirmLabel={confirmLoading ? 'Verificando...' : 'Eliminar'}
+          confirmClass="btn btn-red"
+        >
+          <p style={{ fontSize: 14, color: '#1f2430', margin: '0 0 14px' }}>{confirmDel.label}</p>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Contraseña de administrador</label>
+            <input
+              className="form-input"
+              type="password"
+              value={confirmPass}
+              autoFocus
+              disabled={confirmLoading}
+              onChange={e => { setConfirmPass(e.target.value); setConfirmError(false) }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmDelExecute() }}
+              placeholder="••••••••"
+            />
+            {confirmError && (
+              <p style={{ color: '#CE1126', fontSize: 12, margin: '6px 0 0' }}>Contraseña incorrecta. Verifica e intenta de nuevo.</p>
+            )}
           </div>
         </Modal>
       )}

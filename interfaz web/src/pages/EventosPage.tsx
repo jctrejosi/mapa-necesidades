@@ -94,6 +94,10 @@ export default function EventosPage({ store }: Props) {
   const [puntoFilter, setPuntoFilter] = useState('todos')
   const [tick, setTick] = useState(0)
 
+  // Grupos (por punto de apoyo) abiertos/cerrados. Sin estado guardado:
+  // un grupo se abre por defecto si tiene eventos vigentes, o si se filtra por él.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+
   const [showForm, setShowForm] = useState<any>(null)
   const [eForm, setEForm] = useState({
     titulo: '', descripcion: '', puntoPin: '', direccion: '',
@@ -116,6 +120,12 @@ export default function EventosPage({ store }: Props) {
 
   // Al cambiar de ciudad se reinicia el filtro por punto de apoyo.
   useEffect(() => { setPuntoFilter('todos') }, [ciudad])
+
+  // Al filtrar por un punto concreto, se abre su grupo para ver los eventos de inmediato.
+  useEffect(() => {
+    setOpenGroups({})
+    if (puntoFilter !== 'todos') setOpenGroups({ [`p${puntoFilter}`]: true })
+  }, [puntoFilter, ciudad])
 
   /** ¿Visible en el mapa ahora mismo? */
   const isVigente = (e: any) => {
@@ -328,66 +338,105 @@ export default function EventosPage({ store }: Props) {
             if (g) g.eventos.push(e)
             else grupos.set(key, { punto: e.punto ?? null, eventos: [e] })
           }
-          return Array.from(grupos.values()).map(({ punto, eventos }) => (
-            <div key={punto?.id ?? 'sin_punto'} style={{ marginBottom: 28 }}>
-              {/* Encabezado del punto de apoyo */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-                <span style={{ width: 14, height: 14, borderRadius: '50%', background: punto?.color ?? '#003893', flexShrink: 0, border: '2px solid #fff', boxShadow: '0 0 0 1px #e1e4e9' }} />
-                <h2 style={{ fontSize: 17, fontWeight: 800, color: '#1f2430', margin: 0 }}>
-                  {punto ? `${ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} ${punto.nombre}` : '🏪 Puntos de apoyo'}
-                </h2>
-                {punto?.tipo && (
-                  <span className="tag tag-blue" style={{ fontSize: 11 }}>{ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} {punto.tipo}</span>
-                )}
-                <span style={{ fontSize: 12, color: '#9AA0AC' }}>{eventos.length} evento{eventos.length === 1 ? '' : 's'}</span>
-              </div>
-              <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                {eventos.map(e => {
-                  const vigente = isVigente(e)
-                  return (
-                    <div key={e.id} className="card card-hover">
-                      <div style={{ padding: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1f2430' }}>{e.titulo}</h3>
-                          <span className={`tag ${vigente ? 'tag-green' : 'tag-gray'}`} style={{ fontSize: 10.5 }}>
-                            {vigente ? '🟢 Vigente' : '⚪ Inactivo'}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>
-                          🕒 {fmtPeriodo(e)}
-                        </p>
-                        {e.descripcion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px' }}>{e.descripcion}</p>}
-                        {e.direccion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>📍 {e.direccion}</p>}
-                        {e.imagenes && e.imagenes.length > 0 && (
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 10px' }}>
-                            {e.imagenes.map((img, i) => (
-                              <a key={i} href={img} target="_blank" rel="noreferrer" title={`Evidencia ${i + 1}`}>
-                                <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #e1e4e9' }} />
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <a
-                            className="btn btn-outline btn-sm"
-                            style={{ textDecoration: 'none' }}
-                            href={`https://maps.google.com/?q=${e.lat},${e.lng}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            🗺️ Cómo llegar
-                          </a>
-                          <button className="btn btn-outline btn-sm" onClick={() => openEdit(e)}>✎ Editar / activar</button>
-                          <button className="btn btn-red btn-sm" onClick={() => { setDeleteTarget(e); setDeletePin('') }}>🗑</button>
-                        </div>
-                      </div>
+          const arr = Array.from(grupos.values())
+          const todosAbiertos = arr.every(g => {
+            const key = g.punto?.id ? `p${g.punto.id}` : 'sin_punto'
+            return openGroups[key] ?? g.eventos.some(isVigente)
+          })
+          return (
+            <>
+              {arr.length > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setOpenGroups(Object.fromEntries(arr.map(g => [g.punto?.id ? `p${g.punto.id}` : 'sin_punto', !todosAbiertos])))}  
+                    style={{ fontSize: 12 }}
+                  >
+                    {todosAbiertos ? '▴ Contraer todos' : '▾ Expandir todos'}
+                  </button>
+                </div>
+              )}
+              {arr.map(({ punto, eventos }) => {
+                const key = punto?.id ? `p${punto.id}` : 'sin_punto'
+                const abierto = openGroups[key] ?? eventos.some(isVigente)
+                return (
+                  <div key={key} style={{ marginBottom: 16 }}>
+                    {/* Encabezado del punto de apoyo: al darle click despliega las tarjetas */}
+                    <div
+                      onClick={() => setOpenGroups(o => ({ ...o, [key]: !abierto }))}
+                      role="button"
+                      aria-expanded={abierto}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                        cursor: 'pointer', userSelect: 'none', padding: '10px 14px', borderRadius: 10,
+                        background: abierto ? '#eef1f8' : '#fff', border: '1px solid #e1e4e9',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'background .15s',
+                      }}
+                    >
+                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: punto?.color ?? '#003893', flexShrink: 0, border: '2px solid #fff', boxShadow: '0 0 0 1px #e1e4e9' }} />
+                      <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1f2430', margin: 0, flex: 1 }}>
+                        {punto ? `${ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} ${punto.nombre}` : '🏪 Puntos de apoyo'}
+                      </h2>
+                      {punto?.tipo && (
+                        <span className="tag tag-blue" style={{ fontSize: 10.5 }}>{ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} {punto.tipo}</span>
+                      )}
+                      <span style={{ fontSize: 11.5, color: '#9AA0AC' }}>
+                        {eventos.length} evento{eventos.length === 1 ? '' : 's'}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#003893', transition: 'transform .15s', transform: abierto ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
                     </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))
-        })()}
+                    {abierto && (
+                      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', marginTop: 12 }}>
+                        {eventos.map(e => {
+                          const vigente = isVigente(e)
+                          return (
+                            <div key={e.id} className="card card-hover">
+                              <div style={{ padding: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1f2430' }}>{e.titulo}</h3>
+                                  <span className={`tag ${vigente ? 'tag-green' : 'tag-gray'}`} style={{ fontSize: 10.5 }}>
+                                    {vigente ? '🟢 Vigente' : '⚪ Inactivo'}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>
+                                  🕒 {fmtPeriodo(e)}
+                                </p>
+                                {e.descripcion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 4px' }}>{e.descripcion}</p>}
+                                {e.direccion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>📍 {e.direccion}</p>}
+                                {e.imagenes && e.imagenes.length > 0 && (
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 10px' }}>
+                                    {e.imagenes.map((img, i) => (
+                                      <a key={i} href={img} target="_blank" rel="noreferrer" title={`Evidencia ${i + 1}`}>
+                                        <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #e1e4e9' }} />
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  <a
+                                    className="btn btn-outline btn-sm"
+                                    style={{ textDecoration: 'none' }}
+                                    href={`https://maps.google.com/?q=${e.lat},${e.lng}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    🗺️ Cómo llegar
+                                  </a>
+                                  <button className="btn btn-outline btn-sm" onClick={() => openEdit(e)}>✎ Editar / activar</button>
+                                  <button className="btn btn-red btn-sm" onClick={() => { setDeleteTarget(e); setDeletePin('') }}>🗑</button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )
+        })()}   
       </div>
 
       {/* Formulario con mini-mapa para ubicar el evento */}

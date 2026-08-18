@@ -1278,12 +1278,6 @@ export default function MapPage({ store, setPage }: Props) {
         {/* 🔔 Actividad reciente — notificaciones en tiempo real */}
         <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={reciente.length}
           badge={unread > 0 ? <span className="tag tag-red" style={{ fontSize: 10 }}>{unread} nuevas</span> : null}>
-          {pendingNeeds.length > 0 && (
-            <>
-              <p style={{ fontSize: 11, fontWeight: 800, color: '#CE1126', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🆘 Últimos pendientes</p>
-              {pendingNeeds.map(n => renderPendingItem(n))}
-            </>
-          )}
           {reciente.length === 0 ? (
             <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>
               Sin actividad todavía. Cuando alguien reporte una necesidad, una mascota, un ofrecimiento,
