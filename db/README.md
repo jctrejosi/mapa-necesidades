@@ -1,59 +1,57 @@
-# SolidaridadCO — Despliegue con Docker
+# SolidaridadCO — Carpeta `db`
 
-Este directorio orquesta el stack: **backend (NestJS/Drizzle) + cliente + admin**. La **base de datos vive en Supabase** (PostgreSQL en la nube); aquí ya no corre un PostgreSQL local.
+Orquesta la **base de datos local (PostgreSQL en Docker)** y guarda los datos y
+las herramientas relacionadas. Los servicios (backend, web, admin, bot) los
+levanta `setup.js` en el host; **lo único que corre en Docker aquí es la BD**.
 
-## Arranque
+## Contenido
 
-```bash
-cd db
-cp .env.example .env       # opcional: cambia ADMIN_PASSWORD / credenciales
-docker compose up -d --build
-```
-
-Quedará corriendo:
-
-| Servicio | URL |
+| Ruta | Qué es |
 |---|---|
-| Frontend (cliente / mapa público) | http://localhost:8080 |
-| Panel admin (interfaz separada) | http://localhost:8081 (clave `admin123` por defecto) |
-| API | http://localhost:3000/api |
-| PostgreSQL | Supabase (nube) — el backend corre las migraciones al arrancar |
+| `docker-compose.yml` | PostgreSQL local (puerto **5435**) + perfiles del stack |
+| `.env` / `.env.example` | Variables de entorno para compose (`.env` no se sube) |
+| `scripts/sync-prod.sh` | Trae los datos de PRODUCCIÓN (Supabase) a la base local |
+| `scripts/backup.sh` | Copia de seguridad de la base local en `db/backups/` |
+| `data/bk.sql` | Dump legado (MySQL) usado como semilla (`backups/bk.sql` en la raíz es idéntico) |
+| `data/danos-Manizales.csv` | Exportación de reportes de daños |
+| `data/courtyard-*.webp` | Imagen sobrante de pruebas (puede borrarse) |
 
-## Base de datos (Supabase)
-
-- Cada proyecto de Supabase tiene una instancia de PostgreSQL con la base por defecto `postgres` (a la que apunta `DATABASE_URL`). No hay que "crear una db aparte": las tablas se crean en esa base con las migraciones de Drizzle.
-- **URL**: `postgresql://postgres:…@db.idiypzqlbjeqgphjlabz.supabase.co:5432/postgres`
-  - Si la contraseña tiene caracteres especiales (ej. `@`) debe ir URL-encoded (`@` → `%40`).
-  - Supabase exige SSL: el backend la conecta con `DB_SSL=true`.
-- Las migraciones se aplican automáticamente cuando arranca el backend (`npm run db:migrate` también funciona desde `backend/`).
-
-## Migrar los datos de producción (una sola vez)
-
-1. El dump MySQL de producción ya está en `../backups/mapanece_mapa-necesidades.sql` (montado en el contenedor backend en `/app/legacy-backups`).
-2. Con el stack arriba, ejecuta:
+## Base de datos local
 
 ```bash
-docker compose exec backend npm run db:import-legacy
+docker compose -f db/docker-compose.yml up -d db   # PostgreSQL local en :5435
 ```
 
-El script trunca e importa las 9 tablas conservando los ids y fija las secuencias. Al final valida los conteos esperados (sectores=22, contactos=21, necesidades=20, ofrecimientos=19, mascotas=1, centros=6, noticias=1, viviendas=0, danos=14).
+> El puerto es **5435** a propósito: evita chocar con otros proyectos locales
+> (p. ej. `chatbot-db` usa 5434).
 
-3. **Imágenes**: copia los archivos de `uploads/` del servidor de producción al volumen del backend:
+## Copia de seguridad de la base local
 
 ```bash
-docker compose cp <ruta_local_uploads>/. backend:/app/uploads/
+db/scripts/backup.sh
 ```
 
-## Tareas útiles
+Genera `db/backups/redsolidaria_<fecha>.sql.gz` (volcado comprimido con fecha/hora).
+Requiere la BD local arriba. Los backups no se suben a git (ver `db/.gitignore`).
+
+## Traer datos de producción a local
 
 ```bash
-docker compose logs -f backend     # logs de la API
-docker compose down                # detiene los contenedores (la DB sigue en Supabase)
+db/scripts/sync-prod.sh
 ```
 
-## Desarrollo (sin Docker)
+Hace **UPSERT por id** (inserta lo nuevo, actualiza lo existente, no borra nada).
+Requiere `PROD_DATABASE_URL` en `backend/.env` (con la contraseña de Supabase) y
+la base local arriba. Si el backend no está compilado, lo compila primero.
 
-- **Frontend (cliente)**: `cd "../interfaz web" && pnpm install && pnpm dev` (Vite proxya `/api` y `/uploads` a `localhost:3000`).
-- **Frontend (admin)**: `cd "../interfaz web admin" && npm install && npm run dev` (puerto 8444).
-- **Backend**: `cd ../backend && npm install && npm run start:dev` (usa `backend/.env` → Supabase).
-- Migraciones: `npm run db:generate` (tras tocar `src/db/schema.ts`) y `npm run db:migrate`.
+## Arranque completo
+
+Desde la raíz del repo:
+
+```bash
+node setup.js            # levanta backend + web + admin + bot en el host y la BD en Docker
+node setup.js --down     # detiene los servicios locales y la BD (conserva los datos)
+node setup.js --reset    # borra la BD y monta todo desde cero
+```
+
+Los logs quedan en `logs/` (backend, web, admin, bot, db).
