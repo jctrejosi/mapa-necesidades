@@ -11,6 +11,7 @@ interface Props {
 
 const NAV = [
   { id: 'mapa',          label: '🗺️ Mapa' },
+  { id: 'reportes',      label: '📋 Reportes' },
   { id: 'puntos',        label: '🏪 Puntos de apoyo' },
   { id: 'eventos',       label: '📅 Eventos' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },

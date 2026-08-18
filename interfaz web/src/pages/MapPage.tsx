@@ -102,7 +102,7 @@ const ESTADOS_OPCIONES: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-interface Props { store: Store; setPage: (p: string) => void }
+interface Props { store: Store; setPage: (p: string) => void; openReportes?: number }
 
 /**
  * Geocodificación inversa: lat/lng → dirección legible (calle/carrera/número,
@@ -185,7 +185,7 @@ function DetailImageCarousel({ images }: { images: string[] }) {
 }
 
 
-export default function MapPage({ store, setPage }: Props) {
+export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   const { ciudad, sectores, necesidades, puntosApoyo, eventos, mascotas, danos, noticias, ofrecimientos, viviendas,
     notificaciones, markAllRead,
     addSector, addNecesidad, addMascota, addDano, updateNecesidad, registrarVoluntario, getSectorEstado,
@@ -232,6 +232,11 @@ export default function MapPage({ store, setPage }: Props) {
   const [reportesModalOpen, setReportesModalOpen] = useState(false)
   // Detalle del reporte seleccionado (se abre al hacer click en un ítem)
   const [detailItem, setDetailItem] = useState<any | null>(null)
+
+  // El tab «Reportes» del navbar navega al mapa y pide abrir el popup de reportes.
+  useEffect(() => {
+    if (openReportes > 0) setReportesModalOpen(true)
+  }, [openReportes])
   // Voluntarios registrados para el reporte del detalle abierto
   const [detailHelpers, setDetailHelpers] = useState<any[]>([])
   // 🔍 Buscador de reportes por PIN, teléfono o descripción
@@ -1865,6 +1870,55 @@ export default function MapPage({ store, setPage }: Props) {
               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
+              {/* Buscador amplio (PIN, teléfono, descripción, tipo…) como el del mapa */}
+              <div style={{ position: 'relative', margin: '12px 0 4px' }}>
+                <input
+                  className="form-input"
+                  placeholder="🔍 Buscar por PIN, teléfono o descripción…"
+                  value={searchQ}
+                  onChange={e => setSearchQ(e.target.value)}
+                  onFocus={() => setSearchOpen(true)}
+                  onBlur={() => setTimeout(() => setSearchOpen(false), 250)}
+                  style={{ borderRadius: 999, padding: '9px 14px', fontSize: 13.5 }}
+                />
+                {searchOpen && searchQ.trim().length >= 3 && (
+                  <div
+                    onMouseDown={e => e.preventDefault()}
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
+                      marginTop: 6, background: '#fff', borderRadius: 12,
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.18)', border: '1px solid #e1e4e9',
+                      maxHeight: 300, overflowY: 'auto', textAlign: 'left',
+                    }}
+                  >
+                    {searchResults.length === 0 ? (
+                      <p style={{ padding: '14px 16px', margin: 0, fontSize: 13, color: '#6b7280' }}>Sin resultados para “{searchQ.trim()}”</p>
+                    ) : (
+                      searchResults.map((r, i) => (
+                        <button
+                          key={`${r.tabla}-${r.id}-${i}`}
+                          onClick={() => openSearchResult(r)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                            background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0',
+                            padding: '10px 14px', cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
+                          }}
+                        >
+                          <span style={{ fontSize: 18, flexShrink: 0 }}>{r.tipo === 'necesidad' ? needIcon(r.titulo) : (RESULT_ICONS[r.tipo] ?? '🔍')}</span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: '#1f2430', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {r.titulo}
+                            </span>
+                            <span style={{ display: 'block', fontSize: 11.5, color: '#9AA0AC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {r.coincidencia === 'pin' ? `PIN · ${r.ciudad}` : r.coincidencia === 'texto' ? `Descripción · ${r.ciudad}` : `Teléfono · ${r.ciudad}`}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <ReportesPanel />
             </div>
           </div>
