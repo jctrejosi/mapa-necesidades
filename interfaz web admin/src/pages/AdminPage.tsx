@@ -1106,7 +1106,7 @@ export default function AdminPage({ store }: Props) {
           </div>
         }>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Fecha</Th><Th>Página</Th><Th>Ciudad</Th><Th>IP</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
+            <thead><tr><Th>Fecha</Th><Th>Página</Th><Th>Ciudad</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
             <tbody>
               {visitas.length === 0 && <Empty text="Sin visitas registradas." />}
               {visitas.map((v, i) => (
@@ -1114,7 +1114,6 @@ export default function AdminPage({ store }: Props) {
                   <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(v.created_at)}</Td>
                   <Td><code style={{ fontSize: 12 }}>{v.path ?? '/'}</code></Td>
                   <Td>{v.ciudad ?? '—'}</Td>
-                  <Td style={{ fontSize: 12, color: '#6b7280' }}>{v.ip ?? '—'}</Td>
                   <Td style={{ fontSize: 12 }}>{v.lang ?? '—'}</Td>
                   <Td style={{ maxWidth: 160, fontSize: 12, color: '#6b7280' }}>{v.referrer ? v.referrer.slice(0, 60) : '—'}</Td>
                 </tr>
