@@ -47,6 +47,16 @@ const fmtDateTime = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+const fmtDate = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+}
+
+const fmtTime = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+}
+
 // ── Componentes visuales ─────────────────────────────────────────────────────
 
 const TAG: Record<string, string> = {
@@ -1106,12 +1116,13 @@ export default function AdminPage({ store }: Props) {
           </div>
         }>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Fecha</Th><Th>Página</Th><Th>Ciudad</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
+            <thead><tr><Th>Fecha</Th><Th>Hora</Th><Th>Página</Th><Th>Ciudad</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
             <tbody>
               {visitas.length === 0 && <Empty text="Sin visitas registradas." />}
               {visitas.map((v, i) => (
                 <tr key={v.id ?? i} className="row-hover">
-                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDateTime(v.created_at)}</Td>
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtDate(v.created_at)}</Td>
+                  <Td style={{ whiteSpace: 'nowrap', color: '#6b7280' }}>{fmtTime(v.created_at)}</Td>
                   <Td><code style={{ fontSize: 12 }}>{v.path ?? '/'}</code></Td>
                   <Td>{v.ciudad ?? '—'}</Td>
                   <Td style={{ fontSize: 12 }}>{v.lang ?? '—'}</Td>
