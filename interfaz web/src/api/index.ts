@@ -68,6 +68,10 @@ export const createNecesidad = (b: Partial<Necesidad> & { sector_id: number; tip
 export const updateNecesidad = (id: number, b: Record<string, unknown>): Promise<Necesidad> =>
   request(`/necesidades/${id}`, { method: 'PATCH', body: b })
 
+/** Valida el código de edición de una necesidad (¿es válido? ¿es el punto asociado?). */
+export const validarEdicionNecesidad = (id: number, pin: string): Promise<{ ok: boolean; es_punto: boolean }> =>
+  request(`/necesidades/${id}/validar-edicion`, { method: 'POST', body: { pin } })
+
 export const updateNecesidadAdmin = (id: number, b: Record<string, unknown>): Promise<Necesidad> =>
   request(`/necesidades/${id}/admin`, { method: 'PATCH', body: b })
 

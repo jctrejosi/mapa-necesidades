@@ -9,7 +9,7 @@ import PinModal from '../components/PinModal'
 import ImageInput from '../components/ImageInput'
 import ChatbotWidget from '../components/ChatbotWidget'
 import MiniMapPicker from '../components/MiniMapPicker'
-import { uploadImage, listVoluntarios, buscarReportes } from '../api'
+import { uploadImage, listVoluntarios, buscarReportes, validarEdicionNecesidad } from '../api'
 
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -257,6 +257,9 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   // Editar/eliminar cualquier reporte público con el código (PIN/radicado)
   const [editReport, setEditReport] = useState<{ tipo: string; id: number; titulo: string; sectorId?: number } | null>(null)
   const [editStep, setEditStep] = useState<'pin' | 'form'>('pin')
+  // true cuando el código ingresado es el PIN del punto de apoyo asociado: en ese
+  // caso solo se permite cambiar el estado (no nombre/descripción).
+  const [editEsPunto, setEditEsPunto] = useState(false)
   const [editForm, setEditForm] = useState({ pin: '', direccion: '', descripcion: '', imagen: null as string | null, estado: '' })
   const [deleteReport, setDeleteReport] = useState<{ tipo: string; id: number; titulo: string } | null>(null)
   const [deletePin, setDeletePin] = useState('')
@@ -996,6 +999,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
     })
     setEditReport({ ...e, titulo: d.titulo ?? '' })
     setEditStep('pin')
+    setEditEsPunto(false)
   }
 
   const openDelete = (e: { tipo: string; id: number }) => {
@@ -1004,13 +1008,27 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   }
 
   /** Pide el código antes de mostrar el formulario de edición. */
-  const continuarEdit = () => {
+  const continuarEdit = async () => {
     if (!editReport) return
-    if (!editForm.pin.trim()) {
+    const pin = editForm.pin.trim()
+    if (!pin) {
       alert(editReport.tipo === 'dano'
         ? 'Ingresa el número de radicado para poder editar.'
         : 'Ingresa el código de 4 dígitos que se te dio al publicar.')
       return
+    }
+    if (editReport.tipo === 'necesidad') {
+      try {
+        const res = await validarEdicionNecesidad(editReport.id, pin)
+        if (!res.ok) { alert('El código de edición es incorrecto.'); return }
+        // Si el código es el PIN del punto de apoyo asociado, la edición queda
+        // restringida a cambiar el estado y adjuntar evidencias.
+        setEditEsPunto(res.es_punto)
+      } catch {
+        setEditEsPunto(false)
+      }
+    } else {
+      setEditEsPunto(false)
     }
     setEditStep('form')
   }
@@ -1035,13 +1053,14 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
     let r: unknown
     if (editReport.tipo === 'necesidad') {
-      r = await updateNecesidad(editReport.id, {
-        descripcion: editForm.descripcion || undefined,
-        imagen,
-        direccion_sector: editForm.direccion || undefined,
-        estado: (editForm.estado || undefined) as any,
-        pin: codigo,
-      })
+      // El punto de apoyo asociado solo puede cambiar el estado (no nombre/descripción).
+      const body: Record<string, unknown> = { estado: (editForm.estado || undefined) as any, pin: codigo }
+      if (!editEsPunto) {
+        body.descripcion = editForm.descripcion || undefined
+        body.imagen = imagen
+        body.direccion_sector = editForm.direccion || undefined
+      }
+      r = await updateNecesidad(editReport.id, body)
     } else if (editReport.tipo === 'ofrecimiento') {
       r = await updateOfrecimiento(editReport.id, {
         descripcion: editForm.descripcion || undefined,
@@ -2151,33 +2170,52 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
               <div className="form-group">
                 <label className="form-label">{editReport.tipo === 'dano' ? 'Número de radicado' : 'Código de edición'} <span className="req">*</span></label>
                 <input className="form-input" autoFocus value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && editForm.pin.trim() && setEditStep('form')}
+                  onKeyDown={e => { if (e.key === 'Enter') continuarEdit() }}
                   placeholder={editReport.tipo === 'dano' ? 'DA000000' : '····'} maxLength={32}
                   style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 15 }} />
               </div>
             </>
           ) : (
             <>
-              <div className="form-group">
-                <label className="form-label">{editReport.tipo === 'mascota' ? 'Lugar visto' : editReport.tipo === 'vivienda' ? 'Sector / referencia' : 'Dirección'}</label>
-                <input className="form-input" value={editForm.direccion} onChange={e => setEditForm(p => ({ ...p, direccion: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Descripción</label>
-                <textarea className="form-input" rows={3} value={editForm.descripcion} onChange={e => setEditForm(p => ({ ...p, descripcion: e.target.value }))} />
-              </div>
-              {ESTADOS_OPCIONES[editReport.tipo] && (
-                <div className="form-group">
-                  <label className="form-label">Estado</label>
-                  <select className="form-select" value={editForm.estado} onChange={e => setEditForm(p => ({ ...p, estado: e.target.value }))}>
-                    {ESTADOS_OPCIONES[editReport.tipo].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
+              {editEsPunto ? (
+                <>
+                  <div className="alert-blue" style={{ fontSize: 12.5, marginBottom: 12 }}>
+                    🏪 Editaste con el PIN de un punto de apoyo: solo puedes actualizar el
+                    estado del reporte. El nombre y la descripción no se pueden cambiar.
+                  </div>
+                  {ESTADOS_OPCIONES[editReport.tipo] && (
+                    <div className="form-group">
+                      <label className="form-label">Estado</label>
+                      <select className="form-select" value={editForm.estado} onChange={e => setEditForm(p => ({ ...p, estado: e.target.value }))}>
+                        {ESTADOS_OPCIONES[editReport.tipo].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">{editReport.tipo === 'mascota' ? 'Lugar visto' : editReport.tipo === 'vivienda' ? 'Sector / referencia' : 'Dirección'}</label>
+                    <input className="form-input" value={editForm.direccion} onChange={e => setEditForm(p => ({ ...p, direccion: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Descripción</label>
+                    <textarea className="form-input" rows={3} value={editForm.descripcion} onChange={e => setEditForm(p => ({ ...p, descripcion: e.target.value }))} />
+                  </div>
+                  {ESTADOS_OPCIONES[editReport.tipo] && (
+                    <div className="form-group">
+                      <label className="form-label">Estado</label>
+                      <select className="form-select" value={editForm.estado} onChange={e => setEditForm(p => ({ ...p, estado: e.target.value }))}>
+                        {ESTADOS_OPCIONES[editReport.tipo].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label className="form-label">Foto / imagen</label>
+                    <ImageInput value={editForm.imagen ?? undefined} onChange={v => setEditForm(p => ({ ...p, imagen: v ?? null }))} />
+                  </div>
+                </>
               )}
-              <div className="form-group">
-                <label className="form-label">Foto / imagen</label>
-                <ImageInput value={editForm.imagen ?? undefined} onChange={v => setEditForm(p => ({ ...p, imagen: v ?? null }))} />
-              </div>
             </>
           )}
         </Modal>

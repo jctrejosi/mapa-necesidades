@@ -185,6 +185,12 @@ class NecesidadesService {
         .set({ nombre: str(b.direccion_sector) })
         .where(eq(sectores.id, row.sectorId));
     }
+    // El punto de apoyo asociado no puede cambiar el tipo ni la descripción del reporte.
+    if (esPunto) {
+      if (b.tipo !== undefined || b.descripcion !== undefined) {
+        throw new ForbiddenException({ error: 'El punto de apoyo solo puede actualizar el estado y las evidencias' });
+      }
+    }
     const actualizado = await this.patch(id, b, false);
     await registrarAuditoria(this.db, {
       tabla: 'necesidades', registroId: id, accion: 'update',
@@ -193,6 +199,23 @@ class NecesidadesService {
       codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin), visitorId: str(b.visitor_id),
     });
     return actualizado;
+  }
+
+  /**
+   * Valida el código de edición sin modificar nada. Devuelve si es válido y si
+   * corresponde al punto de apoyo asociado (para restringir la edición en la UI).
+   */
+  async validarEdicion(id: number, pin: unknown) {
+    const row = await this.get(id);
+    if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
+    const p = str(pin);
+    if (isAdminEdit(p)) return { ok: true, es_punto: false };
+    if (checkEditCode(row.pin, p)) return { ok: true, es_punto: false };
+    if (row.ayudaPuntoApoyoId) {
+      const ptos = await this.db.select({ pin: puntosApoyo.pin }).from(puntosApoyo).where(eq(puntosApoyo.id, row.ayudaPuntoApoyoId)).limit(1);
+      if (ptos[0]?.pin && ptos[0].pin === p) return { ok: true, es_punto: true };
+    }
+    return { ok: false };
   }
 
   async adminUpdate(id: number, b: NecesidadBody) {
@@ -366,6 +389,12 @@ export class NecesidadesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() b: NecesidadBody) {
     return this.svc.updatePublic(toInt(id), b);
+  }
+
+  /** Valida el código de edición sin modificar nada (¿es válido? ¿es el punto asociado?). */
+  @Post(':id/validar-edicion')
+  validarEdicion(@Param('id') id: string, @Body() b: { pin?: string }) {
+    return this.svc.validarEdicion(toInt(id), b?.pin);
   }
 
   @Patch(':id/admin')
