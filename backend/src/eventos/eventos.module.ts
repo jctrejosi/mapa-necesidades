@@ -34,6 +34,7 @@ type EventoBody = {
   lng?: unknown;
   direccion?: string;
   imagenes?: unknown;
+  evidencias?: unknown;
   activo?: unknown;
   fecha_inicio?: string;
   fecha_fin?: string;
@@ -45,6 +46,32 @@ function toStrArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
   const arr = v.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean);
   return arr.length ? arr : null;
+}
+
+/**
+ * Convierte las evidencias a [{ url, descripcion }]. Acepta objetos
+ * { url, descripcion } (la descripción es obligatoria) o strings (URLs
+ * simples, usadas por el admin): en ese caso se etiquetan como "Evidencia".
+ */
+function toEvidencias(v: unknown): { url: string; descripcion: string }[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: { url: string; descripcion: string }[] = [];
+  for (const x of v) {
+    if (typeof x === 'string') {
+      const url = x.trim();
+      if (url) out.push({ url, descripcion: 'Evidencia' });
+      continue;
+    }
+    if (x && typeof x === 'object') {
+      const o = x as Record<string, unknown>;
+      const url = typeof o.url === 'string' ? o.url.trim() : '';
+      const desc = typeof o.descripcion === 'string' ? o.descripcion.trim() : '';
+      if (!url) continue;
+      // La descripción es obligatoria en el flujo público; el admin no la envía.
+      out.push({ url, descripcion: desc || 'Evidencia' });
+    }
+  }
+  return out.length ? out : null;
 }
 
 /** Acepta timestamps ISO; null si la entrada no es una fecha válida. */
@@ -82,6 +109,7 @@ class EventosService {
   }
 
   private serialize(e: typeof eventos.$inferSelect, p: typeof puntosApoyo.$inferSelect) {
+    const evidencias = (e.evidencias as { url: string; descripcion: string }[] | null) ?? [];
     return {
       id: e.id,
       ciudad: p.ciudad,
@@ -90,7 +118,10 @@ class EventosService {
       lat: asNum(e.lat),
       lng: asNum(e.lng),
       direccion: e.direccion ?? '',
-      imagenes: e.imagenes ?? [],
+      // `imagenes` (URLs) se mantiene para compatibilidad con el mapa y las tarjetas;
+      // `evidencias` incluye además la descripción de cada imagen.
+      imagenes: evidencias.length ? evidencias.map((x) => x.url) : (e.imagenes ?? []),
+      evidencias,
       activo: e.activo,
       vigente: this.vigente(e),
       fecha_inicio: tsIso(e.fechaInicio),
@@ -162,6 +193,8 @@ class EventosService {
     const existentes = await this.db.select({ pin: eventos.pin }).from(eventos);
     const pin = genPin(existentes.map((r) => r.pin));
 
+    const evidencias = toEvidencias(b.evidencias);
+
     const [e] = await this.db
       .insert(eventos)
       .values({
@@ -172,7 +205,8 @@ class EventosService {
         lat: String(lat),
         lng: String(lng),
         direccion: str(b.direccion) || null,
-        imagenes: toStrArray(b.imagenes),
+        imagenes: evidencias ? evidencias.map((x) => x.url) : toStrArray(b.imagenes),
+        evidencias: evidencias ?? (toStrArray(b.imagenes) ? null : undefined),
         activo: toBool(b.activo, true),
         fechaInicio,
         fechaFin,
@@ -236,7 +270,14 @@ class EventosService {
     }
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
     if (b.direccion !== undefined) set.direccion = str(b.direccion) || null;
-    if (b.imagenes !== undefined) set.imagenes = toStrArray(b.imagenes);
+    if (b.evidencias !== undefined) {
+      const ev = toEvidencias(b.evidencias);
+      set.evidencias = ev ?? null;
+      set.imagenes = ev ? ev.map((x) => x.url) : null;
+    } else if (b.imagenes !== undefined) {
+      set.imagenes = toStrArray(b.imagenes);
+      set.evidencias = null;
+    }
     if (b.activo !== undefined) set.activo = toBool(b.activo, true);
     if (b.fecha_inicio !== undefined) {
       const d = toTs(b.fecha_inicio);

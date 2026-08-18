@@ -71,6 +71,13 @@
       "when": 1787700000000,
       "tag": "0009_eventos_imagenes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787800000000,
+      "tag": "0010_eventos_evidencias",
+      "breakpoints": true
     }
   ]
 }

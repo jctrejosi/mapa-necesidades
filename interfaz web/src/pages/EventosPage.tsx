@@ -64,6 +64,138 @@ function MiniMap({ lat, lng, onChange }: { lat: number; lng: number; onChange: (
   return <div ref={mapRef} style={{ height: 220, width: '100%', borderRadius: 10, border: '1px solid #e1e4e9', marginTop: 8, zIndex: 1 }} />
 }
 
+/** Mapa con los marcadores de todos los eventos (color del punto de apoyo; los vigentes titilan). */
+function MapaEventos({ eventos, fmtPeriodo }: { eventos: any[]; fmtPeriodo: (e: any) => string }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInst = useRef<L.Map | null>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || mapInst.current) return
+    const e0 = eventos[0]
+    const map = L.map(mapRef.current, { zoomControl: true })
+      .setView(e0 && Number.isFinite(Number(e0.lat)) ? [Number(e0.lat), Number(e0.lng)] : [5.0703, -75.5138], e0 ? 13 : 12)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(map)
+
+    const bounds: [number, number][] = []
+    const now = Date.now()
+    eventos.forEach(e => {
+      const lat = Number(e.lat)
+      const lng = Number(e.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      const color = e.punto?.color ?? '#003893'
+      const img = e.punto?.imagen ?? ''
+      const vigente = e.activo && now >= (e.fecha_inicio ? new Date(e.fecha_inicio).getTime() : 0) && now <= (e.fecha_fin ? new Date(e.fecha_fin).getTime() : Infinity)
+      const icon = L.divIcon({
+        className: '',
+        html: vigente
+          ? `<div class="evt-marker" style="--evc:${color}"><span class="evt-ping"></span><div class="evt-core"${img ? ` style="background-image:url('${img}')"` : ''}><span class="evt-badge">📅</span></div></div>`
+          : `<div style="width:28px;height:28px;border-radius:50%;background:#b6bcc9;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:.85">📅</div>`,
+        iconSize: vigente ? [34, 34] : [28, 28],
+        iconAnchor: vigente ? [17, 17] : [14, 14],
+      })
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup(`
+        <div style="min-width:200px;max-width:260px">
+          <span style="background:${vigente ? '#e8f5e9' : '#f1f3f5'};color:${vigente ? '#2E9E5B' : '#6b7280'};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${vigente ? '🟢 VIGENTE' : '⚪ INACTIVO'}</span>
+          <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">📅 ${e.titulo}</h4>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">🏪 ${e.punto?.nombre ?? 'Punto de apoyo'}</p>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">🕒 ${fmtPeriodo(e)}</p>
+          ${e.direccion ? `<p style="font-size:12px;color:#6b7280;margin:0 0 6px">📍 ${e.direccion}</p>` : ''}
+          <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" rel="noreferrer" style="display:inline-block;background:#f0f4ff;color:#003893;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none">🗺️ Cómo llegar</a>
+        </div>
+      `, { maxWidth: 280 })
+      bounds.push([lat, lng])
+    })
+    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] })
+    mapInst.current = map
+    setTimeout(() => map.invalidateSize(), 120)
+    return () => { map.remove(); mapInst.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden' }}>
+      <div ref={mapRef} style={{ height: 420, width: '100%' }} />
+    </div>
+  )
+}
+
+/** Mapa de un punto de apoyo individual: su marcador + los eventos asociados a él. */
+function MapaPunto({ punto, eventos, fmtPeriodo }: { punto: any; eventos: any[]; fmtPeriodo: (e: any) => string }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInst = useRef<L.Map | null>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || mapInst.current) return
+    const lat = Number(punto?.lat)
+    const lng = Number(punto?.lng)
+    const map = L.map(mapRef.current, { zoomControl: true })
+      .setView([Number.isFinite(lat) ? lat : 5.0703, Number.isFinite(lng) ? lng : -75.5138], 14)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(map)
+
+    const bounds: [number, number][] = []
+    if (punto && Number.isFinite(lat) && Number.isFinite(lng)) {
+      const img = punto.imagen ?? ''
+      const emoji = ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:38px;height:38px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);background:${punto.color || '#003893'} url('${img}') center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:16px">${img ? '' : emoji}</div>`,
+        iconSize: [38, 38], iconAnchor: [19, 19],
+      })
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup(`
+        <div style="min-width:200px;max-width:260px">
+          <h4 style="margin:0 0 4px;font-size:14px;font-weight:700">${emoji} ${punto.nombre}</h4>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">${punto.tipo}</p>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">📍 ${punto.direccion || ''}</p>
+          ${punto.telefono ? `<p style="font-size:12px;margin:0">📞 ${punto.telefono}</p>` : ''}
+        </div>
+      `, { maxWidth: 280 })
+      bounds.push([lat, lng])
+    }
+
+    const now = Date.now()
+    eventos.forEach(e => {
+      const elat = Number(e.lat)
+      const elng = Number(e.lng)
+      if (!Number.isFinite(elat) || !Number.isFinite(elng)) return
+      const color = e.punto?.color ?? punto?.color ?? '#003893'
+      const img = e.punto?.imagen ?? ''
+      const vigente = e.activo && now >= (e.fecha_inicio ? new Date(e.fecha_inicio).getTime() : 0) && now <= (e.fecha_fin ? new Date(e.fecha_fin).getTime() : Infinity)
+      const icon = L.divIcon({
+        className: '',
+        html: vigente
+          ? `<div class="evt-marker" style="--evc:${color}"><span class="evt-ping"></span><div class="evt-core"${img ? ` style="background-image:url('${img}')"` : ''}><span class="evt-badge">📅</span></div></div>`
+          : `<div style="width:28px;height:28px;border-radius:50%;background:#b6bcc9;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:.85">📅</div>`,
+        iconSize: vigente ? [34, 34] : [28, 28],
+        iconAnchor: vigente ? [17, 17] : [14, 14],
+      })
+      L.marker([elat, elng], { icon }).addTo(map).bindPopup(`
+        <div style="min-width:190px;max-width:250px">
+          <span style="background:${vigente ? '#e8f5e9' : '#f1f3f5'};color:${vigente ? '#2E9E5B' : '#6b7280'};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${vigente ? '🟢 VIGENTE' : '⚪ INACTIVO'}</span>
+          <h4 style="margin:6px 0 4px;font-size:13.5px;font-weight:700">📅 ${e.titulo}</h4>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 4px">🕒 ${fmtPeriodo(e)}</p>
+          <a href="https://maps.google.com/?q=${elat},${elng}" target="_blank" rel="noreferrer" style="display:inline-block;background:#f0f4ff;color:#003893;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none">🗺️ Cómo llegar</a>
+        </div>
+      `, { maxWidth: 270 })
+      bounds.push([elat, elng])
+    })
+    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] })
+    mapInst.current = map
+    setTimeout(() => map.invalidateSize(), 120)
+    return () => { map.remove(); mapInst.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden' }}>
+      <div ref={mapRef} style={{ height: 420, width: '100%' }} />
+    </div>
+  )
+}
+
 /** ISO → valor para <input type="datetime-local">. */
 const toLocalInput = (iso: string | null) => {
   if (!iso) return ''
@@ -104,7 +236,7 @@ export default function EventosPage({ store }: Props) {
     lat: defaultCenter[0], lng: defaultCenter[1],
     fechaInicio: defaultInicio(), fechaFin: defaultFin(),
     activo: true, pin: '',
-    imagenes: [] as string[],
+    evidencias: [] as { url: string; descripcion: string }[],
   })
   const geocodeTimer = useRef<number | null>(null)
   const evidenciaRef = useRef<HTMLInputElement>(null)
@@ -112,6 +244,8 @@ export default function EventosPage({ store }: Props) {
   const [pinResult, setPinResult] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [deletePin, setDeletePin] = useState('')
+  const [showMapaEventos, setShowMapaEventos] = useState(false)
+  const [mapaPunto, setMapaPunto] = useState<any | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setTick(x => x + 1), 30000)
@@ -163,7 +297,7 @@ export default function EventosPage({ store }: Props) {
       titulo: '', descripcion: '', puntoPin: '', direccion: '',
       lat: defaultCenter[0], lng: defaultCenter[1],
       fechaInicio: defaultInicio(), fechaFin: defaultFin(),
-      activo: true, pin: '', imagenes: [],
+      activo: true, pin: '', evidencias: [],
     })
     setShowForm({})
   }
@@ -173,7 +307,10 @@ export default function EventosPage({ store }: Props) {
       titulo: e.titulo, descripcion: e.descripcion, puntoPin: '',
       direccion: e.direccion, lat: e.lat, lng: e.lng,
       fechaInicio: toLocalInput(e.fecha_inicio), fechaFin: toLocalInput(e.fecha_fin),
-      activo: e.activo, pin: '', imagenes: e.imagenes ?? [],
+      activo: e.activo, pin: '',
+      evidencias: e.evidencias?.length
+        ? e.evidencias.map((x: any) => ({ url: x.url, descripcion: x.descripcion ?? '' }))
+        : (e.imagenes ?? []).map((u: string) => ({ url: u, descripcion: '' })),
     })
     setShowForm(e)
   }
@@ -205,7 +342,7 @@ export default function EventosPage({ store }: Props) {
     }, 900)
   }
 
-  /** Adjunta una evidencia a la galería (comprime y la agrega a eForm.imagenes). */
+  /** Adjunta una evidencia: comprime la imagen y la agrega con su descripción pendiente. */
   const handleEvidencia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -213,11 +350,21 @@ export default function EventosPage({ store }: Props) {
     try {
       const b64 = await compressImage(file)
       if (b64.length > 6 * 1024 * 1024) { alert('La imagen sigue siendo muy pesada después de comprimirla. Intenta con otra foto.'); return }
-      setEForm(p => ({ ...p, imagenes: [...p.imagenes, b64] }))
+      setEForm(p => ({ ...p, evidencias: [...p.evidencias, { url: b64, descripcion: '' }] }))
     } catch {
       alert('No se pudo procesar la imagen')
     }
     if (evidenciaRef.current) evidenciaRef.current.value = ''
+  }
+
+  /** Quita una evidencia de la lista. */
+  const quitarEvidencia = (idx: number) => {
+    setEForm(p => ({ ...p, evidencias: p.evidencias.filter((_, i) => i !== idx) }))
+  }
+
+  /** Actualiza la descripción de una evidencia. */
+  const setEvidenciaDesc = (idx: number, descripcion: string) => {
+    setEForm(p => ({ ...p, evidencias: p.evidencias.map((ev, i) => (i === idx ? { ...ev, descripcion } : ev)) }))
   }
 
   const submit = async () => {
@@ -226,9 +373,18 @@ export default function EventosPage({ store }: Props) {
     const fin = fromLocalInput(eForm.fechaFin)
     if (!inicio) { alert('Indica la fecha de inicio del evento'); return }
 
-    // Sube las evidencias nuevas (data:) a Cloudinary; las URLs ya guardadas se conservan.
-    const imagenes = await Promise.all(
-      eForm.imagenes.map(async (img) => (img.startsWith('data:') ? (await uploadImage(img)).path : img)),
+    // Cada evidencia necesita su descripción (obligatoria).
+    if (eForm.evidencias.some(ev => !ev.descripcion.trim())) {
+      alert('Escribe la descripción de cada evidencia (es obligatoria).')
+      return
+    }
+
+    // Sube las imágenes nuevas (data:) a Cloudinary; las URLs ya guardadas se conservan.
+    const evidencias = await Promise.all(
+      eForm.evidencias.map(async (ev) => ({
+        url: ev.url.startsWith('data:') ? (await uploadImage(ev.url)).path : ev.url,
+        descripcion: ev.descripcion.trim(),
+      })),
     )
 
     if (showForm?.id) {
@@ -236,7 +392,7 @@ export default function EventosPage({ store }: Props) {
       const r = await updateEvento(showForm.id, {
         titulo: eForm.titulo, descripcion: eForm.descripcion, direccion: eForm.direccion,
         lat: eForm.lat, lng: eForm.lng, activo: eForm.activo,
-        fecha_inicio: inicio, fecha_fin: fin, imagenes,
+        fecha_inicio: inicio, fecha_fin: fin, evidencias,
         pin: eForm.pin.trim(),
       })
       if (!r) return
@@ -248,7 +404,7 @@ export default function EventosPage({ store }: Props) {
         titulo: eForm.titulo, descripcion: eForm.descripcion,
         lat: eForm.lat, lng: eForm.lng, direccion: eForm.direccion,
         activo: eForm.activo, fecha_inicio: inicio, fecha_fin: fin,
-        punto_pin: eForm.puntoPin.trim(), imagenes,
+        punto_pin: eForm.puntoPin.trim(), evidencias,
       })
       if (!pin) return
       setShowForm(null)
@@ -285,7 +441,10 @@ export default function EventosPage({ store }: Props) {
               Actividades temporales de la red solidaria en {ciudad}. Para crearlos necesitas el PIN del punto de apoyo que los organiza.
             </p>
           </div>
-          <button className="btn btn-primary" onClick={openAdd}>+ Crear evento</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" onClick={() => setShowMapaEventos(true)}>🗺️ Ver eventos en el mapa</button>
+            <button className="btn btn-primary" onClick={openAdd}>+ Crear evento</button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -377,6 +536,16 @@ export default function EventosPage({ store }: Props) {
                       <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1f2430', margin: 0, flex: 1 }}>
                         {punto ? `${ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} ${punto.nombre}` : '🏪 Puntos de apoyo'}
                       </h2>
+                      {punto && (
+                        <button
+                          className="btn btn-xs btn-outline"
+                          title={`Mapa de ${punto.nombre}`}
+                          onClick={(ev) => { ev.stopPropagation(); setMapaPunto(punto) }}
+                          style={{ flexShrink: 0 }}
+                        >
+                          🗺️
+                        </button>
+                      )}
                       {punto?.tipo && (
                         <span className="tag tag-blue" style={{ fontSize: 10.5 }}>{ICONO_PUNTO_APOYO[punto.tipo] ?? '🏪'} {punto.tipo}</span>
                       )}
@@ -405,11 +574,15 @@ export default function EventosPage({ store }: Props) {
                                 {e.direccion && <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>📍 {e.direccion}</p>}
                                 {e.imagenes && e.imagenes.length > 0 && (
                                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 10px' }}>
-                                    {e.imagenes.map((img, i) => (
-                                      <a key={i} href={img} target="_blank" rel="noreferrer" title={`Evidencia ${i + 1}`}>
-                                        <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #e1e4e9' }} />
-                                      </a>
-                                    ))}
+                                    {e.imagenes.map((img, i) => {
+                                      const desc = e.evidencias?.[i]?.descripcion ?? `Evidencia ${i + 1}`
+                                      return (
+                                        <a key={i} href={img} target="_blank" rel="noreferrer" title={desc} style={{ position: 'relative', display: 'inline-block', textDecoration: 'none' }}>
+                                          <img src={img} alt={desc} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #e1e4e9' }} />
+                                          <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, padding: '1px 4px', borderRadius: '0 0 6px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{desc}</span>
+                                        </a>
+                                      )
+                                    })}
                                   </div>
                                 )}
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -463,30 +636,45 @@ export default function EventosPage({ store }: Props) {
             <textarea className="form-input" rows={3} value={eForm.descripcion} onChange={e => setEForm(p => ({ ...p, descripcion: e.target.value }))} placeholder="Detalles de la actividad: qué habrá, requisitos, horarios..." />
           </div>
           <div className="form-group">
-            <label className="form-label">Evidencias (galería de imágenes)</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {eForm.imagenes.map((img, i) => (
-                <div key={i} style={{ position: 'relative', display: 'inline-block' }}>
-                  <img src={img} alt={`Evidencia ${i + 1}`} style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e1e4e9' }} />
-                  <button
-                    type="button"
-                    onClick={() => setEForm(p => ({ ...p, imagenes: p.imagenes.filter((_, j) => j !== i) }))}
-                    style={{ position: 'absolute', top: -6, right: -6, background: '#CE1126', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', lineHeight: 1 }}
-                    aria-label={`Quitar evidencia ${i + 1}`}
-                  >✕</button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn-sm btn-outline"
-                onClick={() => evidenciaRef.current?.click()}
-                style={{ width: 96, height: 72, borderRadius: 8, borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                📷 Agregar
-              </button>
-            </div>
+            <label className="form-label">Evidencias</label>
+            {eForm.evidencias.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+                {eForm.evidencias.map((ev, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid #e1e4e9', borderRadius: 10, padding: 8, background: '#fafbfc' }}>
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <img src={ev.url} alt={`Evidencia ${i + 1}`} style={{ width: 84, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #e1e4e9' }} />
+                      <button
+                        type="button"
+                        onClick={() => quitarEvidencia(i)}
+                        style={{ position: 'absolute', top: -6, right: -6, background: '#CE1126', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', lineHeight: 1 }}
+                        aria-label={`Quitar evidencia ${i + 1}`}
+                      >✕</button>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <input
+                        className="form-input"
+                        value={ev.descripcion}
+                        onChange={e => setEvidenciaDesc(i, e.target.value)}
+                        placeholder={`Describe esta evidencia (obligatorio)…`}
+                        style={{ fontSize: 13 }}
+                      />
+                      <span style={{ fontSize: 11, color: ev.descripcion.trim() ? '#2E9E5B' : '#CE1126' }}>
+                        {ev.descripcion.trim() ? '✓ Descripción lista' : '⚠️ La descripción es obligatoria'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => evidenciaRef.current?.click()}
+            >
+              📎 Adjuntar evidencia
+            </button>
             <span style={{ fontSize: 11.5, color: '#9AA0AC', display: 'block', marginTop: 6 }}>
-              JPG, PNG, WEBP — adjunta fotos de la actividad como evidencia.
+              JPG, PNG, WEBP — adjunta una foto de la actividad y escribe qué muestra (la descripción es obligatoria).
             </span>
             <input ref={evidenciaRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleEvidencia} />
           </div>
@@ -552,6 +740,39 @@ export default function EventosPage({ store }: Props) {
       )}
 
       {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
+
+      {/* Mapa con los eventos activos de la ciudad (respetando los filtros activos) */}
+      {showMapaEventos && (
+        <Modal title={`🗺️ Eventos activos — ${ciudad}`} onClose={() => setShowMapaEventos(false)} hideCancel wide>
+          {(() => {
+            const activos = items.filter(isVigente)
+            return activos.length === 0 ? (
+              <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>No hay eventos activos para mostrar con el filtro actual.</p>
+            ) : (
+              <>
+                <MapaEventos eventos={activos} fmtPeriodo={fmtPeriodo} />
+                <p style={{ fontSize: 11.5, color: '#9AA0AC', margin: '8px 0 0' }}>
+                  Solo se muestran los eventos activos ({activos.length}).
+                </p>
+              </>
+            )
+          })()}
+        </Modal>
+      )}
+
+      {/* Mapa individual de un punto de apoyo (su marcador + sus eventos) */}
+      {mapaPunto && (
+        <Modal title={`🗺️ ${ICONO_PUNTO_APOYO[mapaPunto.tipo] ?? '🏪'} ${mapaPunto.nombre}`} onClose={() => setMapaPunto(null)} hideCancel wide>
+          <MapaPunto
+            punto={mapaPunto}
+            eventos={eventos.filter(e => matchesCiudad(e.ciudad) && String(e.punto?.id) === String(mapaPunto.id))}
+            fmtPeriodo={fmtPeriodo}
+          />
+          <p style={{ fontSize: 11.5, color: '#9AA0AC', margin: '8px 0 0' }}>
+            📍 {mapaPunto.direccion || 'Sin dirección'} · 📞 {mapaPunto.telefono || '—'} · {eventos.filter(e => matchesCiudad(e.ciudad) && String(e.punto?.id) === String(mapaPunto.id)).length} evento(s)
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

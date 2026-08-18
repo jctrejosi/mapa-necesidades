@@ -341,6 +341,7 @@ export const eventos = pgTable(
     lng: numeric('lng', { precision: 10, scale: 7 }).notNull(),
     direccion: varchar('direccion', { length: 200 }),
     imagenes: text('imagenes').array(),
+    evidencias: jsonb('evidencias'),
     activo: boolean('activo').notNull().default(true),
     fechaInicio: timestamp('fecha_inicio', { withTimezone: true }).notNull(),
     fechaFin: timestamp('fecha_fin', { withTimezone: true }),

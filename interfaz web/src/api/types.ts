@@ -57,6 +57,7 @@ export interface Evento {
   id: number; ciudad: string; titulo: string; descripcion: string
   lat: number; lng: number; direccion: string
   imagenes: string[]
+  evidencias?: { url: string; descripcion: string }[]
   activo: boolean; vigente: boolean
   fecha_inicio: string | null; fecha_fin: string | null
   punto: { id: number; nombre: string; tipo: string; color: string; telefono: string; imagen: string | null }
