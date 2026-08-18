@@ -1003,6 +1003,18 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
     setDeleteReport({ ...e, titulo: detailItem?.titulo ?? '' })
   }
 
+  /** Pide el código antes de mostrar el formulario de edición. */
+  const continuarEdit = () => {
+    if (!editReport) return
+    if (!editForm.pin.trim()) {
+      alert(editReport.tipo === 'dano'
+        ? 'Ingresa el número de radicado para poder editar.'
+        : 'Ingresa el código de 4 dígitos que se te dio al publicar.')
+      return
+    }
+    setEditStep('form')
+  }
+
   const submitEditReport = async () => {
     if (!editReport) return
     const codigo = editForm.pin.trim()
@@ -1262,16 +1274,20 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   }
 
   // ── Centro de reportes: actividad + secciones por entidad ──
-  const ReportesPanel = () => {
+  // `conFiltro`: la barra de filtros por estado solo se muestra en el popup de
+  // reportes (modal), no en el panel lateral izquierdo / bottom sheet.
+  const ReportesPanel = ({ conFiltro = true }: { conFiltro?: boolean }) => {
     const unread = notificaciones.filter(n => !n.leida).length
     const prioridadOrder: Record<string, number> = { alta: 0, media: 1, baja: 2 }
 
     const nsDeCiudad = necesidades.filter(n => ciudadSectores.some(s => s.id === n.sector_id))
+    // Sin checks activos se muestran todas; con checks, solo los estados marcados.
+    const hayFiltroEstado = nEstado.pendientes || nEstado.proceso || nEstado.resueltos
     const nsFiltered = nsDeCiudad.filter(n => {
       const esPendiente = n.estado === 'requiere' && !n.responsable
       const esProceso = n.estado === 'requiere' && n.responsable
       const esResuelta = n.estado === 'atendida'
-      if (!nEstado.pendientes && !nEstado.proceso && !nEstado.resueltos) return false
+      if (!hayFiltroEstado) return true
       return (nEstado.pendientes && esPendiente) || (nEstado.proceso && esProceso) || (nEstado.resueltos && esResuelta)
     })
       .sort((a, b) => {
@@ -1309,6 +1325,28 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
     return (
       <div>
+        {/* Filtro por estado: solo en el popup de reportes, no en el panel lateral */}
+        {conFiltro && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '4px 0 10px', borderBottom: '1px solid #eef0f3', marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Filtrar por estado:</span>
+          {[
+            { id: 'pendientes', label: '🔴 Pendientes' },
+            { id: 'proceso', label: '🟠 En proceso' },
+            { id: 'resueltos', label: '✅ Resueltos' },
+          ].map(c => (
+            <label key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1f2430', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={nEstado[c.id as keyof typeof nEstado]}
+                onChange={e => setNEstado(p => ({ ...p, [c.id]: e.target.checked }))}
+                style={{ width: 15, height: 15, accentColor: '#003893', cursor: 'pointer' }}
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+        )}
+
         {/* 🔔 Actividad reciente — notificaciones en tiempo real */}
         <ReportSection id="actividad" icon="🔔" title="Actividad reciente" count={reciente.length}
           badge={unread > 0 ? <span className="tag tag-red" style={{ fontSize: 10 }}>{unread} nuevas</span> : null}>
@@ -1341,24 +1379,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
         {/* 🆘 Necesidades (alimentos y demás) */}
         <ReportSection id="necesidades" icon="🆘" title="Necesidades" count={nsDeCiudad.length}>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '2px 0 8px' }}>
-            {[
-              { id: 'pendientes', label: '🔴 Pendientes' },
-              { id: 'proceso', label: '🟠 En proceso' },
-              { id: 'resueltos', label: '✅ Resueltos' },
-            ].map(c => (
-              <label key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1f2430', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={nEstado[c.id as keyof typeof nEstado]}
-                  onChange={e => setNEstado(p => ({ ...p, [c.id]: e.target.checked }))}
-                  style={{ width: 15, height: 15, accentColor: '#003893', cursor: 'pointer' }}
-                />
-                {c.label}
-              </label>
-            ))}
-          </div>
-          {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro (marca al menos un estado).</p>}
+          {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro.</p>}
           {(() => {
             // Agrupa por tipo (canónico) para mostrar cada familia junta, separada por una línea gris
             const grupos = new Map<string, typeof nsFiltered>()
@@ -1820,7 +1841,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
               {unreadCount > 0 && <span className="tag tag-red" style={{ fontSize: 10 }}>{unreadCount} nuevas</span>}
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              <ReportesPanel />
+              <ReportesPanel conFiltro={false} />
             </div>
           </div>
         </div>
@@ -1854,7 +1875,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
           {/* Panel de reportes por secciones */}
           <div style={{ flex: 1, overflow: 'auto', overscrollBehavior: 'contain' }}>
-            <ReportesPanel />
+            <ReportesPanel conFiltro={false} />
           </div>
         </div>
       </div>
@@ -2031,7 +2052,8 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
           })()}
           {(() => {
             const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
-            if (!tabla) return null
+            // Los ofrecimientos son ayuda que alguien ofrece: no llevan «Yo te ayudo».
+            if (!tabla || tabla === 'ofrecimientos') return null
             const id = detailItem.ayuda?.id ?? detailItem.editable!.id
             return (
               <div style={{ marginTop: 14 }}>
@@ -2117,7 +2139,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
         <Modal
           title={editStep === 'pin' ? `🔑 Código para editar: ${editReport.titulo}` : `✎ Editar: ${editReport.titulo}`}
           onClose={() => setEditReport(null)}
-          onConfirm={editStep === 'pin' ? () => setEditStep('form') : submitEditReport}
+          onConfirm={editStep === 'pin' ? continuarEdit : submitEditReport}
           confirmLabel={editStep === 'pin' ? 'Continuar' : 'Guardar cambios'}
           hideCancel
         >
