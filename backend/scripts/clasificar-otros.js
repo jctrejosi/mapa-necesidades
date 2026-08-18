@@ -70,7 +70,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const backendEnv = loadEnv(path.join(__dirname, '..', '.env'));
 const botEnv = loadEnv(path.join(ROOT, 'bot', '.env'));
 
-const DATABASE_URL = backendEnv.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5434/redsolidaria';
+const DATABASE_URL = backendEnv.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5435/redsolidaria';
 const PROD_DATABASE_URL = backendEnv.PROD_DATABASE_URL || '';
 const API_KEY = botEnv.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || '';
 const MODEL = botEnv.DEEPSEEK_MODEL || 'deepseek-chat';

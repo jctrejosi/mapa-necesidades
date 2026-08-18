@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * setup.js — Monta el proyecto completo en local con Docker.
+ * setup.js — Monta el proyecto completo en local.
  *
- *   node setup.js            -> levanta backend (NestJS) + interfaz web + panel admin
- *                              en modo producción local (imágenes construidas)
- *   node setup.js --dev      -> modo desarrollo: servicios directos en el host con
- *                              hot reload y logs en vivo (Ctrl+C los detiene)
+ *   node setup.js            -> levanta backend (NestJS) + bot (Anay) + interfaz web
+ *                              + panel admin como procesos LOCALES en el host;
+ *                              lo único que corre en Docker es PostgreSQL.
+ *                              Libera los puertos ocupados, escribe los logs en
+ *                              logs/ (backend, web, admin, bot, db) y TERMINA:
+ *                              los servicios quedan corriendo en segundo plano.
+ *   node setup.js --dev      -> igual que arriba (alias).
  *   node setup.js --import   -> fuerza la importación de los datos de producción
- *   node setup.js --down     -> detiene los contenedores (conserva los datos)
+ *   node setup.js --down     -> detiene los servicios locales (por puerto) y la BD (conserva los datos)
  *   node setup.js --reset    -> detiene, borra la base y vuelve a montar desde cero
  *
  * Sin dependencias externas (solo Node >= 18 y Docker con el plugin Compose).
@@ -28,15 +31,14 @@ const COMPOSE = ['docker', 'compose', '-p', 'redsolidaria', '-f', COMPOSE_FILE];
 // Nombres reservados por docker-compose.yml (db/)
 const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin', 'redsolidaria-bot'];
 const DEV_CONTAINERS = ['redsolidaria-backend-dev', 'redsolidaria-frontend-dev', 'redsolidaria-admin-dev'];
-// Perfiles compose: prod (build) y dev (hot reload)
-const PROD = ['--profile', 'prod'];
-const DEV = ['--profile', 'dev'];
+// Perfil compose usado en down/reset (detener todo el proyecto)
 const ALL = ['--profile', 'prod', '--profile', 'dev'];
 
 const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
 const PORTS = [8080, 8081, 3000, 8000];
+const LOGS_DIR = path.join(ROOT, 'logs');
 
 // ── Modo desarrollo: servicios directos en el host (como dev.js de mercaldas) ──
 // Cada servicio corre en su carpeta con sus propias dependencias; los logs se
@@ -75,7 +77,8 @@ const c = {
 function banner() {
   console.log(`
 ${c.cyan}${c.bold}  ███ SolidaridadCO — Mapa de Sectores Afectados ███${c.reset}
-  ${c.dim}Arranque local: API (NestJS/Drizzle + PostgreSQL local en Docker) + Interfaz Web${c.reset}
+  ${c.dim}Arranque local: servicios en el host (API, web, admin, bot) + PostgreSQL en Docker${c.reset}
+  ${c.dim}Logs: logs/backend.log · logs/web.log · logs/admin.log · logs/bot.log · logs/db.log${c.reset}
 `);
 }
 
@@ -124,10 +127,20 @@ function containerRunning(name) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+/** Espera a que un puerto local responda (devuelve false si agota el tiempo). */
+async function waitForPort(port, timeoutMs = 60000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (await portInUse(port)) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
 /** Nombre del proyecto compose actual (la carpeta que contiene db/docker-compose.yml). */
 function projectName() {
   try {
-    const cfg = JSON.parse(quiet(COMPOSE.concat(['config', '--format', 'json'])));
+    const cfg = JSON.parse(quiet(COMPOSE.concat(ALL, ['config', '--format', 'json'])));
     if (cfg && cfg.name) return cfg.name;
   } catch { /* noop */ }
   return path.basename(path.dirname(COMPOSE_FILE)).toLowerCase();
@@ -166,7 +179,7 @@ async function waitForApi(timeoutMs = 180000) {
     } catch { /* aún no arriba */ }
     await sleep(2000);
   }
-  fail(`La API no respondió en ${timeoutMs / 1000}s. Revisa: docker compose logs backend`);
+  fail(`La API no respondió en ${timeoutMs / 1000}s. Revisa: logs/backend.log`);
 }
 
 /** Espera a que la interfaz web responda. */
@@ -180,11 +193,11 @@ async function waitForWeb(timeoutMs = 60000) {
     } catch { /* aún no arriba */ }
     await sleep(1000);
   }
-  fail(`La interfaz web no respondió en ${timeoutMs / 1000}s. Revisa: docker compose logs frontend`);
+  fail(`La interfaz web no respondió en ${timeoutMs / 1000}s. Revisa: logs/web.log`);
 }
 
-/** Importa datos a la base local (Postgres) si está vacía. */
-async function importLegacyIfNeeded(force = false, devMode = false) {
+/** Importa datos a la base local (Postgres) si está vacía. Corre en el host. */
+async function importLegacyIfNeeded(force = false) {
   let totalSectores = 0;
   try {
     const res = await fetch(`${API_URL}/stats?ciudad=manizales`);
@@ -197,19 +210,16 @@ async function importLegacyIfNeeded(force = false, devMode = false) {
     return;
   }
 
-  const backend = devMode ? 'backend-dev' : 'backend';
   const bkPath = path.join(ROOT, 'backups', 'bk.sql');
-  if (fs.existsSync(bkPath)) {
-    info(force
-      ? 'Sembrando la base local desde bk.sql (merge idempotente)...'
-      : 'La base local está vacía; sembrando desde bk.sql (merge idempotente)...');
-    run(COMPOSE.concat(['exec', '-T', backend, 'npm', 'run', 'db:seed-bk']));
-  } else {
-    info(force
-      ? 'Importando los datos del backup de producción (legacy)...'
-      : 'La base local está vacía; importando el backup de producción (legacy)...');
-    run(COMPOSE.concat(['exec', '-T', backend, 'npm', 'run', 'db:import-legacy']));
+  const seedPath = path.join(ROOT, 'backend', 'dist', 'scripts', 'merge-bk.js');
+  if (!fs.existsSync(seedPath)) {
+    warn('El backend no está compilado (falta backend/dist); se omite la siembra de bk.sql.');
+    return;
   }
+  info(force
+    ? 'Sembrando la base local desde bk.sql (merge idempotente)...'
+    : 'La base local está vacía; sembrando desde bk.sql (merge idempotente)...');
+  run(['node', seedPath, bkPath], path.join(ROOT, 'backend'));
 }
 
 async function up() {
@@ -221,62 +231,85 @@ async function up() {
   if (!hasCompose()) fail('Falta el plugin "docker compose" de Docker.');
   ok(`Compose: ${quiet(COMPOSE.concat(['version']))}`);
 
-  const busy = (await Promise.all(PORTS.map(portInUse)))
-    .map((used, i) => (used ? PORTS[i] : null))
-    .filter(Boolean);
-  // Los puertos que ocupan contenedores de ESTE proyecto no son un problema
-  const ours = (p) =>
-    (p === 8080 && containerRunning('redsolidaria-frontend')) ||
-    (p === 8081 && containerRunning('redsolidaria-admin')) ||
-    (p === 3000 && containerRunning('redsolidaria-backend')) ||
-    (p === 8000 && containerRunning('redsolidaria-bot'));
-  const foreign = busy.filter((p) => !ours(p));
-  if (foreign.length) {
-    warn(`Puerto${foreign.length > 1 ? 's' : ''} ${foreign.join(' y ')} en uso.`);
-    warn('Se liberarán los puertos ocupados por procesos ajenos al proyecto.');
-  }
-
-  // Si el stack de desarrollo está corriendo, detenerlo (mismos puertos 3000/8080/8081)
-  for (const name of DEV_CONTAINERS) {
+  // 1) Liberar los puertos: detener contenedores del proyecto y matar cualquier
+  //    proceso local que los esté usando (3000, 8080, 8081, 8000).
+  info('Liberando puertos (3000, 8080, 8081, 8000)...');
+  for (const name of CONTAINERS.concat(DEV_CONTAINERS)) {
     if (containerRunning(name)) {
-      warn(`El contenedor de desarrollo "${name}" está corriendo; se detiene (mismos puertos).`);
+      warn(`El contenedor "${name}" está corriendo; se detiene (mismos puertos).`);
       run(['docker', 'stop', name]);
     }
   }
-
   removeStaleContainers(CONTAINERS);
-
-  // Liberar los puertos que aún estén ocupados por procesos ajenos al proyecto.
-  for (const p of foreign) {
+  for (const p of PORTS) {
     if (await portInUse(p)) {
-      warn(`Liberando el puerto ${p} (proceso ajeno)...`);
+      warn(`Puerto ${p} ocupado; matando el proceso que lo usa...`);
       killPort(p);
     }
   }
-  if (foreign.length) await sleep(800);
+  await sleep(800);
 
-  info('Montando backend + interfaz web + panel admin (docker compose up -d --build)...');
-  run(COMPOSE.concat(PROD, ['up', '-d', '--build']));
+  // 2) La única cosa que corre en Docker es la base de datos.
+  info('Levantando PostgreSQL local (docker compose up -d db)...');
+  run(COMPOSE.concat(ALL, ['up', '-d', 'db']));
+  if (!(await waitForPort(5435, 60000))) {
+    warn('No se detectó PostgreSQL local en :5435; el backend reintentará la conexión al arrancar.');
+  }
+  startDbLog();
+
+  // 3) Dependencias locales (node_modules / venv del bot).
+  info('Preparando servicios en el host (dependencias)...');
+  for (const svc of DEV_SERVICES) {
+    if (svc.dir !== 'bot') ensureDeps(svc);
+  }
+  const botDir = path.join(ROOT, 'bot');
+  const botPython = path.join(botDir, '.venv', 'bin', 'python');
+  if (!fs.existsSync(botPython)) {
+    info('Preparando el bot (venv + dependencias de Python)...');
+    run(['python3', '-m', 'venv', '.venv'], botDir);
+    run([botPython, '-m', 'pip', 'install', '-r', 'requirements.txt'], botDir);
+  }
+
+  // 4) Arrancar los 4 servicios como procesos locales (logs en consola + logs/).
+  console.log(`
+${c.bold}  Levantando ${DEV_SERVICES.length} servicios locales — logs en vivo:${c.reset}
+`);
+  for (const svc of DEV_SERVICES) startDevService(svc);
 
   await waitForApi();
   await waitForWeb();
   await importLegacyIfNeeded();
 
-  summary(false);
-
-  // Mantener la consola abierta mostrando los logs (como dev.js): Ctrl+C sale
-  // del log sin apagar los contenedores.
-  info('Mostrando logs en vivo (Ctrl+C para salir; los contenedores siguen corriendo).');
-  info('Para volver a verlos: node setup.js');
-  run(COMPOSE.concat(PROD, ['logs', '-f', '--tail=50']));
-  ok('Seguimiento de logs terminado. Los contenedores siguen arriba.');
+  summary();
+  ok('Servicios corriendo en segundo plano. Logs en logs/ (backend.log, web.log, admin.log, bot.log, db.log).');
+  info('Para detenerlos: node setup.js --down');
 }
 
-/** Mata el proceso que esté escuchando en `port` (Unix: fuser). */
+/** Mata el proceso que esté escuchando en `port` (fuser, con fallback lsof). */
 function killPort(port) {
   try {
     execFileSync('fuser', ['-k', `${port}/tcp`], { stdio: ['ignore', 'pipe', 'ignore'] });
   } catch { /* nada que liberar */ }
+  try {
+    const pids = execFileSync('lsof', ['-ti', `tcp:${port}`], { stdio: ['pipe', 'pipe', 'ignore'] })
+      .toString().trim().split(/\s+/).filter(Boolean);
+    for (const pid of pids) {
+      try { process.kill(Number(pid), 'SIGKILL'); } catch { /* ya terminó */ }
+    }
+  } catch { /* sin lsof o nada que liberar */ }
+}
+
+/** Crea la carpeta logs/ (si no existe). */
+function ensureLogsDir() {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
+
+/** Abre (append) el fd del log de un servicio y escribe el encabezado de ejecución. */
+function openLogFd(name) {
+  ensureLogsDir();
+  const fd = fs.openSync(path.join(LOGS_DIR, `${name}.log`), 'a');
+  fs.writeSync(fd, `\n${'='.repeat(72)}\n[${new Date().toLocaleString('es-CO')}] — Ejecución iniciada\n${'='.repeat(72)}\n`);
+  return fd;
 }
 
 /** Asegura node_modules en la carpeta del servicio (instala si falta). */
@@ -288,36 +321,49 @@ function ensureDeps(svc) {
   run([pm, 'install'], dir);
 }
 
-/** Arranca un servicio dev en el host con salida prefijada en vivo. */
+/**
+ * Arranca un servicio local desacoplado (daemon): su salida va directo a
+ * logs/<nombre>.log y sigue corriendo aunque el setup termine.
+ */
 function startDevService(svc) {
   const cwd = path.join(ROOT, svc.dir);
   const prefix = `${svc.color}[${svc.name}]${c.reset} `;
-  console.log(`${prefix}▶ ${svc.url}  (cwd: ${cwd})`);
 
   killPort(svc.port);
   // dar tiempo a que el SO libere el socket
   const sab = new SharedArrayBuffer(4);
   Atomics.wait(new Int32Array(sab), 0, 0, 800);
 
+  const fd = openLogFd(svc.name.toLowerCase());
   const child = spawn(svc.cmd[0], svc.cmd.slice(1), {
     cwd,
     env: { ...process.env, ...svc.env },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', fd, fd],
     detached: process.platform !== 'win32',
   });
-  const pipe = (stream, out) => {
-    stream.on('data', (chunk) => {
-      chunk.toString().split('\n').forEach((line) => {
-        if (line.trim()) out.write(prefix + line + '\n');
-      });
-    });
-  };
-  if (child.stdout) pipe(child.stdout, process.stdout);
-  if (child.stderr) pipe(child.stderr, process.stderr);
-  child.on('exit', (code, signal) => {
-    console.log(`${prefix}terminó (${signal || code})`);
+  fs.closeSync(fd); // el padre cierra su copia; el hijo conserva la suya
+  child.on('error', (err) => {
+    console.log(`${prefix}✖ No se pudo arrancar ${svc.name}: ${err.message}`);
   });
+  child.unref(); // el setup puede terminar sin esperar al servicio
   devChildren.push(child);
+  console.log(`${prefix}▶ ${svc.url}  (log: logs/${svc.name.toLowerCase()}.log)`);
+}
+
+/** Sigue los logs del contenedor PostgreSQL y los escribe en logs/db.log (desacoplado). */
+function startDbLog() {
+  const fd = openLogFd('db');
+  const child = spawn('docker', ['logs', '-f', '--tail=0', 'redsolidaria-db'], {
+    stdio: ['ignore', fd, fd],
+    detached: process.platform !== 'win32',
+  });
+  fs.closeSync(fd);
+  child.on('error', (err) => {
+    console.log(`${c.red}✖ No se pudo capturar los logs de PostgreSQL: ${err.message}${c.reset}`);
+  });
+  child.unref();
+  devChildren.push(child);
+  info('Capturando logs de PostgreSQL en logs/db.log');
 }
 
 function killDevChildren() {
@@ -331,83 +377,45 @@ function killDevChildren() {
   }
 }
 
-/** Modo desarrollo: servicios en el host con hot reload y logs en vivo. */
+/** Modo desarrollo: alias del flujo local (mismos servicios, hot reload). */
 async function devUp() {
-  banner();
-
-  // La base de datos local (PostgreSQL) se levanta con Docker
-  info('Levantando PostgreSQL local (docker compose up -d db)...');
-  run(COMPOSE.concat(['up', '-d', 'db']));
-  if (!(await waitForPort(5434, 60000))) {
-    warn('No se detectó PostgreSQL local en :5434; el backend reintentará la conexión al arrancar.');
-  }
-
-  // El modo dev usa los mismos puertos (3000/8080/8081): detener contenedores del proyecto
-  for (const name of CONTAINERS.concat(DEV_CONTAINERS)) {
-    if (containerRunning(name)) {
-      warn(`El contenedor "${name}" está corriendo; se detiene (mismos puertos).`);
-      run(['docker', 'stop', name]);
-    }
-  }
-
-  info('Preparando servicios dev en el host (hot reload: nest --watch + Vite HMR)...');
-  for (const svc of DEV_SERVICES) {
-    if (svc.dir !== 'bot') ensureDeps(svc);
-  }
-
-  // Bot (Python): crear venv e instalar dependencias si falta
-  const botDir = path.join(ROOT, 'bot');
-  const botPython = path.join(botDir, '.venv', 'bin', 'python');
-  if (!require('fs').existsSync(botPython)) {
-    info('Preparando el bot (venv + dependencias de Python)...');
-    run(['python3', '-m', 'venv', '.venv'], botDir);
-    run([botPython, '-m', 'pip', 'install', '-r', 'requirements.txt'], botDir);
-  }
-
-  console.log(`
-${c.bold}  Levantando ${DEV_SERVICES.length} servicios — logs en vivo:${c.reset}
-`);
-  for (const svc of DEV_SERVICES) startDevService(svc);
-
-  console.log(`
-${c.green}${c.bold}  ✔ Servicios dev arriba${c.reset}
-  ${c.bold}Interfaz web${c.reset}  ${c.cyan}http://localhost:8080${c.reset}
-  ${c.bold}Panel admin${c.reset}   ${c.cyan}http://localhost:8081${c.reset}
-  ${c.bold}API${c.reset}          ${c.cyan}http://localhost:3000/api${c.reset}
-  ${c.bold}Bot Anay${c.reset}     ${c.cyan}http://localhost:8000${c.reset}
-
-  ${c.dim}Hot reload activo: edita y mira los logs aquí. Ctrl+C detiene los 4 servicios.${c.reset}
-`);
-
-  // El script se queda vivo hasta Ctrl+C (manejado abajo).
-  await new Promise(() => {});
+  await up();
 }
 
 async function down() {
   banner();
-  info('Deteniendo los contenedores (los datos se conservan)...');
+  info('Deteniendo servicios locales (por puerto: 3000, 8080, 8081, 8000)...');
+  for (const p of PORTS) {
+    if (await portInUse(p)) killPort(p);
+  }
+  await sleep(600);
+  info('Deteniendo los contenedores del proyecto...');
   run(COMPOSE.concat(ALL, ['down']));
-  ok('Contenedores detenidos.');
+  ok('Todo detenido. Los datos de la base se conservan.');
 }
 
 async function reset() {
   banner();
   info('Deteniendo y borrando la base de datos (docker compose down -v)...');
+  killDevChildren();
   run(COMPOSE.concat(ALL, ['down', '-v']));
-  info('Montando de cero...');
-  run(COMPOSE.concat(PROD, ['up', '-d', '--build']));
-  await waitForApi();
-  await waitForWeb();
-  await importLegacyIfNeeded();
-  summary(false);
+  info('Montando de cero (solo la BD en Docker; servicios en el host)...');
+  await up();
 }
 
 async function forceImport() {
   banner();
-  info('Asegurando que el stack esté arriba...');
-  run(COMPOSE.concat(PROD, ['up', '-d']));
-  await waitForApi();
-  await importLegacyIfNeeded(true);
+  info('Asegurando PostgreSQL local (docker compose up -d db)...');
+  run(COMPOSE.concat(ALL, ['up', '-d', 'db']));
+  if (!(await waitForPort(5435, 60000))) {
+    warn('No se detectó PostgreSQL local en :5435.');
+  }
+  const seedPath = path.join(ROOT, 'backend', 'dist', 'scripts', 'merge-bk.js');
+  if (!fs.existsSync(seedPath)) {
+    fail('El backend no está compilado (falta backend/dist). Ejecuta: npm --prefix backend run build');
+  }
+  info('Ejecutando el merge de datos (bk.sql) contra la base local...');
+  run(['node', seedPath, path.join(ROOT, 'backups', 'bk.sql')], path.join(ROOT, 'backend'));
   ok('Importación completada.');
 }
 
@@ -425,17 +433,16 @@ function lanUrl() {
   } catch { return null }
 }
 
-function summary(dev = false) {
+function summary() {
   console.log(`
 ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${c.reset}
 
   ${c.bold}Interfaz web${c.reset}    ${c.cyan}${WEB_URL}${c.reset}
   ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
+  ${c.bold}Bot Anay${c.reset}       ${c.cyan}http://localhost:8000${c.reset}
   ${c.bold}PostgreSQL${c.reset}     Local (Docker) — semilla desde backups/bk.sql; producción usa Supabase
-${dev ? `
-  ${c.dim}Modo DEV: hot reload activo — backend (nest --watch) y frontends (Vite HMR)${c.reset}
-` : ''}
+  ${c.bold}Logs${c.reset}           ${c.cyan}logs/backend.log · web.log · admin.log · bot.log · db.log${c.reset}
 ${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.reset} (web) · ${c.cyan}${lanUrl()}:8081${c.reset} (admin)
 ` : ''}
   ${c.dim}Parar:  node setup.js --down${c.reset}
@@ -449,10 +456,11 @@ ${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.r
     if (arg === '--down') await down();
     else if (arg === '--reset') await reset();
     else if (arg === '--import') await forceImport();
-    else if (arg === '--dev') await devUp();
+    else if (arg === '--dev') await devUp(); // mismo flujo local
     else if (arg === '--help' || arg === '-h') {
       banner();
       console.log('Uso: node setup.js [--dev | --import | --down | --reset]');
+      console.log('Logs en logs/ (backend, web, admin, bot, db). Solo PostgreSQL corre en Docker.');
     } else await up();
   } catch (e) {
     if (e && (e.signal === 'SIGINT' || e.signal === 'SIGTERM')) {
