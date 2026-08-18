@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import Modal from './Modal'
 import { CITIES } from '../data/mock'
 
 interface Props {
@@ -22,6 +24,8 @@ const NAV = [
 ]
 
 export default function Header({ currentPage, setPage, ciudad, setCiudad }: Props) {
+  const [cityOpen, setCityOpen] = useState(false)
+
   return (
     <header style={{ background: '#fff', boxShadow: '0 1px 0 #e1e4e9', position: 'sticky', top: 0, zIndex: 200, flexShrink: 0 }}>
       <div className="tricolor-band" />
@@ -30,10 +34,10 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', flexWrap: 'nowrap', overflow: 'hidden' }}>
         <button
           onClick={() => setPage('mapa')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}
         >
-          <span style={{ fontSize: 20 }}>🇨🇴</span>
-          <span style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 17, color: '#003893', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>🇨🇴</span>
+          <span className="header-logo-name" style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 800, fontSize: 17, color: '#003893', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             Estamos contigo
           </span>
         </button>
@@ -44,8 +48,9 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
 
         <div style={{ flex: 1, minWidth: 0 }} />
 
+        {/* Selector de ciudad: <select> nativo en escritorio… */}
         <select
-          className="form-select"
+          className="form-select header-city-native"
           style={{ width: 'auto', fontSize: 13, padding: '5px 8px', maxWidth: 130, flexShrink: 0 }}
           value={ciudad}
           onChange={e => setCiudad(e.target.value)}
@@ -53,6 +58,18 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
         >
           {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+
+        {/* …y botón con modal en móvil (el select nativo se corta en pantallas estrechas) */}
+        <button
+          className="header-city-btn"
+          onClick={() => setCityOpen(true)}
+          aria-label="Cambiar ciudad"
+        >
+          📍 {ciudad}
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M2 3.5 L5 6.5 L8 3.5" />
+          </svg>
+        </button>
       </div>
 
       {/* Desktop nav */}
@@ -76,6 +93,31 @@ export default function Header({ currentPage, setPage, ciudad, setCiudad }: Prop
           </button>
         ))}
       </nav>
+
+      {/* Modal de ciudad (móvil) */}
+      {cityOpen && (
+        <Modal title="📍 Ciudad" onClose={() => setCityOpen(false)} hideCancel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {CITIES.map(c => (
+              <button
+                key={c}
+                onClick={() => { setCiudad(c); setCityOpen(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', textAlign: 'left', padding: '12px 14px', fontSize: 14, fontWeight: 600,
+                  fontFamily: "'Nunito', sans-serif", color: c === ciudad ? '#003893' : '#1f2430',
+                  background: c === ciudad ? '#e8eeff' : '#fff',
+                  border: c === ciudad ? '1.5px solid #003893' : '1.5px solid #e1e4e9',
+                  borderRadius: 10, cursor: 'pointer',
+                }}
+              >
+                <span>{c}</span>
+                {c === ciudad && <span style={{ fontSize: 15 }}>✅</span>}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
     </header>
   )
 }

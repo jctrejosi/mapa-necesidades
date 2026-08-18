@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
@@ -15,6 +17,58 @@ const CITY_CENTER: Record<string, [number, number]> = {
   'Norte del Valle': [3.9000, -76.0000], 'Armenia': [4.5339, -75.6811],
 }
 
+/** Mapa con los marcadores de todas las mascotas perdidas (y encontradas). */
+function MapaMascotas({ mascotas }: { mascotas: any[] }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInst = useRef<L.Map | null>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || mapInst.current) return
+    const m0 = mascotas.find(m => m.lat != null)
+    const map = L.map(mapRef.current, { zoomControl: true })
+      .setView(m0 ? [Number(m0.lat), Number(m0.lng)] : [5.0703, -75.5138], m0 ? 13 : 12)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(map)
+
+    const bounds: [number, number][] = []
+    mascotas.forEach(m => {
+      const lat = Number(m.lat)
+      const lng = Number(m.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      const encontrada = m.estado === 'encontrado'
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:28px;height:28px;border-radius:50%;background:${encontrada ? '#2E9E5B' : '#7C3AED'};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:13px">🐾</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14],
+      })
+      const nombre = m.nombre || m.tipo_animal
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup(`
+        <div style="min-width:200px;max-width:260px">
+          <span style="background:${encontrada ? '#e6f5ec' : '#f3e8ff'};color:${encontrada ? '#2E9E5B' : '#7C3AED'};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${encontrada ? '✅ ENCONTRADA' : '🐾 PERDIDA'}</span>
+          <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${nombre}</h4>
+          ${m.senas ? `<p style="font-size:12px;color:#6b7280;margin:0 0 4px">${m.senas}</p>` : ''}
+          ${m.lugar_visto ? `<p style="font-size:12px;margin:0 0 4px">📍 ${m.lugar_visto}</p>` : ''}
+          ${m.nombre_reporta ? `<p style="font-size:12px;margin:0 0 8px">📞 ${m.nombre_reporta}${m.telefono_reporta ? ' · ' + m.telefono_reporta : ''}</p>` : ''}
+          <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" rel="noreferrer" style="display:inline-block;background:#f0f4ff;color:#003893;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none">🗺️ Cómo llegar</a>
+        </div>
+      `, { maxWidth: 280 })
+      bounds.push([lat, lng])
+    })
+    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] })
+    mapInst.current = map
+    setTimeout(() => map.invalidateSize(), 120)
+    return () => { map.remove(); mapInst.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div style={{ border: '1.5px solid #e1e4e9', borderRadius: 10, overflow: 'hidden' }}>
+      <div ref={mapRef} style={{ height: 420, width: '100%' }} />
+    </div>
+  )
+}
+
 export default function MascotasPage({ store }: Props) {
   const { ciudad, mascotas, addMascota, updateMascota } = store
   const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
@@ -22,6 +76,7 @@ export default function MascotasPage({ store }: Props) {
   const [search, setSearch] = useState('')
   const [showReportarModal, setShowReportarModal] = useState(false)
   const [showMap, setShowMap] = useState(false)
+  const [showMapaMascotas, setShowMapaMascotas] = useState(false)
   const [showAvistarModal, setShowAvistarModal] = useState<number | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState<number | null>(null)
   const [pinResult, setPinResult] = useState<string | null>(null)
@@ -105,7 +160,10 @@ export default function MascotasPage({ store }: Props) {
             <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1f2430', margin: 0 }}>🐾 Mascotas perdidas</h1>
             <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b7280' }}>Reportes en {ciudad} · Los marcadores aparecen en el Mapa principal</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowReportarModal(true)}>🐾 Reportar mascota</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" onClick={() => setShowMapaMascotas(true)}>🗺️ Ver mascotas en el mapa</button>
+            <button className="btn btn-primary" onClick={() => setShowReportarModal(true)}>🐾 Reportar mascota</button>
+          </div>
         </div>
 
         <div style={{ marginBottom: 14 }}>
@@ -272,6 +330,22 @@ export default function MascotasPage({ store }: Props) {
       )}
 
       {pinResult && <PinModal pin={pinResult} onClose={() => setPinResult(null)} />}
+
+      {/* Mapa con las mascotas de la ciudad (respeta filtros y búsqueda) */}
+      {showMapaMascotas && (
+        <Modal title={`🗺️ Mascotas — ${ciudad}`} onClose={() => setShowMapaMascotas(false)} hideCancel wide>
+          {filtered.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>No hay mascotas para mostrar con el filtro actual.</p>
+          ) : (
+            <>
+              <MapaMascotas mascotas={filtered} />
+              <p style={{ fontSize: 11.5, color: '#9AA0AC', margin: '8px 0 0' }}>
+                Los marcadores morados son mascotas perdidas; los verdes están reportadas como encontradas.
+              </p>
+            </>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

@@ -350,6 +350,34 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .hide-xs { display: none; }
 }
 
+/* ── Header: selector de ciudad ──
+   En escritorio se usa el <select> nativo; en móvil se reemplaza por un botón
+   que abre un modal (el select nativo se corta/desborda en pantallas estrechas). */
+.header-city-btn {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: #f0f4ff;
+  border: 1.5px solid #dbe3f5;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  color: #003893;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.header-city-btn:active { background: #e2e9fb; }
+
+@media (max-width: 720px) {
+  .header-city-native { display: none !important; }
+  .header-city-btn { display: inline-flex; }
+  /* El logo cede espacio con elipsis para no empujar el selector de ciudad */
+  .header-logo-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+}
+
 .page-container { max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; width: 100%; }
 .page-container-wide { max-width: 1040px; margin: 0 auto; padding: 24px 16px 80px; width: 100%; }
 
