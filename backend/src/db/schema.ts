@@ -75,6 +75,8 @@ export const necesidades = pgTable(
     tipo: varchar('tipo', { length: 100 }).notNull(),
     descripcion: text('descripcion'),
     imagen: varchar('imagen', { length: 255 }),
+    evidencias: jsonb('evidencias'),
+    ayudaPuntoApoyoId: integer('ayuda_punto_apoyo_id').references(() => puntosApoyo.id),
     fecha: date('fecha').notNull(),
     cantidad: varchar('cantidad', { length: 100 }),
     prioridad: prioridad('prioridad').notNull().default('media'),

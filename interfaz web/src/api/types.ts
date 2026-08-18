@@ -17,6 +17,8 @@ export interface Necesidad {
   estado: 'requiere' | 'atendida'
   responsable: { nombre: string; telefono: string; fecha: string } | null
   reportado_por: string; telefono_reporta: string; pin: string | null
+  evidencias?: { url: string; descripcion: string }[]
+  ayuda_punto_apoyo_id?: number | null
 }
 
 export interface Ofrecimiento {

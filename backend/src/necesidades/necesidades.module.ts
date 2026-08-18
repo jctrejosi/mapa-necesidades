@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
-import { necesidades, sectores } from '../db/schema';
+import { necesidades, puntosApoyo, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
 import { asDate, nested } from '../common/serialize';
@@ -31,6 +31,7 @@ type NecesidadBody = {
   tipo?: string;
   descripcion?: string;
   imagen?: string;
+  evidencias?: unknown;
   fecha?: string;
   cantidad?: string;
   prioridad?: 'alta' | 'media' | 'baja';
@@ -45,6 +46,27 @@ type NecesidadBody = {
   visitor_id?: string;
 };
 
+/** Convierte las evidencias a [{ url, descripcion }]; la descripción es obligatoria. */
+function toEvidencias(v: unknown): { url: string; descripcion: string }[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: { url: string; descripcion: string }[] = [];
+  for (const x of v) {
+    if (typeof x === 'string') {
+      const url = x.trim();
+      if (url) out.push({ url, descripcion: 'Evidencia' });
+      continue;
+    }
+    if (x && typeof x === 'object') {
+      const o = x as Record<string, unknown>;
+      const url = typeof o.url === 'string' ? o.url.trim() : '';
+      const desc = typeof o.descripcion === 'string' ? o.descripcion.trim() : '';
+      if (!url) continue;
+      out.push({ url, descripcion: desc || 'Evidencia' });
+    }
+  }
+  return out.length ? out : null;
+}
+
 @Injectable()
 class NecesidadesService {
   constructor(@Inject(DB) private db: Db) {}
@@ -56,6 +78,9 @@ class NecesidadesService {
       tipo: n.tipo,
       descripcion: n.descripcion ?? '',
       imagen: n.imagen ?? '',
+      evidencias: (n.evidencias as { url: string; descripcion: string }[] | null) ?? [],
+      // Punto de apoyo que adoptó el reporte (para que su PIN permita editarlo).
+      ayuda_punto_apoyo_id: n.ayudaPuntoApoyoId ?? null,
       fecha: asDate(n.fecha),
       cantidad: n.cantidad ?? '',
       prioridad: n.prioridad,
@@ -143,7 +168,13 @@ class NecesidadesService {
     const row = await this.get(id);
     if (!row) throw new NotFoundException({ error: 'Necesidad no encontrada' });
     const esAdminEdit = isAdminEdit(b.pin);
-    if (!checkEditCode(row.pin, b.pin)) {
+    // El punto de apoyo que adoptó el reporte también puede editarlo con su PIN.
+    let esPunto = false;
+    if (!esAdminEdit && row.ayudaPuntoApoyoId && str(b.pin)) {
+      const ptos = await this.db.select({ pin: puntosApoyo.pin }).from(puntosApoyo).where(eq(puntosApoyo.id, row.ayudaPuntoApoyoId)).limit(1);
+      esPunto = ptos[0]?.pin === str(b.pin);
+    }
+    if (!checkEditCode(row.pin, b.pin) && !esPunto) {
       throw new ForbiddenException({ error: 'Código de edición incorrecto' });
     }
     const previo = this.serialize(row);
@@ -157,7 +188,8 @@ class NecesidadesService {
     const actualizado = await this.patch(id, b, false);
     await registrarAuditoria(this.db, {
       tabla: 'necesidades', registroId: id, accion: 'update',
-      datosPrevios: previo, datosNuevos: actualizado, autor: esAdminEdit ? 'admin' : 'usuario',
+      datosPrevios: previo, datosNuevos: actualizado,
+      autor: esAdminEdit ? 'admin' : esPunto ? 'punto' : 'usuario',
       codigo: esAdminEdit ? 'ADMIN_EDIT' : str(b.pin), visitorId: str(b.visitor_id),
     });
     return actualizado;
@@ -181,6 +213,7 @@ class NecesidadesService {
     if (b.tipo !== undefined) set.tipo = str(b.tipo);
     if (b.descripcion !== undefined) set.descripcion = str(b.descripcion) || null;
     if (b.imagen !== undefined) set.imagen = str(b.imagen) || null;
+    if (b.evidencias !== undefined) set.evidencias = toEvidencias(b.evidencias);
     if (b.cantidad !== undefined) set.cantidad = str(b.cantidad) || null;
     if (b.fecha !== undefined) set.fecha = toDate(b.fecha) ?? today();
     if (b.prioridad !== undefined) {

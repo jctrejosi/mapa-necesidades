@@ -65,7 +65,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100svh', background: '#f4f5f7' }}>
+    <div className="app-root" style={{ display: 'flex', flexDirection: 'column', background: '#f4f5f7' }}>
       <Header currentPage={page} setPage={navigate} ciudad={store.ciudad} setCiudad={store.setCiudad} />
 
       <main style={{

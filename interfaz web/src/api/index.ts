@@ -194,7 +194,7 @@ export const eliminarEvento = (id: number, pin: string): Promise<{ ok: boolean }
 export const listVoluntarios = (tabla: string, registroId: number): Promise<Voluntario[]> =>
   request(`/voluntarios?tabla=${encodeURIComponent(tabla)}&registro_id=${registroId}`)
 
-export const registrarVoluntario = (b: { tabla: string; registro_id: number; nombre: string; telefono: string; mensaje?: string }): Promise<{ ok: boolean; id: number; whatsapp: boolean }> =>
+export const registrarVoluntario = (b: { tabla: string; registro_id: number; nombre: string; telefono: string; tipo?: 'persona' | 'punto'; punto_pin?: string; mensaje?: string }): Promise<{ ok: boolean; id: number; whatsapp: boolean }> =>
   request('/voluntarios', { method: 'POST', body: { ...b, visitor_id: getVisitorId() } })
 
 // ── Buscador (PIN o teléfono) ─────────────────────────────────────────────

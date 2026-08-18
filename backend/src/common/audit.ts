@@ -7,7 +7,7 @@ export type AuditEntry = {
   accion: 'create' | 'update' | 'delete';
   datosPrevios?: unknown;
   datosNuevos?: unknown;
-  autor?: 'usuario' | 'admin' | 'sistema';
+  autor?: 'usuario' | 'admin' | 'sistema' | 'punto';
   codigo?: string | null;
   visitorId?: string | null;
 };

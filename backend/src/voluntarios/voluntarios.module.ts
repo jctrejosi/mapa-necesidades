@@ -49,6 +49,10 @@ type VoluntarioBody = {
   registro_id?: unknown;
   nombre?: string;
   telefono?: string;
+  /** 'persona' (por defecto) o 'punto' (punto de apoyo). */
+  tipo?: string;
+  /** PIN del punto de apoyo cuando tipo === 'punto'. */
+  punto_pin?: string;
   mensaje?: string;
   visitor_id?: string;
 };
@@ -123,11 +127,14 @@ class VoluntariosService {
   }
 
   /** Actualiza el estado del reporte según la entidad (en proceso / reservado / avistado...). */
-  private async applyEstado(tabla: Tabla, id: number, nombre: string, telefono: string) {
+  private async applyEstado(tabla: Tabla, id: number, nombre: string, telefono: string, puntoId?: number) {
     const hoy = today();
     switch (tabla) {
       case 'necesidades':
-        await this.db.update(necesidades).set({ responsableNombre: nombre, responsableTelefono: telefono, fechaCompromiso: hoy }).where(eq(necesidades.id, id));
+        await this.db
+          .update(necesidades)
+          .set({ responsableNombre: nombre, responsableTelefono: telefono, fechaCompromiso: hoy, ayudaPuntoApoyoId: puntoId ?? null })
+          .where(eq(necesidades.id, id));
         break;
       case 'ofrecimientos':
         await this.db.update(ofrecimientos).set({ reservadoPorNombre: nombre, reservadoPorTelefono: telefono, fechaReserva: hoy }).where(eq(ofrecimientos.id, id));
@@ -150,16 +157,31 @@ class VoluntariosService {
   async create(b: VoluntarioBody) {
     const tabla = str(b.tabla) as Tabla;
     const registroId = toInt(b.registro_id);
-    const nombre = str(b.nombre);
-    const telefono = str(b.telefono);
-
+    const tipo = str(b.tipo) === 'punto' ? 'punto' : 'persona';
+    const puntoPin = str(b.punto_pin);
     if (!TABLAS.includes(tabla)) throw new BadRequestException({ error: 'Tipo de reporte inválido' });
     if (!registroId) throw new BadRequestException({ error: 'Falta el id del reporte' });
-    if (!nombre) throw new BadRequestException({ error: 'Tu nombre es obligatorio' });
-    if (!telefono) throw new BadRequestException({ error: 'Tu teléfono es obligatorio' });
+    if (!puntoPin && !str(b.nombre)) throw new BadRequestException({ error: 'Tu nombre es obligatorio' });
+    if (!puntoPin && !str(b.telefono)) throw new BadRequestException({ error: 'Tu teléfono es obligatorio' });
 
     const info = await this.targetInfo(tabla, registroId);
     if (!info.ok) throw new NotFoundException({ error: 'El reporte ya no existe' });
+
+    // Si es un punto de apoyo, se valida su PIN y se usa su nombre/teléfono.
+    let nombre = str(b.nombre) ?? '';
+    let telefono = str(b.telefono) ?? '';
+    let puntoId: number | undefined;
+    let autor: 'usuario' | 'punto' = 'usuario';
+    if (tipo === 'punto') {
+      if (!puntoPin) throw new BadRequestException({ error: 'Ingresa el PIN del punto de apoyo' });
+      const ptos = await this.db.select().from(puntosApoyo).where(eq(puntosApoyo.pin, puntoPin)).limit(1);
+      const punto = ptos[0];
+      if (!punto) throw new BadRequestException({ error: 'El PIN del punto de apoyo es incorrecto' });
+      nombre = punto.nombre;
+      telefono = punto.telefono ?? '';
+      puntoId = punto.id;
+      autor = 'punto';
+    }
 
     const [v] = await this.db
       .insert(voluntarios)
@@ -174,7 +196,7 @@ class VoluntariosService {
       .returning();
 
     // Cambia el estado del reporte (queda "en proceso"/reservado/avistado/visita)
-    await this.applyEstado(tabla, registroId, nombre, telefono);
+    await this.applyEstado(tabla, registroId, nombre, telefono, puntoId);
 
     emitAppEvent({
       type: 'ayuda',
@@ -186,7 +208,8 @@ class VoluntariosService {
 
     await registrarAuditoria(this.db, {
       tabla: 'voluntarios', registroId: v.id, accion: 'create',
-      datosNuevos: this.serialize(v), autor: 'usuario',
+      datosNuevos: this.serialize(v), autor,
+      codigo: tipo === 'punto' ? puntoPin : undefined,
       visitorId: str(b.visitor_id),
     });
 

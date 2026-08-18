@@ -273,7 +273,8 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
   // Centro de reportes (panel de notificaciones por secciones)
   const [openSection, setOpenSection] = useState<string | null>('actividad')
-  const [nFilter, setNFilter] = useState('urgentes')
+  // Filtro por estado con checks: pendientes / en proceso / resueltos
+  const [nEstado, setNEstado] = useState({ pendientes: true, proceso: true, resueltos: true })
   const [oFilter, setOFilter] = useState('disponibles')
   const [mFilter, setMFilter] = useState('perdidas')
   const [dFilter, setDFilter] = useState('pendientes')
@@ -290,8 +291,11 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
     tipo: 'Comida y agua', cantidad: '', prioridad: 'alta' as const,
     detalles: '', reportado_por: '', telefono: '', imagen: null as string | null
   })
-  // Help form — nombre + teléfono del voluntario (se registra en /voluntarios)
-  const [hForm, setHForm] = useState({ nombre: '', telefono: '' })
+  // Help form — quién va a ayudar (persona o punto de apoyo) + su PIN si aplica
+  const [hForm, setHForm] = useState({ nombre: '', telefono: '', tipo: 'persona' as 'persona' | 'punto', puntoPin: '' })
+  // Adjuntar evidencias al reporte (galería tipo eventos, con descripción)
+  const [evidenciaModal, setEvidenciaModal] = useState<{ id: number; actuales: { url: string; descripcion: string }[] } | null>(null)
+  const [evForm, setEvForm] = useState({ imagen: null as string | null, descripcion: '', pin: '' })
   // Update form
   const [uForm, setUForm] = useState({
     cantidad: '', prioridad: 'alta' as const, detalles: '', estado: 'requiere' as const,
@@ -917,22 +921,46 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
   const submitHelp = async () => {
     if (!helpTarget) return
-    if (!hForm.nombre.trim()) { alert('Tu nombre es obligatorio'); return }
-    if (!hForm.telefono.trim()) { alert('Tu teléfono es obligatorio'); return }
+    const esPunto = hForm.tipo === 'punto'
+    if (esPunto) {
+      if (!hForm.puntoPin.trim()) { alert('Ingresa el PIN del punto de apoyo'); return }
+    } else {
+      if (!hForm.nombre.trim()) { alert('Tu nombre es obligatorio'); return }
+      if (!hForm.telefono.trim()) { alert('Tu teléfono es obligatorio'); return }
+    }
     const r = await registrarVoluntario({
       tabla: helpTarget.tabla, registro_id: helpTarget.id,
       nombre: hForm.nombre.trim(), telefono: hForm.telefono.trim(),
+      tipo: hForm.tipo, punto_pin: hForm.puntoPin.trim(),
     })
     if (!r) return
     setHelpTarget(null)
-    setHForm({ nombre: '', telefono: '' })
-    showToast('✅ ¡Gracias! Quedaste registrado como voluntario y el reporte cambió de estado.')
+    setHForm({ nombre: '', telefono: '', tipo: 'persona', puntoPin: '' })
+    showToast(esPunto
+      ? '✅ El punto de apoyo quedó a cargo del reporte (estado: En proceso).'
+      : '✅ ¡Gracias! Quedaste registrado como voluntario y el reporte cambió de estado.')
     // Refresca la lista de voluntarios del detalle abierto
     if (detailItem) {
       const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
       const id = detailItem.ayuda?.id ?? detailItem.editable?.id
       if (tabla && id) listVoluntarios(tabla, id).then(setDetailHelpers).catch(() => setDetailHelpers([]))
     }
+  }
+
+  const submitEvidencia = async () => {
+    if (!evidenciaModal) return
+    if (!evForm.imagen) { alert('Adjunta una imagen de evidencia'); return }
+    if (!evForm.descripcion.trim()) { alert('La descripción de la evidencia es obligatoria'); return }
+    if (!evForm.pin.trim()) { alert('Ingresa el código de edición (PIN del reporte, del punto de apoyo o llave de admin)'); return }
+    const url = evForm.imagen.startsWith('data:') ? (await uploadImage(evForm.imagen)).path : evForm.imagen
+    const r = await updateNecesidad(evidenciaModal.id, {
+      evidencias: [...evidenciaModal.actuales, { url, descripcion: evForm.descripcion.trim() }],
+      pin: evForm.pin.trim(),
+    })
+    if (!r) return
+    setEvidenciaModal(null)
+    setEvForm({ imagen: null, descripcion: '', pin: '' })
+    showToast('✅ Evidencia adjuntada al reporte.')
   }
 
   const submitUpdate = async () => {
@@ -1239,12 +1267,13 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
     const prioridadOrder: Record<string, number> = { alta: 0, media: 1, baja: 2 }
 
     const nsDeCiudad = necesidades.filter(n => ciudadSectores.some(s => s.id === n.sector_id))
-    const nsFiltered = nsDeCiudad
-      .filter(n =>
-        nFilter === 'urgentes' ? (n.estado === 'requiere' && !n.responsable)
-        : nFilter === 'en_proceso' ? (n.estado === 'requiere' && n.responsable)
-        : nFilter === 'atendidas' ? n.estado === 'atendida'
-        : true)
+    const nsFiltered = nsDeCiudad.filter(n => {
+      const esPendiente = n.estado === 'requiere' && !n.responsable
+      const esProceso = n.estado === 'requiere' && n.responsable
+      const esResuelta = n.estado === 'atendida'
+      if (!nEstado.pendientes && !nEstado.proceso && !nEstado.resueltos) return false
+      return (nEstado.pendientes && esPendiente) || (nEstado.proceso && esProceso) || (nEstado.resueltos && esResuelta)
+    })
       .sort((a, b) => {
         const ua = a.estado === 'requiere' && !a.responsable ? 0 : a.estado === 'requiere' ? 1 : 2
         const ub = b.estado === 'requiere' && !b.responsable ? 0 : b.estado === 'requiere' ? 1 : 2
@@ -1312,13 +1341,24 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
         {/* 🆘 Necesidades (alimentos y demás) */}
         <ReportSection id="necesidades" icon="🆘" title="Necesidades" count={nsDeCiudad.length}>
-          <Chips value={nFilter} onChange={setNFilter} options={[
-            { id: 'urgentes', label: '🟥 Urgentes' },
-            { id: 'en_proceso', label: '🟠 En proceso' },
-            { id: 'atendidas', label: '✅ Atendidas' },
-            { id: 'todos', label: 'Todas' },
-          ]} />
-          {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro.</p>}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '2px 0 8px' }}>
+            {[
+              { id: 'pendientes', label: '🔴 Pendientes' },
+              { id: 'proceso', label: '🟠 En proceso' },
+              { id: 'resueltos', label: '✅ Resueltos' },
+            ].map(c => (
+              <label key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', color: '#1f2430', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={nEstado[c.id as keyof typeof nEstado]}
+                  onChange={e => setNEstado(p => ({ ...p, [c.id]: e.target.checked }))}
+                  style={{ width: 15, height: 15, accentColor: '#003893', cursor: 'pointer' }}
+                />
+                {c.label}
+              </label>
+            ))}
+          </div>
+          {nsFiltered.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin necesidades con este filtro (marca al menos un estado).</p>}
           {(() => {
             // Agrupa por tipo (canónico) para mostrar cada familia junta, separada por una línea gris
             const grupos = new Map<string, typeof nsFiltered>()
@@ -1356,7 +1396,22 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
                       {urgente && (
                         <button onClick={(e) => { e.stopPropagation(); setHelpTarget({ tabla: 'necesidades', id: n.id, titulo: n.tipo }) }} className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>🙋 Yo ayudo</button>
                       )}
-                      {n.responsable && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>}
+                      {(() => {
+                        // Si la resuelta/en proceso tiene punto de apoyo asociado, se muestra su logo
+                        const punto = n.ayuda_punto_apoyo_id ? puntosApoyo.find(p => p.id === n.ayuda_punto_apoyo_id) : null
+                        if (punto) {
+                          return (
+                            <p style={{ margin: '2px 0 0', fontSize: 11, color: '#003893', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              {punto.imagen
+                                ? <img src={punto.imagen} alt={punto.nombre} style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', border: '1px solid #dbe3f5' }} />
+                                : '🏪'}
+                              {punto.nombre}
+                            </p>
+                          )
+                        }
+                        if (n.responsable) return <p style={{ margin: '2px 0 0', fontSize: 11, color: '#2E9E5B' }}>🙋 {n.responsable.nombre}</p>
+                        return null
+                      })()}
                     </div>
                   )
                 })}
@@ -2001,7 +2056,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
                   )}
                 </div>
                 <button
-                  onClick={() => { setHForm({ nombre: '', telefono: '' }); setHelpTarget({ tabla, id, titulo: detailItem.titulo }) }}
+                  onClick={() => { setHForm({ nombre: '', telefono: '', tipo: 'persona', puntoPin: '' }); setHelpTarget({ tabla, id, titulo: detailItem.titulo }) }}
                   style={{
                     width: '100%', marginTop: 8, background: '#2E9E5B', color: '#fff',
                     border: 'none', borderRadius: 10, padding: '11px 16px',
@@ -2009,6 +2064,38 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
                   }}
                 >
                   🤝 Yo te ayudo
+                </button>
+              </div>
+            )
+          })()}
+          {/* 🧾 Evidencias: galería aparte de la foto del reporte (como en eventos) */}
+          {(() => {
+            const tabla = detailItem.ayuda?.tabla ?? (detailItem.editable ? tablaDeTipo[detailItem.editable.tipo] : null)
+            if (tabla !== 'necesidades' || !liveItem) return null
+            const id = detailItem.ayuda?.id ?? detailItem.editable!.id
+            const evs = (liveItem as any).evidencias ?? []
+            return (
+              <div style={{ marginTop: 14, borderTop: '1px solid #f0f0f0', paddingTop: 14 }}>
+                <p style={{ fontSize: 12.5, fontWeight: 800, color: '#1f2430', margin: '0 0 8px' }}>🧾 Evidencias</p>
+                {evs.length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#9AA0AC', margin: '0 0 10px' }}>
+                    Aún no hay evidencias. El punto de apoyo a cargo puede adjuntar fotos de su gestión.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                    {evs.map((ev: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fafbfc', border: '1px solid #e1e4e9', borderRadius: 10, padding: 8 }}>
+                        <img src={ev.url} alt={ev.descripcion} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12.5, color: '#1f2430', flex: 1 }}>{ev.descripcion}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => { setEvForm({ imagen: null, descripcion: '', pin: '' }); setEvidenciaModal({ id, actuales: evs }) }}
+                >
+                  📎 Adjuntar evidencia
                 </button>
               </div>
             )
@@ -2227,16 +2314,68 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
       {helpTarget && (
         <Modal title={`🤝 Yo te ayudo: ${helpTarget.titulo}`} onClose={() => setHelpTarget(null)} onConfirm={submitHelp} confirmLabel="Confirmar ayuda">
           <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px' }}>
-            Déjanos tu nombre y teléfono: quedará registrado que vas a ayudar y quien publicó
-            el reporte recibirá tu contacto por WhatsApp para coordinar.
+            El reporte pasará a <strong>En proceso</strong> con tu contacto. Quien publicó recibirá tu
+            información por WhatsApp para coordinar.
           </p>
           <div className="form-group">
-            <label className="form-label">Tu nombre <span className="req">*</span></label>
-            <input className="form-input" value={hForm.nombre} onChange={e => setHForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. María Pérez" />
+            <label className="form-label">¿Quién eres? <span className="req">*</span></label>
+            <select
+              className="form-select"
+              value={hForm.tipo}
+              onChange={e => setHForm(p => ({ ...p, tipo: e.target.value as 'persona' | 'punto' }))}
+            >
+              <option value="persona">👤 Persona / voluntario</option>
+              <option value="punto">🏪 Punto de apoyo</option>
+            </select>
+          </div>
+          {hForm.tipo === 'punto' ? (
+            <div className="form-group">
+              <label className="form-label">PIN del punto de apoyo <span className="req">*</span></label>
+              <input
+                className="form-input"
+                value={hForm.puntoPin}
+                onChange={e => setHForm(p => ({ ...p, puntoPin: e.target.value }))}
+                maxLength={10}
+                placeholder="····"
+                style={{ letterSpacing: 8, fontSize: 20 }}
+              />
+              <p style={{ fontSize: 11.5, color: '#9AA0AC', margin: '6px 0 0' }}>
+                Con este PIN el punto de apoyo quedará a cargo del reporte y podrá editarlo y adjuntar evidencias.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label">Tu nombre <span className="req">*</span></label>
+                <input className="form-input" value={hForm.nombre} onChange={e => setHForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. María Pérez" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tu teléfono (WhatsApp) <span className="req">*</span></label>
+                <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* Adjuntar evidencia a un reporte (pide código de edición) */}
+      {evidenciaModal && (
+        <Modal title="📎 Adjuntar evidencia" onClose={() => setEvidenciaModal(null)} onConfirm={submitEvidencia} confirmLabel="Adjuntar">
+          <p style={{ fontSize: 12.5, color: '#6b7280', margin: '0 0 12px' }}>
+            Adjunta una foto de la gestión con su descripción. Se pide el código de edición:
+            el PIN del reporte, el PIN del punto de apoyo a cargo o la llave de administrador.
+          </p>
+          <div className="form-group">
+            <label className="form-label">Imagen <span className="req">*</span></label>
+            <ImageInput value={evForm.imagen ?? undefined} onChange={v => setEvForm(p => ({ ...p, imagen: v ?? null }))} />
           </div>
           <div className="form-group">
-            <label className="form-label">Tu teléfono (WhatsApp) <span className="req">*</span></label>
-            <input className="form-input" type="tel" value={hForm.telefono} onChange={e => setHForm(p => ({ ...p, telefono: e.target.value }))} placeholder="300 123 4567" />
+            <label className="form-label">Descripción de la evidencia <span className="req">*</span></label>
+            <input className="form-input" value={evForm.descripcion} onChange={e => setEvForm(p => ({ ...p, descripcion: e.target.value }))} placeholder="¿Qué muestra esta foto?" />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Código de edición <span className="req">*</span></label>
+            <input className="form-input" value={evForm.pin} onChange={e => setEvForm(p => ({ ...p, pin: e.target.value }))} maxLength={32} placeholder="PIN del reporte, del punto o llave de admin" />
           </div>
         </Modal>
       )}

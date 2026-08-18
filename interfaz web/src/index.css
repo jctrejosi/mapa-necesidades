@@ -36,6 +36,15 @@ html, body {
   flex-direction: column;
 }
 
+/* La app es una ventana fija: nunca crece más allá del viewport, así el mapa
+   llena todo el alto y los controles (capas, botón de reportes) quedan pegados
+   al fondo en escritorio. */
+.app-root {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 h1, h2, h3, h4, h5, h6 { font-family: 'Work Sans', sans-serif; margin: 0; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
