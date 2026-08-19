@@ -311,7 +311,7 @@ export function useStore() {
   const deleteCentro = (id: number): Promise<unknown> =>
     mutate(() => api.deleteCentro(id), ciudad)
 
-  const addPuntoApoyo = (p: Omit<PuntoApoyo, 'id'>): Promise<unknown> =>
+  const addPuntoApoyo = (p: Omit<PuntoApoyo, 'id' | 'pin'>): Promise<unknown> =>
     mutate(async () => api.createPuntoApoyo({ ...p, imagen: await withImage(p.imagen) }), ciudad)
 
   const updatePuntoApoyo = (id: number, b: Partial<PuntoApoyo>): Promise<unknown> =>

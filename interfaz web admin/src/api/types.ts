@@ -50,6 +50,7 @@ export interface PuntoApoyo {
   id: number; ciudad: string; nombre: string; tipo: string
   direccion: string; telefono: string; imagen: string | null
   lat: number; lng: number; color: string
+  pin: string | null
 }
 
 export interface Evento {

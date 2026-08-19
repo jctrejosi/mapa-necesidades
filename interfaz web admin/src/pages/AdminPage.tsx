@@ -505,7 +505,7 @@ export default function AdminPage({ store }: Props) {
 
   // ── Acciones (se conserva la funcionalidad existente) ──
   const pinTabla = (type: string) =>
-    type === 'necesidad' ? 'necesidades' : type === 'ofrecimiento' ? 'ofrecimientos' : type === 'mascota' ? 'mascotas_perdidas' : 'viviendas'
+    type === 'necesidad' ? 'necesidades' : type === 'ofrecimiento' ? 'ofrecimientos' : type === 'mascota' ? 'mascotas_perdidas' : type === 'punto' ? 'puntos_apoyo' : 'viviendas'
 
   const showPin = (pin: string | null, id: number, type: string) => {
     setShowPinModal({ pin, id, type })
@@ -1027,7 +1027,7 @@ export default function AdminPage({ store }: Props) {
           </div>
         }>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><Th>Imagen</Th><Th>Nombre</Th><Th>Tipo</Th><Th>Dirección</Th><Th>Teléfono</Th><Th>Acciones</Th></tr></thead>
+            <thead><tr><Th>Imagen</Th><Th>Nombre</Th><Th>Tipo</Th><Th>Dirección</Th><Th>Teléfono</Th><Th>PIN</Th><Th>Acciones</Th></tr></thead>
             <tbody>
               {pts.length === 0 && <Empty text="Sin puntos de apoyo. Agrega el primero." />}
               {pts.map(p => (
@@ -1043,6 +1043,9 @@ export default function AdminPage({ store }: Props) {
                   </Td>
                   <Td style={{ fontSize: 12.5 }}>{p.direccion}</Td>
                   <Td style={{ fontSize: 12.5 }}>{p.telefono || '—'}</Td>
+                  <Td>
+                    <button className="btn btn-xs" style={{ background: '#e8eeff', color: '#003893' }} onClick={() => showPin(p.pin, p.id, 'punto')}>🔑 PIN</button>
+                  </Td>
                   <Td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs btn-outline" onClick={() => { setPuntoForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || randomColor(), lat: p.lat, lng: p.lng }); setShowPuntoForm(p) }}>✎ Editar</button>
