@@ -16,6 +16,12 @@ async function bootstrap() {
   // 2) API bajo /api
   app.setGlobalPrefix('api');
 
+  // Body JSON ampliado: el frontend manda imágenes como data URL base64 y el
+  // límite por defecto de Express (100 KB) las rechaza con PayloadTooLargeError.
+  // UploadsService valida cada imagen hasta 5 MB, así que 10 MB da margen para
+  // el base64 (~4/3 del binario) más el resto del JSON.
+  app.useBodyParser('json', { limit: '10mb' });
+
   // Confiar en el proxy (nginx local / proxy de Render) para capturar la IP
   // real del cliente en X-Forwarded-For al registrar visitas.
   app.set('trust proxy', true);
