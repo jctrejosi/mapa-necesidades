@@ -100,15 +100,20 @@ export default function OfrecimientosPage({ store }: Props) {
   const submitUpdate = async () => {
     if (!showUpdate) return
     const o = ofrecimientos.find(x => x.id === showUpdate)!
-    if (o.pin && uForm.pin !== o.pin) { alert('Código incorrecto'); return }
+    if (!uForm.pin.trim()) { alert('Ingresa el código de edición (4 dígitos).'); return }
+    // La edición general (cantidad/descripción/estado) va por PATCH con el PIN;
+    // el backend valida el código. La reserva NO se incluye aquí: se maneja aparte.
     const r = await updateOfrecimiento(showUpdate, {
       cantidad: uForm.cantidad || o.cantidad,
       descripcion: uForm.descripcion || o.descripcion,
       estado: uForm.estado === 'entregado' ? 'entregado' : 'disponible',
-      reservado_por: uForm.cancelReserva ? null : o.reservado_por,
-      pin: uForm.pin,
+      pin: uForm.pin.trim(),
     })
     if (!r) return
+    // Si marcó "Cancelar esta reserva", se libera por separado (endpoint dedicado).
+    if (uForm.cancelReserva) {
+      await updateOfrecimiento(showUpdate, { reservado_por: null })
+    }
     setShowUpdate(null)
     alert('✅ Ofrecimiento actualizado.')
   }

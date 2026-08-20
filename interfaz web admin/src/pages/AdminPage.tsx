@@ -345,33 +345,6 @@ export default function AdminPage({ store }: Props) {
     visitasResumen().then(setVisitasKpi).catch(() => { /* silencioso */ })
   }, [authed])
 
-  if (!authed) {
-    return (
-      <div className="login-wrap">
-        <div className="tricolor-band" />
-        <div className="card login-card">
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🔑</div>
-          <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Acceso administrador</h2>
-          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>Ingresa la contraseña de administración</p>
-          <div className="form-group" style={{ textAlign: 'left' }}>
-            <label className="form-label">Contraseña</label>
-            <input
-              className="form-input"
-              type="password"
-              value={password}
-              autoFocus
-              onChange={e => { setPassword(e.target.value); setLoginError(false) }}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              style={{ textAlign: 'center', letterSpacing: 4 }}
-            />
-            {loginError && <p style={{ color: '#CE1126', fontSize: 12, margin: '4px 0 0' }}>Contraseña incorrecta.</p>}
-          </div>
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleLogin}>Ingresar</button>
-        </div>
-      </div>
-    )
-  }
-
   // ── Datos filtrados por ciudad ──
   const cSectores = sectores.filter(s => s.ciudad === ciudad)
   const cOfrecimientos = ofrecimientos.filter(o => o.ciudad === ciudad)
@@ -1259,6 +1232,33 @@ export default function AdminPage({ store }: Props) {
           </div>
         </div>
       </>
+    )
+  }
+
+  if (!authed) {
+    return (
+      <div className="login-wrap">
+        <div className="tricolor-band" />
+        <div className="card login-card">
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🔑</div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Acceso administrador</h2>
+          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>Ingresa la contraseña de administración</p>
+          <div className="form-group" style={{ textAlign: 'left' }}>
+            <label className="form-label">Contraseña</label>
+            <input
+              className="form-input"
+              type="password"
+              value={password}
+              autoFocus
+              onChange={e => { setPassword(e.target.value); setLoginError(false) }}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              style={{ textAlign: 'center', letterSpacing: 4 }}
+            />
+            {loginError && <p style={{ color: '#CE1126', fontSize: 12, margin: '4px 0 0' }}>Contraseña incorrecta.</p>}
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleLogin}>Ingresar</button>
+        </div>
+      </div>
     )
   }
 
