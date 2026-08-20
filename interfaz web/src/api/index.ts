@@ -36,6 +36,11 @@ export const verifyAdmin = (admin_password: string): Promise<{ ok: boolean }> =>
 export const recordVisita = (b: { visitor_id?: string; path?: string; ciudad?: string; lang?: string }): Promise<{ ok: boolean; id: number }> =>
   request('/visitas', { method: 'POST', body: b })
 
+// ── Clics en enlaces (analítica: logo DSI, colaboradores, etc.) ────────────
+
+export const registrarClic = (enlace: string): Promise<{ ok: boolean; id?: number }> =>
+  request('/clics', { method: 'POST', body: { enlace, visitor_id: getVisitorId() } })
+
 // ── Sectores / contactos ────────────────────────────────────────────────────
 
 export const listSectores = (ciudadLabel: string, admin = false): Promise<Sector[]> =>

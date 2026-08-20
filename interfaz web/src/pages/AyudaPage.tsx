@@ -133,7 +133,7 @@ export default function AyudaPage({ setPage }: Props) {
 
         <Block icon="📞" title="Noticias y contacto">
           <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-            En <strong>📰 Noticias</strong> se publican los comunicados oficiales. En <strong>📞 Contáctanos</strong> están las líneas de apoyo (314 885 4358 — línea de apoyo solidario y 310 381 7213 — coordinación general) con botones para llamar o escribir por WhatsApp, y una sección «Invítanos un café» para apoyar la plataforma.
+            En <strong>📰 Noticias</strong> se publican los comunicados oficiales. En <strong>📞 Contáctanos</strong> están las líneas de apoyo (314 885 4358 — línea de apoyo solidario y 310 381 7213 — coordinación general) con botones para llamar o escribir por WhatsApp.
           </p>
         </Block>
 

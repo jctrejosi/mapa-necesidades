@@ -1,14 +1,5 @@
-import { useState } from 'react'
 import logoDsi from '../../assets/logo-dsi.png'
-
-/**
- * ⚠️ CONFIGURACIÓN DEL CAFÉ ☕
- * 1. CAFE_LINK: pega aquí el enlace de pago (Nequi, Daviplata, Ko-fi, Stripe...).
- * 2. CAFE_QR_IMAGE: si prefieres un QR propio, coloca el archivo en
- *    "interfaz web/public/qr-cafe.png" y déjalo tal cual.
- */
-const CAFE_LINK = ''
-const CAFE_QR_IMAGE = '/qr-cafe.png'
+import { registrarClic } from '../api'
 
 const TELEFONOS = [
   { numero: '310 381 7213', raw: '3103817213', label: 'Coordinación general' },
@@ -16,8 +7,6 @@ const TELEFONOS = [
 ]
 
 export default function ContactoPage() {
-  const [qrOk, setQrOk] = useState(true)
-
   const wa = (raw: string) => `57${raw}`
 
   return (
@@ -52,49 +41,12 @@ export default function ContactoPage() {
           ))}
         </div>
 
-        {/* Invítanos un café */}
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 38, marginBottom: 6 }}>☕</div>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1f2430', margin: '0 0 4px' }}>Invítanos un café</h2>
-          <p style={{ fontSize: 13.5, color: '#6b7280', margin: '0 auto 16px', maxWidth: 380 }}>
-            Si esta plataforma te ha sido útil, tu aporte nos ayuda a mantener el mapa,
-            el bot y las notificaciones funcionando para la comunidad.
-          </p>
-
-          {qrOk && CAFE_QR_IMAGE ? (
-            <div style={{
-              display: 'inline-block', background: '#fff', border: '1px solid #e1e4e9',
-              borderRadius: 14, padding: 14, marginBottom: 10,
-            }}>
-              <img
-                src={CAFE_QR_IMAGE}
-                alt="Código QR para invitarnos un café"
-                style={{ width: 200, height: 200, objectFit: 'contain', display: 'block' }}
-                onError={() => setQrOk(false)}
-              />
-            </div>
-          ) : (
-            <div className="alert-yellow" style={{ maxWidth: 420, margin: '0 auto 10px', fontSize: 13 }}>
-              QR pendiente de configurar: coloca tu código QR en{' '}
-              <code>interfaz web/public/qr-cafe.png</code> o define el enlace en{' '}
-              <code>ContactoPage.tsx</code>.
-            </div>
-          )}
-
-          {CAFE_LINK && (
-            <div>
-              <a className="btn btn-primary" style={{ textDecoration: 'none' }} href={CAFE_LINK} target="_blank" rel="noreferrer">
-                ☕ Apoyar con un café
-              </a>
-            </div>
-          )}
-        </div>
-
         {/* Franjas de créditos */}
         <a
           href="https://dsi-software.co/"
           target="_blank"
           rel="noreferrer"
+          onClick={() => { registrarClic('dsi').catch(() => {}) }}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none', marginBottom: 10 }}
         >
           <span style={{ fontSize: 12.5, color: '#6b7280' }}>Con el respaldo de</span>

@@ -20,6 +20,7 @@ import { PuntosApoyoModule } from './puntos-apoyo/puntos-apoyo.module';
 import { EventosModule } from './eventos/eventos.module';
 import { VoluntariosModule } from './voluntarios/voluntarios.module';
 import { BuscarModule } from './buscar/buscar.module';
+import { ClicsModule } from './clics/clics.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BuscarModule } from './buscar/buscar.module';
     EventosModule,
     VoluntariosModule,
     BuscarModule,
+    ClicsModule,
   ],
 })
 export class AppModule {}

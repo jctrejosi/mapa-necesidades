@@ -378,3 +378,26 @@ export const voluntarios = pgTable(
 );
 
 export type Voluntario = typeof voluntarios.$inferSelect;
+
+// ── Clics en enlaces (analítica de clics, p. ej. el logo DSI) ───────────────
+// Registra qué enlace se pulsó, el visitante anónimo y metadatos de red para
+// poder medir cuántos clics recibe cada patrocinador/colaborador.
+
+export const clics = pgTable(
+  'clics',
+  {
+    id: serial('id').primaryKey(),
+    enlace: varchar('enlace', { length: 50 }).notNull(),
+    visitorId: varchar('visitor_id', { length: 64 }),
+    ip: varchar('ip', { length: 45 }),
+    userAgent: text('user_agent'),
+    referrer: text('referrer'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_clics_enlace').on(t.enlace),
+    index('idx_clics_created').on(t.createdAt),
+  ],
+);
+
+export type Clic = typeof clics.$inferSelect;
