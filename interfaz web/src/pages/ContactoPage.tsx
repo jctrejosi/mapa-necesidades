@@ -97,8 +97,8 @@ export default function ContactoPage() {
           rel="noreferrer"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none', marginBottom: 10 }}
         >
-          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Desarrollo patrocinado por</span>
-          <img src={logoDsi} alt="DSI" style={{ height: 28, objectFit: 'contain' }} />
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Con el respaldo de</span>
+          <img src={logoDsi} alt="DSI" style={{ height: 20, objectFit: 'contain' }} />
         </a>
         <a
           href="https://www.jcti.xyz"
