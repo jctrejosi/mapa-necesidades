@@ -1674,14 +1674,14 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
             <>
               <button
                 onClick={() => setReportesModalOpen(true)}
-                title="Ver todos los reportes"
+                title="Puedo ayudar"
                 className="ver-reportes"
                 style={{
                   pointerEvents: 'auto',
                   padding: '8px 14px', fontSize: 12, marginTop: 4,
                 }}
               >
-                📋 VER REPORTES
+                🤝 PUEDO AYUDAR
               </button>
               <button
                 onClick={handleNecesitoAyuda}
@@ -1702,14 +1702,14 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
           <div style={{ position: 'absolute', bottom: bottomOffset, right: 10, zIndex: 400, display: 'flex', alignItems: 'flex-end', gap: 20, pointerEvents: 'none' }}>
             <button
               onClick={() => setReportesModalOpen(true)}
-              title="Ver todos los reportes"
+              title="Puedo ayudar"
               className="ver-reportes"
               style={{
                 pointerEvents: 'auto',
                 padding: '9px 14px', fontSize: 13,
               }}
             >
-              📋 VER REPORTES
+              🤝 PUEDO AYUDAR
             </button>
             <button
               onClick={handleNecesitoAyuda}

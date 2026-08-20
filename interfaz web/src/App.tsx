@@ -6,8 +6,6 @@ import NotificationToasts from './components/NotificationToasts'
 import MapPage from './pages/MapPage'
 import OfrecimientosPage from './pages/OfrecimientosPage'
 import MascotasPage from './pages/MascotasPage'
-import NoticiasPage from './pages/NoticiasPage'
-import ViviendaPage from './pages/ViviendaPage'
 import DanosPage from './pages/DanosPage'
 import PuntosApoyoPage from './pages/PuntosApoyoPage'
 import EventosPage from './pages/EventosPage'
@@ -33,10 +31,8 @@ const ALL_NAV = [
   { id: 'eventos',       icon: '📅', label: 'Eventos' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
   { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
-  { id: 'vivienda',      icon: '🏠', label: 'Vivienda' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
   { id: 'dashboard',     icon: '📊', label: 'Impacto' },
-  { id: 'noticias',      icon: '📰', label: 'Noticias' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },
   { id: 'contacto',      icon: '📞', label: 'Contáctanos' },
 ]
@@ -80,8 +76,6 @@ export default function App() {
         {page === 'eventos'       && <EventosPage store={store} />}
         {page === 'ofrecimientos' && <OfrecimientosPage store={store} />}
         {page === 'mascotas'      && <MascotasPage store={store} />}
-        {page === 'noticias'      && <NoticiasPage store={store} />}
-        {page === 'vivienda'      && <ViviendaPage store={store} />}
         {page === 'danos'         && <DanosPage store={store} />}
         {page === 'dashboard'     && <DashboardPage store={store} />}
         {page === 'contacto'      && <ContactoPage />}

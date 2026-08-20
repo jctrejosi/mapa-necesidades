@@ -16,10 +16,8 @@ const NAV = [
   { id: 'eventos',       label: '📅 Eventos' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
   { id: 'mascotas',      label: '🐾 Mascotas perdidas' },
-  { id: 'vivienda',      label: '🏠 Vivienda' },
   { id: 'danos',         label: '🏚️ Daños' },
   { id: 'dashboard',     label: '📊 Impacto' },
-  { id: 'noticias',      label: '📰 Noticias' },
   { id: 'ayuda',         label: '❓ Cómo usar' },
   { id: 'contacto',      label: '📞 Contáctanos' },
 ]

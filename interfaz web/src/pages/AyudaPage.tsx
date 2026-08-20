@@ -146,7 +146,6 @@ export default function AyudaPage({ setPage }: Props) {
             { icon: '🏪', label: 'Puntos de apoyo', page: 'puntos' },
             { icon: '📅', label: 'Eventos', page: 'eventos' },
             { icon: '🐾', label: 'Mascotas perdidas', page: 'mascotas' },
-            { icon: '🏠', label: 'Vivienda', page: 'vivienda' },
             { icon: '🏚️', label: 'Reportar daño', page: 'danos' },
             { icon: '📊', label: 'Ver impacto', page: 'dashboard' },
             { icon: '📞', label: 'Contáctanos', page: 'contacto' },
