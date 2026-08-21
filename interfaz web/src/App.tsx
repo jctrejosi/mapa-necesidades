@@ -19,7 +19,6 @@ const MAP_PAGES = new Set(['mapa'])
 const BOTTOM_TABS = [
   { id: 'mapa',          icon: '🗺️', label: 'Mapa' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrece' },
-  { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
   { id: 'danos',         icon: '🏚️', label: 'Daños' },
   { id: '__more__',      icon: '☰',  label: 'Más' },
 ]
@@ -30,7 +29,6 @@ const ALL_NAV = [
   { id: 'puntos',        icon: '🏪', label: 'Puntos de apoyo' },
   { id: 'eventos',       icon: '📅', label: 'Eventos' },
   { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
-  { id: 'mascotas',      icon: '🐾', label: 'Mascotas perdidas' },
   { id: 'danos',         icon: '🏚️', label: 'Daños (Manizales)' },
   { id: 'dashboard',     icon: '📊', label: 'Impacto' },
   { id: 'ayuda',         icon: '❓', label: 'Cómo usar' },

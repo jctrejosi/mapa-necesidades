@@ -200,7 +200,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
   const markersRef = useRef<any[]>([])
-  const mascotaMarkersRef = useRef<any[]>([])
   const danoMarkersRef = useRef<any[]>([])
   const puntoMarkersRef = useRef<any[]>([])
   const eventoMarkersRef = useRef<any[]>([])
@@ -211,7 +210,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   const [layers, setLayers] = useState<Record<string, boolean>>(() => ({
     ...Object.fromEntries(NEED_LAYERS.map(t => [t.key, true])),
     puntos: true,
-    mascotas: true,
     danos: true,
     eventos: true,
   }))
@@ -562,40 +560,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
       `, { maxWidth: 290 })
       markersRef.current.push(marker)
     })
-
-    // — Mascota markers
-    mascotaMarkersRef.current.forEach(m => m.remove())
-    mascotaMarkersRef.current = []
-    if (layers.mascotas) {
-      mascotas.filter(m => matchesCiudad(m.ciudad) && m.estado === 'perdido').forEach(m => {
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:24px;height:24px;border-radius:50%;background:#7C3AED;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:13px">🐾</div>`,
-          iconSize: [24, 24], iconAnchor: [12, 12],
-        })
-        const mk = L.marker([m.lat, m.lng], { icon }).addTo(mapInstance.current)
-        detailRegistry.current[`m${m.id}`] = {
-          titulo: `🐾 ${m.nombre || m.tipo_animal}`,
-          detalle: m.senas || undefined,
-          ubicacion: m.lugar_visto || undefined,
-          telefono: m.telefono_reporta,
-          lat: m.lat, lng: m.lng,
-          imagenes: m.imagen ? [m.imagen] : undefined,
-          editable: { tipo: 'mascota', id: m.id },
-        }
-        mk.bindPopup(`
-          <div style="min-width:180px">
-            <span style="background:${m.estado === 'encontrado' ? '#e6f5ec' : '#f3e8ff'};color:${m.estado === 'encontrado' ? '#2E9E5B' : '#7C3AED'};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">${m.estado === 'encontrado' ? '✅ ENCONTRADA' : '🐾 PERDIDA'}</span>
-            <h4 style="margin:6px 0 4px;font-size:14px;font-weight:700">${m.nombre || m.tipo_animal}</h4>
-            <p style="font-size:12px;color:#6b7280;margin:0 0 4px">${m.senas}</p>
-            <p style="font-size:12px;margin:0 0 4px">📍 ${m.lugar_visto}</p>
-            <p style="font-size:12px;margin:0 0 8px">📞 ${m.nombre_reporta} · ${m.telefono_reporta}</p>
-            <button onclick="window.__openDetail('m${m.id}')" style="width:100%;background:#f0f4ff;color:#003893;border:none;border-radius:6px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">👁 Ver detalle</button>
-          </div>
-        `)
-        mascotaMarkersRef.current.push(mk)
-      })
-    }
 
     // — Daño markers
     danoMarkersRef.current.forEach(m => m.remove())
@@ -1595,14 +1559,13 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   // compact: en móvil se muestran solo con ícono para ocupar menos espacio
   const LayerToggles = ({ bottomOffset = 60, compact = false }: { bottomOffset?: number; compact?: boolean }) => {
     const buttons = [
-      ...NEED_LAYERS.filter(t => t.key !== 'mascotas').map(t => ({
+      ...NEED_LAYERS.map(t => ({
         key: t.key,
         icon: t.icon,
         label: t.label.split(' ').slice(1).join(' ') || t.label,
       })),
       { key: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
       { key: 'eventos', icon: '📅', label: 'Eventos' },
-      { key: 'mascotas', icon: '🐾', label: 'Mascotas perdidas' },
       { key: 'danos', icon: '🏚️', label: 'Daños' },
     ]
     const allOn = buttons.every(b => layers[b.key])

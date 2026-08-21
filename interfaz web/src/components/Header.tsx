@@ -15,7 +15,6 @@ const NAV = [
   { id: 'puntos',        label: '🏪 Puntos de apoyo' },
   { id: 'eventos',       label: '📅 Eventos' },
   { id: 'ofrecimientos', label: '🤝 Ofrecimientos' },
-  { id: 'mascotas',      label: '🐾 Mascotas perdidas' },
   { id: 'danos',         label: '🏚️ Daños' },
   { id: 'dashboard',     label: '📊 Impacto' },
   { id: 'ayuda',         label: '❓ Cómo usar' },

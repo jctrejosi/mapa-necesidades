@@ -60,7 +60,6 @@ export const NEED_LAYERS = [
   { key: 'ropa', icon: '🧥', label: '🧥 Ropa / Cobijas' },
   { key: 'maquinaria', icon: '🚜', label: '🚜 Maquinaria y rescate' },
   { key: 'escombros', icon: '🧱', label: '🧱 Escombros' },
-  { key: 'mascotas', icon: '🐾', label: '🐾 Mascotas' },
   { key: 'otro', icon: '🆘', label: '🆘 Otros' },
 ]
 
