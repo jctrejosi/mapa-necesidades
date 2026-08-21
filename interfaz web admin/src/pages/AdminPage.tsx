@@ -547,7 +547,7 @@ export default function AdminPage({ store }: Props) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `informe-${nombre.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '')}.html`
+      a.download = `informe-${nombre.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '')}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

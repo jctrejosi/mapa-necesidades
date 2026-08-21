@@ -21,6 +21,8 @@
     "cloudinary": "^2.10.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.44.2",
+    "pdfkit": "^0.19.1",
+    "pdfkit-table": "^0.2.11",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
@@ -29,6 +31,7 @@
     "@nestjs/cli": "^11.0.10",
     "@types/express": "^5.0.6",
     "@types/node": "^22.15.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.15.4",
     "drizzle-kit": "^0.31.4",
     "typescript": "^5.8.3"

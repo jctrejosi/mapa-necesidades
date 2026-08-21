@@ -26,6 +26,7 @@ import { emitAppEvent } from '../events/events.module';
 import { asDate, asNum } from '../common/serialize';
 import { checkEditCode, genPin, isAdminEdit, str, toInt, toNum } from '../common/util';
 import { registrarAuditoria } from '../common/audit';
+import { PDFDocumentWithTables } from 'pdfkit-table';
 
 type PuntoApoyoBody = {
   pin?: string;
@@ -328,6 +329,155 @@ ${evs.length === 0 ? '<p style="color:#6b7280">Sin eventos registrados.</p>' : `
 </body>
 </html>`;
   }
+
+  /**
+   * Genera el informe del punto de apoyo como PDF (A4) con tablas:
+   * encabezado con imagen y nombre, KPIs, tabla de necesidades y tabla de eventos.
+   */
+  async informePdf(id: number): Promise<Buffer> {
+    const p = await this.get(id);
+    if (!p) throw new NotFoundException({ error: 'Punto de apoyo no encontrado' });
+
+    const needs = await this.db
+      .select({ n: necesidades, s: sectores })
+      .from(necesidades)
+      .innerJoin(sectores, eq(necesidades.sectorId, sectores.id))
+      .where(eq(necesidades.ayudaPuntoApoyoId, id))
+      .orderBy(desc(necesidades.createdAt));
+
+    const evs = await this.db
+      .select()
+      .from(eventos)
+      .where(eq(eventos.puntoApoyoId, id))
+      .orderBy(desc(eventos.fechaInicio));
+
+    const sinAsignar = needs.filter((r) => r.n.estado === 'requiere' && !r.n.responsableNombre).length;
+    const enProceso = needs.filter((r) => r.n.estado === 'requiere' && r.n.responsableNombre).length;
+    const atendidas = needs.filter((r) => r.n.estado === 'atendida').length;
+
+    const estadoDe = (n: typeof necesidades.$inferSelect) =>
+      n.estado === 'atendida'
+        ? { label: 'Atendida', color: '#2E9E5B' }
+        : n.responsableNombre
+          ? { label: 'En proceso', color: '#E08E00' }
+          : { label: 'Pendiente', color: '#CE1126' };
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocumentWithTables({ size: 'A4', margin: 40, bufferPages: true });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      void (async () => {
+        try {
+          // ── Encabezado: imagen + nombre ──
+          let xTxt = 40;
+          if (p.imagen && /^https?:\/\//.test(p.imagen)) {
+            try {
+              const res = await fetch(p.imagen);
+              if (res.ok) {
+                const buf = Buffer.from(await res.arrayBuffer());
+                doc.image(buf, 40, 40, { fit: [64, 64] });
+                xTxt = 118;
+              }
+            } catch { /* imagen opcional */ }
+          }
+          doc.font('Helvetica-Bold').fontSize(19).fillColor('#003893')
+            .text(p.nombre, xTxt, 44, { width: 557 - xTxt });
+          doc.font('Helvetica').fontSize(11.5).fillColor('#6b7280')
+            .text([p.tipo || 'Punto de apoyo', p.direccion, p.telefono].filter(Boolean).join(' - '), xTxt, 70, { width: 557 - xTxt });
+          doc.moveTo(40, 104).lineTo(555, 104).strokeColor('#003893').lineWidth(3).stroke();
+
+          // ── KPIs ──
+          const kpis = [
+            { n: needs.length, l: 'Necesidades asignadas', c: '#1f2430' },
+            { n: sinAsignar, l: 'Pendientes', c: '#CE1126' },
+            { n: enProceso, l: 'En proceso', c: '#E08E00' },
+            { n: atendidas, l: 'Atendidas', c: '#2E9E5B' },
+            { n: evs.length, l: 'Eventos', c: '#1f2430' },
+          ];
+          let kx = 40;
+          for (const k of kpis) {
+            doc.roundedRect(kx, 118, 99, 52, 8).strokeColor('#d7dbe2').lineWidth(1).stroke();
+            doc.fillColor(k.c).font('Helvetica-Bold').fontSize(21).text(String(k.n), kx, 124, { width: 99, align: 'center', lineBreak: false });
+            doc.fillColor('#6b7280').font('Helvetica-Bold').fontSize(7.5).text(k.l.toUpperCase(), kx, 152, { width: 99, align: 'center' });
+            kx += 103.75;
+          }
+
+          // ── Tabla de necesidades ──
+          doc.font('Helvetica-Bold').fontSize(13.5).fillColor('#003893').text('Necesidades asignadas', 40, 192);
+          if (needs.length === 0) {
+            doc.font('Helvetica').fontSize(11).fillColor('#6b7280').text('Sin necesidades asignadas.', 40, 216);
+          } else {
+            doc.table(
+              {
+                headers: ['Fecha', 'Tipo', 'Sector', 'Estado', 'Prioridad', 'Reporta'],
+                rows: needs.map(({ n, s }) => [
+                  asDate(n.fecha),
+                  n.tipo,
+                  s.nombre,
+                  { label: estadoDe(n).label, options: { color: estadoDe(n).color } },
+                  n.prioridad,
+                  `${n.reportadoPor || '-'}${n.telefonoReporta ? ' / ' + n.telefonoReporta : ''}`,
+                ]),
+              },
+              {
+                x: 40,
+                width: 515,
+                columnsSize: [60, 85, 90, 70, 55, 155],
+                padding: [4, 6],
+                headerBackgroundColor: '#f4f6fb',
+                headerColor: '#6b7280',
+                headerAlign: 'left',
+                align: 'left',
+                fontSize: 9,
+                borderBottomColor: '#eef0f3',
+              },
+            );
+          }
+
+          // ── Tabla de eventos ──
+          doc.font('Helvetica-Bold').fontSize(13.5).fillColor('#003893').text('Eventos del punto', 40, doc.y + 18);
+          if (evs.length === 0) {
+            doc.font('Helvetica').fontSize(11).fillColor('#6b7280').text('Sin eventos registrados.', 40, doc.y + 6);
+          } else {
+            doc.table(
+              {
+                headers: ['Evento', 'Periodo', 'Direccion', 'Estado'],
+                rows: evs.map((e) => [
+                  `${e.titulo}${e.descripcion ? ' - ' + e.descripcion.slice(0, 80) : ''}`,
+                  `${asDate(e.fechaInicio)}${e.fechaFin ? ' a ' + asDate(e.fechaFin) : ''}`,
+                  e.direccion || '-',
+                  { label: e.activo ? 'Activo' : 'Inactivo', options: { color: e.activo ? '#2E9E5B' : '#6b7280' } },
+                ]),
+              },
+              {
+                x: 40,
+                width: 515,
+                columnsSize: [200, 120, 110, 85],
+                padding: [4, 6],
+                headerBackgroundColor: '#f4f6fb',
+                headerColor: '#6b7280',
+                headerAlign: 'left',
+                align: 'left',
+                fontSize: 9,
+                borderBottomColor: '#eef0f3',
+              },
+            );
+          }
+
+          // ── Pie ──
+          doc.font('Helvetica').fontSize(10).fillColor('#9AA0AC')
+            .text(`SolidaridadCO - Informe generado el ${new Date().toLocaleString('es-CO')}`, 40, doc.y + 16);
+
+          doc.end();
+        } catch (err) {
+          reject(err);
+        }
+      })();
+    });
+  }
 }
 
 @Controller('puntos-apoyo')
@@ -339,14 +489,14 @@ export class PuntosApoyoController {
     return this.svc.list(ciudad ?? 'manizales');
   }
 
-  /** Informe descargable del punto de apoyo (HTML autocontenido). Solo admin. */
+  /** Informe descargable del punto de apoyo en PDF (tablas). Solo admin. */
   @Get(':id/informe')
   @UseGuards(AdminGuard)
   async informe(@Param('id') id: string, @Res() res: Response) {
-    const html = await this.svc.informeHtml(toInt(id));
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="informe-punto-apoyo-${id}.html"`);
-    res.send(html);
+    const pdf = await this.svc.informePdf(toInt(id));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="informe-punto-apoyo-${id}.pdf"`);
+    res.send(pdf);
   }
 
   @Post()
