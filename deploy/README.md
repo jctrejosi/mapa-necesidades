@@ -18,6 +18,7 @@ combinada por `localhost` — nada más se expone hacia afuera.
 |---|---|
 | `/api/*` | API NestJS (incluye el proxy `POST /bot/chat` → bot) |
 | `/uploads/*` | Imágenes subidas |
+| `/api/public/reportes` | **Datos abiertos**: JSON con todos los reportes (sin auth) |
 | `/api/stats?ciudad=manizales` | Health check recomendado (verifica DB) |
 
 ## Crear el servicio en Render

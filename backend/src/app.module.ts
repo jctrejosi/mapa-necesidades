@@ -24,6 +24,7 @@ import { EventosModule } from './eventos/eventos.module';
 import { VoluntariosModule } from './voluntarios/voluntarios.module';
 import { BuscarModule } from './buscar/buscar.module';
 import { ClicsModule } from './clics/clics.module';
+import { PublicoModule } from './publico/publico.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ClicsModule } from './clics/clics.module';
     VoluntariosModule,
     BuscarModule,
     ClicsModule,
+    PublicoModule,
   ],
   providers: [
     {
