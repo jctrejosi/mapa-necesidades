@@ -136,8 +136,10 @@ const mapItem = (x: any) => ({
 /** Carga todos los listados (admin ve sectores cerrados y campos completos). */
 async function refresh(ciudad: string): Promise<void> {
   const isAdmin = !!getAdminPass()
-  // "Colombia" carga y combina los datos de todas las ciudades para ver el mapa completo.
-  const targets = ciudad === 'Colombia' ? CIUDAD_LABELS : [ciudad]
+  // El mapa y el panel de reportes siempre muestran los registros de TODAS las
+  // ciudades; el selector del header solo cambia el foco del mapa. Por eso los
+  // listados siempre se cargan completos, sin filtrar por la ciudad elegida.
+  const targets = CIUDAD_LABELS
   const load = <T>(fn: (c: string) => Promise<T[]>) =>
     Promise.all(targets.map(fn)).then(rows => rows.flat())
 

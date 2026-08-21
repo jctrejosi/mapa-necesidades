@@ -193,7 +193,9 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
     updateVivienda, eliminarVivienda, editarDano, eliminarDano, updateEvento, eliminarEvento } = store
 
   const isColombia = ciudad === 'Colombia'
-  const matchesCiudad = (c: string | null) => isColombia || c === ciudad
+  // El mapa y los reportes siempre muestran TODAS las ciudades: el selector del
+  // header solo cambia el foco (centro/zoom del mapa), nunca oculta registros.
+  const matchesCiudad = (_c: string | null) => true
 
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
@@ -1546,8 +1548,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
         </ReportSection>
 
         {/* 🏚️ Daños */}
-        {(isColombia || ciudad === 'Manizales') && (
-          <ReportSection id="danos" icon="🏚️" title="Daños estructurales" count={danos.filter(d => matchesCiudad(d.ciudad)).length}>
+        <ReportSection id="danos" icon="🏚️" title="Daños estructurales" count={danos.filter(d => matchesCiudad(d.ciudad)).length}>
             <Chips value={dFilter} onChange={setDFilter} options={[
               { id: 'pendientes', label: '🔴 Pendientes' },
               { id: 'visita', label: '🟠 Con visita' },
@@ -1575,7 +1576,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
               </div>
             ))}
           </ReportSection>
-        )}
 
         {/* 📰 Noticias */}
         <ReportSection id="noticias" icon="📰" title="Noticias" count={nsNoticias.length}>
