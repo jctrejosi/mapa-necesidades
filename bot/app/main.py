@@ -63,7 +63,7 @@ async def health():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     if not config.DEEPSEEK_API_KEY:
-        raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY no está configurada")
+        raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY_BOT no está configurada")
 
     session_id = req.session_id or str(uuid.uuid4())
     history = [h.model_dump() for h in req.history]

@@ -74,7 +74,7 @@ const botEnv = loadEnv(path.join(ROOT, 'bot', '.env'));
 
 const DATABASE_URL = backendEnv.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5435/redsolidaria';
 const PROD_DATABASE_URL = backendEnv.PROD_DATABASE_URL || '';
-const API_KEY = botEnv.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+const API_KEY = botEnv.DEEPSEEK_API_KEY_BOT || process.env.DEEPSEEK_API_KEY_BOT || '';
 const MODEL = botEnv.DEEPSEEK_MODEL || 'deepseek-chat';
 const API_URL = (botEnv.DEEPSEEK_API_URL || 'https://api.deepseek.com') + '/chat/completions';
 
@@ -157,7 +157,7 @@ async function main() {
   }
 
   if (!API_KEY) {
-    console.error('✖ No se encontró DEEPSEEK_API_KEY (revisa bot/.env)');
+    console.error('✖ No se encontró DEEPSEEK_API_KEY_BOT (revisa bot/.env)');
     process.exit(1);
   }
 

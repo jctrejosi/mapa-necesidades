@@ -24,7 +24,7 @@ puerto por servicio, así que ambas apps FastAPI se montan en una app ASGI
 
    | Variable | Valor |
    |---|---|
-   | `DEEPSEEK_API_KEY` | la API key de DeepSeek |
+   | `DEEPSEEK_API_KEY_BOT` | la API key de DeepSeek del bot |
    | `DEEPSEEK_MODEL` | `deepseek-chat` (default) |
    | `BACKEND_URL` | `https://redsolidaria.onrender.com` (sin `/api`) |
    | `CORS_ORIGIN` | orígenes de los frontends (default en código) |

@@ -60,7 +60,7 @@ async def health():
 @app.post("/clasificar", response_model=ClasificarResponse)
 async def clasificar(req: ClasificarRequest):
     if not config.DEEPSEEK_API_KEY:
-        raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY no está configurada")
+        raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY_IA_SERVICE no está configurada")
 
     tipos = clasificador.normalizar_tipos(req.tipos_posibles)
     try:

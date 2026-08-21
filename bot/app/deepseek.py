@@ -34,7 +34,7 @@ ESTILO:
 
 async def _call_chat(messages: list[dict]) -> dict:
     if not config.DEEPSEEK_API_KEY:
-        raise RuntimeError("DEEPSEEK_API_KEY no está configurada")
+        raise RuntimeError("DEEPSEEK_API_KEY_BOT no está configurada")
 
     body: dict = {
         "model": config.DEEPSEEK_MODEL,

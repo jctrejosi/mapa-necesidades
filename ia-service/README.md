@@ -53,11 +53,11 @@ Respuesta:
 
 ## Configuración
 
-Copiar `.env.example` a `.env` y poner la `DEEPSEEK_API_KEY`.
+Copiar `.env.example` a `.env` y poner la `DEEPSEEK_API_KEY_IA_SERVICE`.
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | — | API key de DeepSeek |
+| `DEEPSEEK_API_KEY_IA_SERVICE` | — | API key de DeepSeek del servicio de IA |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Modelo a usar |
 | `DEEPSEEK_API_URL` | `https://api.deepseek.com` | URL base de la API |
 | `DEEPSEEK_TIMEOUT` | `30` | Timeout de la llamada (segundos) |
