@@ -4,7 +4,7 @@ import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
 import ImageInput from '../components/ImageInput'
 import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria, clicsResumen, verifyAdmin } from '../api'
-import { getAdminRol } from '../api/client'
+import { getAdminRol, getAdminPass, API_URL } from '../api/client'
 import type { Necesidad, ReporteDano } from '../api/types'
 
 interface Props { store: Store }
@@ -531,6 +531,30 @@ export default function AdminPage({ store }: Props) {
     }
   }
 
+  /** Descarga el informe HTML del punto de apoyo (solo admin). */
+  const downloadInforme = async (id: number, nombre: string) => {
+    try {
+      const res = await fetch(`${API_URL}/puntos-apoyo/${id}/informe`, {
+        headers: { 'x-admin-password': getAdminPass() },
+      })
+      if (!res.ok) {
+        let msg = `Error del servidor (${res.status})`
+        try { const d = await res.json(); if (d?.error) msg = d.error } catch { /* sin JSON */ }
+        alert(msg)
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `informe-${nombre.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '')}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('No se pudo conectar con el servidor')
+    }
+  }
+
   const submitPunto = async () => {
     if (!puntoForm.nombre.trim()) { alert('El nombre es obligatorio'); return }
     if (!puntoForm.direccion.trim()) { alert('La dirección es obligatoria'); return }
@@ -1041,6 +1065,7 @@ export default function AdminPage({ store }: Props) {
                   <Td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs btn-outline" onClick={() => { setPuntoForm({ nombre: p.nombre, tipo: p.tipo || 'Otro', direccion: p.direccion, telefono: p.telefono, imagen: p.imagen, color: p.color || randomColor(), lat: p.lat, lng: p.lng }); setShowPuntoForm(p) }}>✎ Editar</button>
+                      <button className="btn btn-xs btn-outline" onClick={() => downloadInforme(p.id, p.nombre)} title="Descargar informe del punto">⬇️ Informe</button>
                       <button className="btn btn-xs btn-red" onClick={() => requireAdmin('¿Eliminar este punto de apoyo? Esta acción no se puede deshacer.', () => deletePuntoApoyo(p.id))}>✕</button>
                     </div>
                   </Td>

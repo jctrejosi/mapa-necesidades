@@ -13,15 +13,17 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { desc, eq } from 'drizzle-orm';
 import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
-import { puntosApoyo } from '../db/schema';
+import { eventos, necesidades, puntosApoyo, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
-import { asNum } from '../common/serialize';
+import { asDate, asNum } from '../common/serialize';
 import { checkEditCode, genPin, isAdminEdit, str, toInt, toNum } from '../common/util';
 import { registrarAuditoria } from '../common/audit';
 
@@ -43,6 +45,16 @@ type PuntoApoyoBody = {
 function safeColor(v: unknown): string {
   const s = typeof v === 'string' ? v.trim() : '';
   return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : '#003893';
+}
+
+/** Escapa texto para incrustarlo en HTML (evita inyección desde descripciones). */
+function esc(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 @Injectable()
@@ -200,6 +212,122 @@ class PuntosApoyoService {
     });
     return { ok: true };
   }
+
+  /**
+   * Genera el INFORME descargable de un punto de apoyo: encabezado con imagen
+   * y nombre, métricas de las necesidades asignadas (pendientes / en proceso /
+   * atendidas), el detalle de cada una y sus eventos. Devuelve HTML autocontenido
+   * (se imprime a PDF desde el navegador).
+   */
+  async informeHtml(id: number): Promise<string> {
+    const p = await this.get(id);
+    if (!p) throw new NotFoundException({ error: 'Punto de apoyo no encontrado' });
+
+    const needs = await this.db
+      .select({ n: necesidades, s: sectores })
+      .from(necesidades)
+      .innerJoin(sectores, eq(necesidades.sectorId, sectores.id))
+      .where(eq(necesidades.ayudaPuntoApoyoId, id))
+      .orderBy(desc(necesidades.createdAt));
+
+    const evs = await this.db
+      .select()
+      .from(eventos)
+      .where(eq(eventos.puntoApoyoId, id))
+      .orderBy(desc(eventos.fechaInicio));
+
+    const sinAsignar = needs.filter((r) => r.n.estado === 'requiere' && !r.n.responsableNombre).length;
+    const enProceso = needs.filter((r) => r.n.estado === 'requiere' && r.n.responsableNombre).length;
+    const atendidas = needs.filter((r) => r.n.estado === 'atendida').length;
+
+    const estadoDe = (n: typeof necesidades.$inferSelect) =>
+      n.estado === 'atendida'
+        ? { label: 'Atendida', color: '#2E9E5B' }
+        : n.responsableNombre
+          ? { label: 'En proceso', color: '#E08E00' }
+          : { label: 'Pendiente', color: '#CE1126' };
+
+    const filasNeeds = needs
+      .map(({ n, s }) => {
+        const e = estadoDe(n);
+        return `<tr>
+<td>${esc(asDate(n.fecha))}</td>
+<td><strong>${esc(n.tipo)}</strong></td>
+<td>${esc(s.nombre)}</td>
+<td><span class="tag" style="background:${e.color}">${e.label}</span></td>
+<td>${esc(n.prioridad)}</td>
+<td>${esc(n.reportadoPor || '—')}<br><small>${esc(n.telefonoReporta || '')}</small></td>
+<td>${esc((n.descripcion || '').slice(0, 220))}</td>
+</tr>`;
+      })
+      .join('\n');
+
+    const filasEventos = evs
+      .map((e) => {
+        const estado = e.activo ? '<span class="tag" style="background:#2E9E5B">Activo</span>' : '<span class="tag" style="background:#9AA0AC">Inactivo</span>';
+        const periodo = `${asDate(e.fechaInicio)}${e.fechaFin ? ' → ' + asDate(e.fechaFin) : ''}`;
+        return `<tr>
+<td><strong>${esc(e.titulo)}</strong><br><small>${esc(e.descripcion || '').slice(0, 160)}</small></td>
+<td>${periodo}</td>
+<td>${esc(e.direccion || '—')}</td>
+<td>${estado}</td>
+</tr>`;
+      })
+      .join('\n');
+
+    return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Informe — ${esc(p.nombre)}</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1f2430; margin: 24px auto; max-width: 900px; padding: 0 16px; }
+  .cab { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #003893; padding-bottom: 14px; }
+  .cab img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 1px solid #e1e4e9; }
+  .cab .fallback { width: 64px; height: 64px; border-radius: 12px; background: #e8eeff; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .cab h1 { margin: 0; font-size: 20px; color: #003893; }
+  .cab p { margin: 2px 0 0; font-size: 13px; color: #6b7280; }
+  .kpis { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
+  .kpi { flex: 1; min-width: 130px; border: 1px solid #e1e4e9; border-radius: 10px; padding: 10px 14px; }
+  .kpi .num { font-size: 26px; font-weight: 800; }
+  .kpi .lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+  h2 { font-size: 15px; margin: 22px 0 8px; color: #003893; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+  th { background: #f4f6fb; color: #6b7280; text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
+  .tag { color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  small { color: #6b7280; }
+  .pie { margin-top: 22px; font-size: 11.5px; color: #9AA0AC; }
+  @media print { body { margin: 0; } .cab { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="cab">
+  ${p.imagen ? `<img src="${esc(p.imagen)}" alt="">` : '<div class="fallback">🏪</div>'}
+  <div>
+    <h1>${esc(p.nombre)}</h1>
+    <p>${esc(p.tipo || 'Punto de apoyo')}${p.direccion ? ` · ${esc(p.direccion)}` : ''}${p.telefono ? ` · 📞 ${esc(p.telefono)}` : ''}</p>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="num">${needs.length}</div><div class="lbl">Necesidades asignadas</div></div>
+  <div class="kpi"><div class="num" style="color:#CE1126">${sinAsignar}</div><div class="lbl">Pendientes</div></div>
+  <div class="kpi"><div class="num" style="color:#E08E00">${enProceso}</div><div class="lbl">En proceso</div></div>
+  <div class="kpi"><div class="num" style="color:#2E9E5B">${atendidas}</div><div class="lbl">Atendidas</div></div>
+  <div class="kpi"><div class="num">${evs.length}</div><div class="lbl">Eventos</div></div>
+</div>
+
+<h2>📋 Necesidades asignadas</h2>
+${needs.length === 0 ? '<p style="color:#6b7280">Sin necesidades asignadas.</p>' : `<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Sector</th><th>Estado</th><th>Prioridad</th><th>Reporta</th><th>Descripción</th></tr></thead><tbody>\n${filasNeeds}\n</tbody></table>`}
+
+<h2>📅 Eventos del punto</h2>
+${evs.length === 0 ? '<p style="color:#6b7280">Sin eventos registrados.</p>' : `<table><thead><tr><th>Evento</th><th>Período</th><th>Dirección</th><th>Estado</th></tr></thead><tbody>\n${filasEventos}\n</tbody></table>`}
+
+<p class="pie">SolidaridadCO — Informe generado el ${new Date().toLocaleString('es-CO')}</p>
+</body>
+</html>`;
+  }
 }
 
 @Controller('puntos-apoyo')
@@ -209,6 +337,16 @@ export class PuntosApoyoController {
   @Get()
   list(@Query('ciudad') ciudad?: string) {
     return this.svc.list(ciudad ?? 'manizales');
+  }
+
+  /** Informe descargable del punto de apoyo (HTML autocontenido). Solo admin. */
+  @Get(':id/informe')
+  @UseGuards(AdminGuard)
+  async informe(@Param('id') id: string, @Res() res: Response) {
+    const html = await this.svc.informeHtml(toInt(id));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="informe-punto-apoyo-${id}.html"`);
+    res.send(html);
   }
 
   @Post()

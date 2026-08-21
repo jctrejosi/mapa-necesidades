@@ -396,6 +396,29 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Marcadores del mapa de reportes por punto de apoyo (Impacto) */
+.marker-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+/* Eventos del punto: cuadrado para distinguirlos de los reportes circulares */
+.marker-square {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+/* Pendientes (rojo) y en proceso (amarillo) titilan; atendidas (verde) no. */
+.marker-blink { animation: marker-blink 1.1s ease-in-out infinite; }
+@keyframes marker-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
 /* Popup temporal de confirmación del mapa (autodespide) */
 .map-toast {
   position: fixed;

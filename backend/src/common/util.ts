@@ -58,14 +58,15 @@ export function isAdminPass(pass: unknown): boolean {
 }
 
 /**
- * Contraseña del rol OWNER (OWNER_PASSWORD en el .env). Si no está definida,
- * cae a ADMIN_PASSWORD: así, sin configurar, admin y owner son lo mismo (no
- * se bloquea a nadie); al definir OWNER_PASSWORD se separan los roles.
+ * Contraseña del rol OWNER (OWNER_PASSWORD en el .env). NO cae a ADMIN_PASSWORD:
+ * si no está definida, nadie es owner (visitas/auditoría quedan ocultas para
+ * el admin hasta que se configure). Así el admin NUNCA ve las secciones
+ * reservadas al owner.
  */
 export function isOwnerPass(pass: unknown): boolean {
-  const expected = process.env.OWNER_PASSWORD ?? process.env.ADMIN_PASSWORD ?? 'admin123';
+  const expected = process.env.OWNER_PASSWORD ?? '';
   const a = String(pass ?? '');
-  if (a.length !== expected.length) return false;
+  if (!expected || a.length !== expected.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;

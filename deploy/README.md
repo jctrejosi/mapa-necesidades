@@ -34,7 +34,7 @@ combinada por `localhost` — nada más se expone hacia afuera.
    | `DB_SSL` | ✅ | `true` |
    | `ADMIN_PASSWORD` | ✅ | Contraseña del panel admin |
    | `ADMIN_EDIT` | | Llave de edición universal (si no, cae a ADMIN_PASSWORD) |
-   | `OWNER_PASSWORD` | | Contraseña del rol **owner** (ve la auditoría). Si no se define, admin = owner |
+   | `OWNER_PASSWORD` | | Contraseña del rol **owner** (ve visitas y auditoría). Si no se define, **nadie** es owner y esas secciones quedan ocultas |
    | `FRONTEND_ORIGIN` | ✅ | Orígenes de los frontends (CORS), separados por coma |
    | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | | Subida de imágenes |
    | `DEEPSEEK_API_KEY_BOT` | ✅ | API key de DeepSeek del bot Anay |
