@@ -5,9 +5,9 @@ export default function Footer() {
   return (
     <footer style={{
       background: '#e9ebee',
-      color: 'rgb(154, 160, 172)',
+      color: '#3f4550',
       padding: 0,
-      fontSize: 13.8,
+      fontSize: 13.11,
       textAlign: 'center',
       lineHeight: 1.4,
       marginTop: 'auto',
@@ -22,16 +22,16 @@ export default function Footer() {
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 5.75,
-          color: 'rgb(154, 160, 172)',
+          gap: 5.46,
+          color: '#3f4550',
           textDecoration: 'none',
           whiteSpace: 'nowrap',
-          fontSize: 13.8,
+          fontSize: 13.11,
           lineHeight: 1.4,
         }}
       >
         <span>Desarrollo respaldado por DSI</span>
-        <img src={logoDsi} alt="DSI" style={{ height: 12.65, objectFit: 'contain' }} />
+        <img src={logoDsi} alt="DSI" style={{ height: 12.02, objectFit: 'contain' }} />
       </a>
     </footer>
   )
