@@ -41,7 +41,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div style={{ minHeight: '100vh', background: '#f4f5f7', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: '100vh', overflow: 'hidden', background: '#f4f5f7', display: 'flex', flexDirection: 'column' }}>
         <header
           style={{
             background: '#fff', boxShadow: '0 1px 0 #e1e4e9', zIndex: 200,

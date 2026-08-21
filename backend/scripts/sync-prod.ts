@@ -31,6 +31,7 @@ const TABLES = [
   'voluntarios',
   'visitas',
   'auditoria',
+  'clics',
 ] as const;
 
 const BATCH = 200;
