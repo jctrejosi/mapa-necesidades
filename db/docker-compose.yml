@@ -61,6 +61,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
       # El backend es el único que habla con el chatbot (FastAPI)
       BOT_SERVICE_URL: ${BOT_SERVICE_URL:-http://bot:8000}
+      # El backend llama al ia-service para clasificar el tipo de los reportes
+      IA_SERVICE_URL: ${IA_SERVICE_URL:-http://ia-service:8100}
     ports:
       - "3000:3000"
     volumes:
@@ -105,6 +107,18 @@ services:
     ports:
       - "8000:8000"
 
+  # ── Servicio de IA (clasificación de reportes con DeepSeek) — lo usa el backend ──
+  ia-service:
+    build: ../ia-service
+    container_name: redsolidaria-ia
+    restart: unless-stopped
+    # Las credenciales de DeepSeek viven en ia-service/.env (no se duplican).
+    env_file: ../ia-service/.env
+    environment:
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081,http://localhost:8443}
+    ports:
+      - "8100:8100"
+
   # ── Desarrollo local (hot reload) ────────────────────────────────────
   # Usan la etapa "build" de cada Dockerfile (con node_modules completos) y
   # montan el código fuente como volumen: NestJS reinicia con --watch y Vite
@@ -133,6 +147,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
       # El backend es el único que habla con el chatbot (FastAPI)
       BOT_SERVICE_URL: ${BOT_SERVICE_URL:-http://bot:8000}
+      # El backend llama al ia-service para clasificar el tipo de los reportes
+      IA_SERVICE_URL: ${IA_SERVICE_URL:-http://ia-service:8100}
     ports:
       - "3000:3000"
     command: npm run start:dev

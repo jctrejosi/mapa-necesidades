@@ -25,6 +25,7 @@ import { asDate, nested } from '../common/serialize';
 import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp, sendWhatsappText, toWhatsappNumber, whatsappConfigured } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
+import { clasificarTipo } from '../common/clasificar';
 
 type NecesidadBody = {
   pin?: string;
@@ -162,6 +163,19 @@ class NecesidadesService {
       datosNuevos: this.serialize(n), autor: 'usuario', codigo: pin,
       visitorId: str(b.visitor_id),
     });
+    // Clasificación inteligente del tipo (ia-service + DeepSeek), en segundo
+    // plano y silenciosa: valida el tipo elegido o clasifica "Otro" automáticamente.
+    // Si el servicio no responde, el reporte queda con el tipo original.
+    clasificarTipo(str(b.descripcion), tipo)
+      .then((nuevoTipo) => {
+        if (!nuevoTipo || nuevoTipo === tipo) return;
+        return this.db
+          .update(necesidades)
+          .set({ tipo: nuevoTipo })
+          .where(eq(necesidades.id, n.id))
+          .catch(() => { /* noop */ });
+      })
+      .catch(() => { /* clasificación opcional */ });
     return { ...this.serialize(n), pin };
   }
 

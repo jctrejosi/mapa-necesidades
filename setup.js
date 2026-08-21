@@ -29,7 +29,7 @@ const COMPOSE_FILE = path.join(ROOT, 'db', 'docker-compose.yml');
 const COMPOSE = ['docker', 'compose', '-p', 'redsolidaria', '-f', COMPOSE_FILE];
 
 // Nombres reservados por docker-compose.yml (db/)
-const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin', 'redsolidaria-bot'];
+const CONTAINERS = ['redsolidaria-backend', 'redsolidaria-frontend', 'redsolidaria-admin', 'redsolidaria-bot', 'redsolidaria-ia'];
 const DEV_CONTAINERS = ['redsolidaria-backend-dev', 'redsolidaria-frontend-dev', 'redsolidaria-admin-dev'];
 // Perfil compose usado en down/reset (detener todo el proyecto)
 const ALL = ['--profile', 'prod', '--profile', 'dev'];
@@ -37,7 +37,7 @@ const ALL = ['--profile', 'prod', '--profile', 'dev'];
 const WEB_URL = 'http://localhost:8080';
 const ADMIN_URL = 'http://localhost:8081';
 const API_URL = 'http://localhost:3000/api';
-const PORTS = [8080, 8081, 3000, 8000];
+const PORTS = [8080, 8081, 3000, 8000, 8100];
 const LOGS_DIR = path.join(ROOT, 'logs');
 
 // ── Modo desarrollo: servicios directos en el host (como dev.js de mercaldas) ──
@@ -61,6 +61,10 @@ const DEV_SERVICES = [
     name: 'BOT', dir: 'bot', cmd: ['bash', 'dev.sh'],
     env: {}, port: 8000, url: 'http://localhost:8000', color: '\x1b[36m',
   },
+  {
+    name: 'IA', dir: 'ia-service', cmd: ['bash', 'dev.sh'],
+    env: {}, port: 8100, url: 'http://localhost:8100', color: '\x1b[33m',
+  },
 ];
 const devChildren = [];
 
@@ -77,8 +81,8 @@ const c = {
 function banner() {
   console.log(`
 ${c.cyan}${c.bold}  ███ SolidaridadCO — Mapa de Sectores Afectados ███${c.reset}
-  ${c.dim}Arranque local: servicios en el host (API, web, admin, bot) + PostgreSQL en Docker${c.reset}
-  ${c.dim}Logs: logs/backend.log · logs/web.log · logs/admin.log · logs/bot.log · logs/db.log${c.reset}
+  ${c.dim}Arranque local: servicios en el host (API, web, admin, bot, IA) + PostgreSQL en Docker${c.reset}
+  ${c.dim}Logs: logs/backend.log · logs/web.log · logs/admin.log · logs/bot.log · logs/ia.log · logs/db.log${c.reset}
 `);
 }
 
@@ -257,10 +261,10 @@ async function up() {
   }
   startDbLog();
 
-  // 3) Dependencias locales (node_modules / venv del bot).
+  // 3) Dependencias locales (node_modules / venv del bot y del ia-service).
   info('Preparando servicios en el host (dependencias)...');
   for (const svc of DEV_SERVICES) {
-    if (svc.dir !== 'bot') ensureDeps(svc);
+    if (svc.dir !== 'bot' && svc.dir !== 'ia-service') ensureDeps(svc);
   }
   const botDir = path.join(ROOT, 'bot');
   const botPython = path.join(botDir, '.venv', 'bin', 'python');
@@ -268,6 +272,13 @@ async function up() {
     info('Preparando el bot (venv + dependencias de Python)...');
     run(['python3', '-m', 'venv', '.venv'], botDir);
     run([botPython, '-m', 'pip', 'install', '-r', 'requirements.txt'], botDir);
+  }
+  const iaDir = path.join(ROOT, 'ia-service');
+  const iaPython = path.join(iaDir, '.venv', 'bin', 'python');
+  if (!fs.existsSync(iaPython)) {
+    info('Preparando el ia-service (venv + dependencias de Python)...');
+    run(['python3', '-m', 'venv', '.venv'], iaDir);
+    run([iaPython, '-m', 'pip', 'install', '-r', 'requirements.txt'], iaDir);
   }
 
   // 4) Arrancar los 4 servicios como procesos locales (logs en consola + logs/).
@@ -464,6 +475,7 @@ ${c.bold}${c.green}  ✔ Todo listo — SolidaridadCO está corriendo en local${
   ${c.bold}Panel admin${c.reset}     ${c.cyan}${ADMIN_URL}${c.reset}   (clave por defecto: admin123)
   ${c.bold}API${c.reset}            ${c.cyan}${API_URL}/...${c.reset}
   ${c.bold}Bot Anay${c.reset}       ${c.cyan}http://localhost:8000${c.reset}
+  ${c.bold}IA (clasifica)${c.reset} ${c.cyan}http://localhost:8100${c.reset}
   ${c.bold}PostgreSQL${c.reset}     Local (Docker) — semilla desde backups/bk.sql; producción usa Supabase
   ${c.bold}Logs${c.reset}           ${c.cyan}logs/backend.log · web.log · admin.log · bot.log · db.log${c.reset}
 ${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.reset} (web) · ${c.cyan}${lanUrl()}:8081${c.reset} (admin)
