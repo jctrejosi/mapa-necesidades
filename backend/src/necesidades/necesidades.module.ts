@@ -21,7 +21,7 @@ import { DB, Db } from '../db/database';
 import { necesidades, puntosApoyo, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
 import { emitAppEvent } from '../events/events.module';
-import { asDate, nested } from '../common/serialize';
+import { asDate, asIso, nested } from '../common/serialize';
 import { checkEditCode, genPin, isAdminEdit, str, toDate, toInt, today } from '../common/util';
 import { notifyReporteWhatsapp, sendWhatsappText, toWhatsappNumber, whatsappConfigured } from '../common/whatsapp';
 import { registrarAuditoria } from '../common/audit';
@@ -84,6 +84,7 @@ class NecesidadesService {
       // Punto de apoyo que adoptó el reporte (para que su PIN permita editarlo).
       ayuda_punto_apoyo_id: n.ayudaPuntoApoyoId ?? null,
       fecha: asDate(n.fecha),
+      created_at: asIso(n.createdAt),
       cantidad: n.cantidad ?? '',
       prioridad: n.prioridad,
       estado: n.estado,

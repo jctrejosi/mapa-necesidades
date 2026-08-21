@@ -279,9 +279,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   // Filtro por estado con checks: pendientes / en proceso / resueltos
   const [nEstado, setNEstado] = useState({ pendientes: true, proceso: true, resueltos: true })
   const [oFilter, setOFilter] = useState('disponibles')
-  const [mFilter, setMFilter] = useState('perdidas')
   const [dFilter, setDFilter] = useState('pendientes')
-  const [vFilter, setVFilter] = useState('disponibles')
 
   // Report form state
   const [rForm, setRForm] = useState({
@@ -370,34 +368,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
         },
       })
     })
-    mascotas.forEach(m => {
-      if (!matchesCiudad(m.ciudad)) return
-      items.push({
-        key: `m${m.id}`, type: 'mascota', mensaje: `Mascota reportada: ${m.nombre || m.tipo_animal}`, ciudad: m.ciudad, at: m.fecha_visto, ts: ts(m.fecha_visto),
-        detail: {
-          titulo: `🐾 ${m.nombre || m.tipo_animal}`,
-          detalle: m.senas || undefined,
-          ubicacion: m.lugar_visto || undefined,
-          telefono: m.telefono_reporta,
-          lat: m.lat, lng: m.lng,
-          imagenes: m.imagen ? [m.imagen] : undefined,
-          editable: { tipo: 'mascota', id: m.id },
-        },
-      })
-    })
-    viviendas.forEach(v => {
-      if (!matchesCiudad(v.ciudad)) return
-      items.push({
-        key: `v${v.id}`, type: 'vivienda', mensaje: 'Nueva oferta de vivienda', ciudad: v.ciudad, at: v.fecha, ts: ts(v.fecha),
-        detail: {
-          titulo: `🏠 ${v.sector_referencia || 'Vivienda'}`,
-          detalle: v.descripcion || undefined,
-          telefono: v.telefono_ofrece,
-          imagenes: v.imagen ? [v.imagen] : undefined,
-          editable: { tipo: 'vivienda', id: v.id },
-        },
-      })
-    })
     danos.forEach(d => {
       if (!matchesCiudad(d.ciudad)) return
       items.push({
@@ -436,7 +406,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
 
     // Solo los 3 registros más recientes en la actividad reciente
     return items.sort((a, b) => b.ts - a.ts || b.key.localeCompare(a.key)).slice(0, 3)
-  }, [necesidades, ofrecimientos, mascotas, viviendas, danos, noticias, eventos, sectores, ciudad])
+  }, [necesidades, ofrecimientos, danos, noticias, eventos, sectores, ciudad])
 
   // Default map center by city
   const cityCenter: Record<string, [number, number]> = {
@@ -1264,7 +1234,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   // reportes (modal), no en el panel lateral izquierdo / bottom sheet.
   const ReportesPanel = ({ conFiltro = true }: { conFiltro?: boolean }) => {
     const unread = notificaciones.filter(n => !n.leida).length
-    const prioridadOrder: Record<string, number> = { alta: 0, media: 1, baja: 2 }
 
     const nsDeCiudad = necesidades.filter(n => ciudadSectores.some(s => s.id === n.sector_id))
     // Sin checks activos se muestran todas; con checks, solo los estados marcados.
@@ -1276,11 +1245,13 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
       if (!hayFiltroEstado) return true
       return (nEstado.pendientes && esPendiente) || (nEstado.proceso && esProceso) || (nEstado.resueltos && esResuelta)
     })
+      // Orden: pendientes primero, en proceso en medio, atendidas al final;
+      // dentro de cada grupo las más recientes primero.
       .sort((a, b) => {
         const ua = a.estado === 'requiere' && !a.responsable ? 0 : a.estado === 'requiere' ? 1 : 2
         const ub = b.estado === 'requiere' && !b.responsable ? 0 : b.estado === 'requiere' ? 1 : 2
         if (ua !== ub) return ua - ub
-        return (prioridadOrder[a.prioridad] ?? 1) - (prioridadOrder[b.prioridad] ?? 1)
+        return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
       })
 
     const ofs = ofrecimientos
@@ -1291,10 +1262,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
         : oFilter === 'entregados' ? o.estado === 'entregado'
         : true)
 
-    const ms = mascotas
-      .filter(m => matchesCiudad(m.ciudad))
-      .filter(m => mFilter === 'perdidas' ? m.estado === 'perdido' : mFilter === 'encontradas' ? m.estado === 'encontrado' : true)
-
     const ds = danos
       .filter(d => matchesCiudad(d.ciudad))
       .filter(d =>
@@ -1302,10 +1269,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
         : dFilter === 'visita' ? d.estado === 'visita_programada'
         : dFilter === 'visitados' ? d.estado === 'visitado'
         : true)
-
-    const vs = viviendas
-      .filter(v => matchesCiudad(v.ciudad))
-      .filter(v => vFilter === 'disponibles' ? v.estado === 'disponible' : vFilter === 'ocupadas' ? v.estado === 'ocupado' : true)
 
     const nsNoticias = noticias.filter(n => n.ciudad === null || matchesCiudad(n.ciudad))
 
@@ -1451,62 +1414,6 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
                 </span>
               </div>
               <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>🤝 {o.nombre_ofrece}</p>
-            </div>
-          ))}
-        </ReportSection>
-
-        {/* 🐾 Mascotas */}
-        <ReportSection id="mascotas" icon="🐾" title="Mascotas" count={mascotas.filter(m => matchesCiudad(m.ciudad)).length}>
-          <Chips value={mFilter} onChange={setMFilter} options={[
-            { id: 'perdidas', label: '🔴 Perdidas' },
-            { id: 'encontradas', label: '✅ Encontradas' },
-            { id: 'todos', label: 'Todas' },
-          ]} />
-          {ms.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin mascotas con este filtro.</p>}
-          {ms.map(m => (
-            <div key={m.id} onClick={() => openDetail({
-              titulo: `🐾 ${m.nombre || m.tipo_animal}`,
-              detalle: m.senas || undefined,
-              ubicacion: m.lugar_visto || undefined,
-              telefono: m.telefono_reporta,
-              lat: m.lat, lng: m.lng,
-              imagenes: m.imagen ? [m.imagen] : undefined,
-              editable: { tipo: 'mascota', id: m.id },
-            })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{m.nombre || m.tipo_animal}</span>
-                <span className={m.estado === 'perdido' ? 'tag tag-red' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
-                  {m.estado === 'perdido' ? '🔴 Perdida' : '✅ Encontrada'}
-                </span>
-              </div>
-              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>📍 {m.lugar_visto || 'Sin lugar'}</p>
-            </div>
-          ))}
-        </ReportSection>
-
-        {/* 🏠 Viviendas */}
-        <ReportSection id="viviendas" icon="🏠" title="Viviendas" count={viviendas.filter(v => matchesCiudad(v.ciudad)).length}>
-          <Chips value={vFilter} onChange={setVFilter} options={[
-            { id: 'disponibles', label: '🟢 Disponibles' },
-            { id: 'ocupadas', label: '⚪ Ocupadas' },
-            { id: 'todos', label: 'Todas' },
-          ]} />
-          {vs.length === 0 && <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Sin ofertas con este filtro.</p>}
-          {vs.map(v => (
-            <div key={v.id} onClick={() => openDetail({
-              titulo: `🏠 ${v.sector_referencia || 'Vivienda'}`,
-              detalle: v.descripcion || undefined,
-              telefono: v.telefono_ofrece,
-              imagenes: v.imagen ? [v.imagen] : undefined,
-              editable: { tipo: 'vivienda', id: v.id },
-            })} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2430' }}>{v.sector_referencia || 'Vivienda'}</span>
-                <span className={v.estado === 'ocupado' ? 'tag tag-gray' : v.tipo === 'alquiler' ? 'tag tag-orange' : 'tag tag-green'} style={{ fontSize: 10, flexShrink: 0 }}>
-                  {v.estado === 'ocupado' ? '⚪ Ocupada' : v.tipo === 'alquiler' ? '💰 Alquiler' : '🏠 Gratis'}
-                </span>
-              </div>
-              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#6b7280' }}>👥 {v.capacidad} · 🕒 {v.tiempo_disponible}</p>
             </div>
           ))}
         </ReportSection>

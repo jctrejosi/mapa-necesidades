@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppModule } from './app.module';
@@ -32,6 +33,18 @@ async function bootstrap() {
     .split(',')
     .map((o) => o.trim().replace(/\/+$/, ''))
     .filter(Boolean);
+
+  // La API pública (/api/public/*) es datos abiertos: cualquier origen puede
+  // leerla desde el navegador. Debe registrarse ANTES del CORS global para que
+  // las preflights OPTIONS de orígenes no permitidos no se corten antes.
+  app.use('/api/public', (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
   app.enableCors({ origin: origins.length ? origins : true });
 
   // 4) Imágenes subidas: /uploads/...

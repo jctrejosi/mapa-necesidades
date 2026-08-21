@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { Store } from '../store'
+import type { Store, Necesidad } from '../store'
 import { TIPOS_NECESIDAD, needLabel, needIcon } from '../data/mock'
 import Modal from '../components/Modal'
 
@@ -10,7 +10,8 @@ export default function DashboardPage({ store }: Props) {
   const { ciudad, sectores, necesidades, ofrecimientos } = store
   const matchesCiudad = (c: string) => ciudad === 'Colombia' || c === ciudad
   const [tick, setTick] = useState(0)
-  const [listModal, setListModal] = useState<{ title: string; items: { titulo: string; subtitulo?: string }[] } | null>(null)
+  const [listModal, setListModal] = useState<{ title: string; items: { titulo: string; subtitulo?: string; need?: Necesidad }[] } | null>(null)
+  const [detailNeed, setDetailNeed] = useState<Necesidad | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setTick(x => x + 1), 30000)
@@ -43,10 +44,28 @@ export default function DashboardPage({ store }: Props) {
   ]
 
   const sectorNombre = (id: number) => sectores.find(s => s.id === id)?.nombre ?? 'Sector'
-  const needItem = (n: any) => ({
+  const needItem = (n: Necesidad) => ({
     titulo: `${needIcon(n.tipo)} ${n.tipo}`,
     subtitulo: `${(n.descripcion || 'Sin descripción').slice(0, 90)} · ${sectorNombre(n.sector_id)}`,
+    need: n,
   })
+
+  /** Abre el modal con los reportes de un fragmento de la gráfica de progreso. */
+  const openGrupo = (name: string) => {
+    let title = ''
+    let items: { titulo: string; subtitulo?: string; need?: Necesidad }[] = []
+    if (name === 'Sin asignar') {
+      title = '🟥 Sin asignar'
+      items = ciudadNecesidades.filter(n => n.estado === 'requiere' && !n.responsable).map(needItem)
+    } else if (name === 'En proceso') {
+      title = '🟧 En proceso'
+      items = ciudadNecesidades.filter(n => n.estado === 'requiere' && n.responsable).map(needItem)
+    } else if (name === 'Atendidas') {
+      title = '✅ Atendidas'
+      items = ciudadNecesidades.filter(n => n.estado === 'atendida').map(needItem)
+    }
+    setListModal({ title, items })
+  }
 
   /** Abre el modal con el listado de reportes de la tarjeta tocada. */
   const openStat = (key: string) => {
@@ -144,7 +163,7 @@ export default function DashboardPage({ store }: Props) {
                 <div style={{ position: 'relative', width: 200, height: 200, flexShrink: 0 }}>
                   <ResponsiveContainer width={200} height={200}>
                     <PieChart>
-                      <Pie data={pieData} cx={95} cy={95} innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" startAngle={90} endAngle={-270}>
+                      <Pie data={pieData} cx={95} cy={95} innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" startAngle={90} endAngle={-270} cursor="pointer" onClick={(data: any) => openGrupo(data?.payload?.name)}>
                         {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                       </Pie>
                       <Tooltip />
@@ -161,7 +180,7 @@ export default function DashboardPage({ store }: Props) {
                     { label: 'En proceso', value: enProceso, color: '#E08E00' },
                     { label: 'Sin asignar', value: sinAsignar, color: '#CE1126' },
                   ].map(item => (
-                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div key={item.label} onClick={() => openGrupo(item.label)} title={`Ver reportes: ${item.label}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, cursor: 'pointer' }}>
                       <div style={{ width: 12, height: 12, borderRadius: 2, background: item.color, flexShrink: 0 }} />
                       <span style={{ fontSize: 14, color: '#6b7280', flex: 1 }}>{item.label}</span>
                       <span style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value}</span>
@@ -228,7 +247,12 @@ export default function DashboardPage({ store }: Props) {
             ) : (
               <div style={{ maxHeight: 380, overflowY: 'auto' }}>
                 {listModal.items.map((it, i) => (
-                  <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div
+                    key={i}
+                    onClick={() => it.need && setDetailNeed(it.need)}
+                    title={it.need ? 'Ver detalle del reporte' : undefined}
+                    style={{ padding: '9px 0', borderBottom: '1px solid #f0f0f0', cursor: it.need ? 'pointer' : 'default' }}
+                  >
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1f2430' }}>{it.titulo}</div>
                     {it.subtitulo && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{it.subtitulo}</div>}
                   </div>
@@ -237,6 +261,79 @@ export default function DashboardPage({ store }: Props) {
             )}
           </Modal>
         )}
+        {/* Modal con el detalle completo de un reporte */}
+        {detailNeed && (() => {
+          const det = detailNeed
+          const detSector = sectores.find(s => s.id === det.sector_id)
+          const detEstado = det.estado === 'atendida'
+            ? { label: '✅ Atendida', cls: 'tag tag-green' }
+            : det.responsable ? { label: '🟠 En proceso', cls: 'tag tag-orange' }
+            : { label: '🔴 Sin asignar', cls: 'tag tag-red' }
+          const detPrioridad = det.prioridad === 'alta' ? '🔴 Alta' : det.prioridad === 'baja' ? '🟢 Baja' : '🟠 Media'
+          return (
+            <Modal title={`📋 ${needLabel(det.tipo)}`} onClose={() => setDetailNeed(null)} hideCancel confirmLabel="Cerrar" onConfirm={() => setDetailNeed(null)} wide>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span className={detEstado.cls} style={{ fontSize: 11 }}>{detEstado.label}</span>
+                  <span className="tag tag-gray" style={{ fontSize: 11 }}>Prioridad: {detPrioridad}</span>
+                </div>
+
+                {det.imagen && (
+                  <a href={det.imagen} target="_blank" rel="noreferrer">
+                    <img src={det.imagen} alt="Foto del reporte" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8 }} />
+                  </a>
+                )}
+
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Descripción</div>
+                  <p style={{ margin: '2px 0 0', fontSize: 14, color: '#1f2430' }}>{det.descripcion || 'Sin descripción'}</p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sector</div>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#1f2430' }}>📍 {detSector?.nombre ?? 'Sector'}</p>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Reportado el</div>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#1f2430' }}>{det.fecha || '—'}</p>
+                  </div>
+                </div>
+
+                {det.responsable && (
+                  <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9A6A00', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🙋 En proceso con</div>
+                    <p style={{ margin: '4px 0 0', fontSize: 13.5, color: '#1f2430' }}>{det.responsable.nombre}{det.responsable.telefono ? ` · 📞 ${det.responsable.telefono}` : ''}</p>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Reportado por</div>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#1f2430' }}>{det.reportado_por || '—'}</p>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Teléfono de contacto</div>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#1f2430' }}>{det.telefono_reporta ? `📞 ${det.telefono_reporta}` : '—'}</p>
+                  </div>
+                </div>
+
+                {det.evidencias && det.evidencias.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#9AA0AC', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Evidencias</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                      {det.evidencias.map((ev, i) => (
+                        <a key={i} href={ev.url} target="_blank" rel="noreferrer">
+                          <img src={ev.url} alt={ev.descripcion || 'Evidencia'} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6 }} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Modal>
+          )
+        })()}
       </div>
     </div>
   )

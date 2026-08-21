@@ -12,7 +12,7 @@ export interface Sector {
 
 export interface Necesidad {
   id: number; sector_id: number; tipo: string; descripcion: string
-  imagen: string | null; fecha: string; cantidad: string
+  imagen: string | null; fecha: string; created_at?: string; cantidad: string
   prioridad: 'alta' | 'media' | 'baja'
   estado: 'requiere' | 'atendida'
   responsable: { nombre: string; telefono: string; fecha: string } | null
