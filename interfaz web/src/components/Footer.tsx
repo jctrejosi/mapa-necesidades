@@ -1,26 +1,38 @@
+import logoDsi from '../../assets/logo-dsi.png'
+import { registrarClic } from '../api'
+
 export default function Footer() {
   return (
     <footer style={{
-      background: '#1f2430',
-      color: '#9AA0AC',
-      padding: '3px 12px',
-      fontSize: 12,
+      background: '#e9ebee',
+      color: 'rgb(154, 160, 172)',
+      padding: 0,
+      fontSize: 13.8,
       textAlign: 'center',
-      lineHeight: 1.3,
+      lineHeight: 1.4,
       marginTop: 'auto',
+      flexShrink: 0,
     }}>
-      {/* Una sola línea siempre: en responsive se achica la fuente para no partir */}
-      <p style={{
-        margin: 0,
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        fontSize: 'clamp(6px, calc((100vw - 44px) / 45), 11px)',
-        lineHeight: 1.2,
-      }}>
-        <span style={{ fontSize: '0.7em', verticalAlign: 'middle' }}>🌎</span>
-        {' '}Plataforma solidaria · Colaboradores: <a href="mailto:wilmarecheverry@gmail.com" style={{ color: '#FCD116' }}>wilmarecheverry@gmail.com</a> · <a href="https://www.jcti.xyz" style={{ color: '#FCD116' }}>www.jcti.xyz</a>
-      </p>
+      {/* Créditos DSI: misma redirección y mismo contador de clics que Contáctanos */}
+      <a
+        href="https://dsi-software.co/"
+        target="_blank"
+        rel="noreferrer"
+        onClick={() => { registrarClic('dsi').catch(() => {}) }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5.75,
+          color: 'rgb(154, 160, 172)',
+          textDecoration: 'none',
+          whiteSpace: 'nowrap',
+          fontSize: 13.8,
+          lineHeight: 1.4,
+        }}
+      >
+        <span>Desarrollo respaldado por DSI</span>
+        <img src={logoDsi} alt="DSI" style={{ height: 12.65, objectFit: 'contain' }} />
+      </a>
     </footer>
   )
 }

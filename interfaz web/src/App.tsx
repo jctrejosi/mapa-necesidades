@@ -80,8 +80,8 @@ export default function App() {
         {page === 'ayuda'         && <AyudaPage setPage={navigate} />}
       </main>
 
-      {/* Footer solo en la página de ayuda */}
-      {page === 'ayuda' && <Footer />}
+      {/* Footer con créditos DSI: siempre visible en el pie de página */}
+      <Footer />
 
       {/* ── Mobile bottom tab bar ── */}
       <nav className="bottom-tab-bar">

@@ -49,7 +49,7 @@ export default function ContactoPage() {
           onClick={() => { registrarClic('dsi').catch(() => {}) }}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none', marginBottom: 10 }}
         >
-          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Con el respaldo de</span>
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Desarrollo respaldado por</span>
           <img src={logoDsi} alt="DSI" style={{ height: 20, objectFit: 'contain' }} />
         </a>
         <a
