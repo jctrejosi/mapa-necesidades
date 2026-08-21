@@ -19,6 +19,7 @@ L.Icon.Default.mergeOptions({
 const CITY_CENTER: Record<string, [number, number]> = {
   Colombia: [4.5709, -74.2973],
   Manizales: [5.0689, -75.5174],
+  Riosucio: [5.4167, -75.7000],
   Pereira: [4.8133, -75.6961],
   Cali: [3.4516, -76.532],
   Quibdó: [5.6947, -76.661],

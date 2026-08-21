@@ -1,6 +1,6 @@
 /** Constantes de la interfaz (listas de ciudades, tipos y categorías). */
 
-export const CITIES = ['Colombia', 'Manizales', 'Pereira', 'Cali', 'Quibdó', 'Norte del Valle', 'Armenia']
+export const CITIES = ['Colombia', 'Manizales', 'Riosucio', 'Pereira', 'Cali', 'Quibdó', 'Norte del Valle', 'Armenia']
 
 /** Tipos de necesidad organizados por familia para los dropdowns (con ícono). */
 export const TIPOS_NECESIDAD_GRUPOS: { group: string; items: { value: string; icon: string }[] }[] = [

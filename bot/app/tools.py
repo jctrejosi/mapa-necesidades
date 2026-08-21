@@ -23,6 +23,7 @@ log = logging.getLogger("bot.tools")
 # Centros por ciudad (usados cuando el usuario no indica un sector específico)
 CITY_CENTERS: dict[str, tuple[float, float]] = {
     "manizales": (5.0703, -75.5138),
+    "riosucio": (5.4167, -75.7000),
     "pereira": (4.8133, -75.6961),
     "cali": (3.4516, -76.5320),
     "quibdo": (5.6942, -76.6583),

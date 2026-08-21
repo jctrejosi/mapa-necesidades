@@ -69,10 +69,16 @@ async function main() {
       }
 
       const colsRes = await prod.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
+        `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
         [t],
       );
       const cols = colsRes.rows.map((r) => r.column_name as string);
+      // Las columnas json/jsonb llegan como valores JS (objeto/array) y node-pg
+      // serializaría los arrays como literal de Postgres `{...}` (inválido para
+      // jsonb). Aquí se envían como texto JSON válido.
+      const jsonCols = new Set(
+        colsRes.rows.filter((r) => r.data_type === 'json' || r.data_type === 'jsonb').map((r) => r.column_name as string),
+      );
       const idCol = cols.includes('id') ? 'id' : null;
       if (!idCol) {
         console.log(`  · ${t}: sin columna id, omitida`);
@@ -94,7 +100,16 @@ async function main() {
         const chunk = rows.slice(i, i + BATCH);
         const params: unknown[] = [];
         for (const r of chunk) {
-          for (const c of cols) params.push(r[c] === undefined ? null : r[c]);
+          for (const c of cols) {
+            const v = r[c];
+            if (v === undefined || v === null) {
+              params.push(null);
+            } else if (jsonCols.has(c)) {
+              params.push(JSON.stringify(v));
+            } else {
+              params.push(v);
+            }
+          }
         }
         const insertSql = `INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(', ')})
         VALUES ${chunk.map((_, i) => `(${cols.map((_, j) => `$${i * cols.length + j + 1}`).join(', ')})`).join(', ')}

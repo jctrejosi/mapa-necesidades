@@ -13,6 +13,7 @@ import type {
 
 export const CITIES: { id: string; label: string }[] = [
   { id: 'manizales', label: 'Manizales' },
+  { id: 'riosucio', label: 'Riosucio' },
   { id: 'pereira', label: 'Pereira' },
   { id: 'cali', label: 'Cali' },
   { id: 'quibdo', label: 'Quibdó' },

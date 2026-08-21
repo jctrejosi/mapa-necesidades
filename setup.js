@@ -419,6 +419,29 @@ async function forceImport() {
   ok('Importación completada.');
 }
 
+/**
+ * Trae los datos de PRODUCCIÓN (Supabase) a la base local.
+ * Reutiliza backend/dist/scripts/sync-prod.js (UPSERT por id: inserta lo
+ * nuevo, actualiza lo existente, no borra nada). Requiere PROD_DATABASE_URL
+ * en backend/.env (o pasarla como argumento al script).
+ */
+async function pullDb() {
+  banner();
+  info('Asegurando PostgreSQL local (docker compose up -d db)...');
+  run(COMPOSE.concat(ALL, ['up', '-d', 'db']));
+  if (!(await waitForPort(5435, 60000))) {
+    warn('No se detectó PostgreSQL local en :5435.');
+  }
+  const syncPath = path.join(ROOT, 'backend', 'dist', 'scripts', 'sync-prod.js');
+  if (!fs.existsSync(syncPath)) {
+    info('Compilando el backend (falta dist/scripts/sync-prod.js)...');
+    run(['npm', 'run', 'build'], path.join(ROOT, 'backend'));
+  }
+  info('Sincronizando producción → local (UPSERT por id, no borra nada)...');
+  run(['node', syncPath], path.join(ROOT, 'backend'));
+  ok('Base de datos local sincronizada con producción.');
+}
+
 /** Detecta la IP de la red local (excluye redes Docker 172.x y loopback). */
 function lanUrl() {
   try {
@@ -447,6 +470,7 @@ ${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.r
 ` : ''}
   ${c.dim}Parar:  node setup.js --down${c.reset}
   ${c.dim}Reset:  node setup.js --reset${c.reset}
+  ${c.dim}Prod→local:  node setup.js --pull-db${c.reset}
 `);
 }
 
@@ -456,10 +480,11 @@ ${lanUrl() ? `  ${c.bold}Red local${c.reset}      ${c.cyan}${lanUrl()}:8080${c.r
     if (arg === '--down') await down();
     else if (arg === '--reset') await reset();
     else if (arg === '--import') await forceImport();
+    else if (arg === '--pull-db') await pullDb();
     else if (arg === '--dev') await devUp(); // mismo flujo local
     else if (arg === '--help' || arg === '-h') {
       banner();
-      console.log('Uso: node setup.js [--dev | --import | --down | --reset]');
+      console.log('Uso: node setup.js [--dev | --import | --pull-db | --down | --reset]');
       console.log('Logs en logs/ (backend, web, admin, bot, db). Solo PostgreSQL corre en Docker.');
     } else await up();
   } catch (e) {

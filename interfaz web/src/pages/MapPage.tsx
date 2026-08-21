@@ -442,6 +442,7 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
   const cityCenter: Record<string, [number, number]> = {
     'Colombia': [4.2, -74.0],
     'Manizales': [5.0703, -75.5138],
+    'Riosucio': [5.4167, -75.7000],
     'Pereira': [4.8133, -75.6961],
     'Cali': [3.4516, -76.5320],
     'Quibdó': [5.6942, -76.6583],

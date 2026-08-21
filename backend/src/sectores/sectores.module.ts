@@ -22,7 +22,7 @@ import { asNum, asIso } from '../common/serialize';
 import { str, toInt, toNum } from '../common/util';
 import { registrarAuditoria } from '../common/audit';
 
-const CIUDADES = ['manizales', 'pereira', 'cali', 'quibdo', 'norte_valle', 'armenia'];
+const CIUDADES = ['manizales', 'riosucio', 'pereira', 'cali', 'quibdo', 'norte_valle', 'armenia'];
 
 function ciudadValida(v: unknown): string {
   const c = str(v).toLowerCase();

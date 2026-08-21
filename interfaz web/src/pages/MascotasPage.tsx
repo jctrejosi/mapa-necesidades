@@ -12,7 +12,7 @@ import { reverseGeocode } from '../api/geo'
 interface Props { store: Store }
 
 const CITY_CENTER: Record<string, [number, number]> = {
-  'Manizales': [5.0703, -75.5138], 'Pereira': [4.8133, -75.6961],
+  'Manizales': [5.0703, -75.5138], 'Riosucio': [5.4167, -75.7000], 'Pereira': [4.8133, -75.6961],
   'Cali': [3.4516, -76.5320], 'Quibdó': [5.6942, -76.6583],
   'Norte del Valle': [3.9000, -76.0000], 'Armenia': [4.5339, -75.6811],
 }
