@@ -115,12 +115,12 @@ const uniqById = <T extends { id: number }>(rows: T[]): T[] => {
 
 // Registra la visita en la API (IP, user-agent, referrer, path) una vez por carga.
 // No bloquea nada: es fire-and-forget y el backend guarda lo que esté disponible.
+// El lugar de la visita lo resuelve el backend geolocalizando la IP (no se envía
+// la ciudad elegida en el header, que es solo un filtro de la interfaz).
 try {
-  const savedCiudad = localStorage.getItem('cr_ciudad') ?? 'Manizales'
   api.recordVisita({
     visitor_id: getVisitorId(),
     path: window.location.pathname,
-    ciudad: savedCiudad,
     lang: navigator.language,
   }).catch(() => { /* silencioso */ })
 } catch { /* noop */ }

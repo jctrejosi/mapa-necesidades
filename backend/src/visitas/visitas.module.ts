@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { desc, sql, count, countDistinct } from 'drizzle-orm';
+import { desc, sql, count, countDistinct, eq } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { visitas } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -49,6 +49,38 @@ const noLoopback = sql`(
   )
 )`;
 
+/** Caché en memoria de IP → lugar ya resuelto (evita llamar al geolocalizador repetido). */
+const geoCache = new Map<string, string | null>();
+
+/**
+ * Geolocaliza una IP pública y devuelve "Ciudad, Departamento" (o null si no
+ * se puede resolver). Usa ipwho.is (gratuito, sin API key, HTTPS).
+ * Con timeout: nunca debe frenar el registro de la visita.
+ */
+async function geolocate(ip: string): Promise<string | null> {
+  if (geoCache.has(ip)) return geoCache.get(ip) ?? null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
+      signal: ctrl.signal,
+      headers: { accept: 'application/json' },
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`geoloc http ${res.status}`);
+    const d = await res.json();
+    if (!d || d.success === false) throw new Error('geoloc sin datos');
+    const city = d.city || '';
+    const region = d.region || d.country || '';
+    const lugar = [city, region].filter(Boolean).join(', ').slice(0, 50) || null;
+    geoCache.set(ip, lugar);
+    return lugar;
+  } catch {
+    geoCache.set(ip, null); // no reintentar por IP en este ciclo de vida
+    return null;
+  }
+}
+
 @Injectable()
 class VisitasService {
   constructor(@Inject(DB) private db: Db) {}
@@ -70,6 +102,21 @@ class VisitasService {
         lang: str(b.lang)?.slice(0, 20) || null,
       })
       .returning();
+    // Lugar REAL del visitante (por IP) en segundo plano: la respuesta no se
+    // bloquea y, si el geolocalizador falla, la fila conserva lo enviado por
+    // el cliente (o null).
+    if (ip) {
+      geolocate(ip)
+        .then((lugar) => {
+          if (!lugar) return;
+          return this.db
+            .update(visitas)
+            .set({ ciudad: lugar })
+            .where(eq(visitas.id, v.id))
+            .catch(() => { /* noop */ });
+        })
+        .catch(() => { /* geolocalización opcional */ });
+    }
     return { ok: true, id: v.id };
   }
 
