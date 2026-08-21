@@ -1,13 +1,16 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { isAdminPass } from './util';
+import { isAdminPass, isOwnerPass } from './util';
 
-/** Exige la contraseña de admin en el header `x-admin-password`. */
+/**
+ * Exige la contraseña de admin en el header `x-admin-password`.
+ * El rol OWNER también pasa: tiene todos los permisos del admin.
+ */
 @Injectable()
 export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();
     const pass = (req.headers as Record<string, unknown>)['x-admin-password'];
-    if (!isAdminPass(pass)) {
+    if (!isAdminPass(pass) && !isOwnerPass(pass)) {
       throw new UnauthorizedException({ error: 'No autorizado' });
     }
     return true;

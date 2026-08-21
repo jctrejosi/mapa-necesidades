@@ -78,10 +78,13 @@ export function isOwnerPass(pass: unknown): boolean {
  * Acepta varias llaves separadas por coma (ej. ADMIN_EDIT=admin-edit-2026,2026)
  * y recorta espacios alrededor de lo que escriba el usuario.
  * Si ADMIN_EDIT no está definido, cae a ADMIN_PASSWORD.
+ * La OWNER_PASSWORD también vale como llave: el owner puede editarlo todo.
  */
 export function isAdminEdit(code: unknown): boolean {
   const env = process.env.ADMIN_EDIT ?? process.env.ADMIN_PASSWORD ?? 'admin123';
   const keys = env.split(',').map(k => k.trim()).filter(Boolean);
+  const owner = process.env.OWNER_PASSWORD ?? '';
+  if (owner) keys.push(owner);
   const a = String(code ?? '').trim();
   return keys.some(expected => {
     if (a.length !== expected.length) return false;

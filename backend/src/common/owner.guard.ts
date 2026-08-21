@@ -4,7 +4,8 @@ import { isOwnerPass } from './util';
 /**
  * Exige la contraseña del rol OWNER en el header `x-admin-password`.
  * Los endpoints protegidos con este guard solo los ve/quiere el owner
- * (p. ej. la auditoría). Sin OWNER_PASSWORD configurada, equivale a admin.
+ * (p. ej. la auditoría). Sin OWNER_PASSWORD configurada, nadie es owner
+ * y estas secciones quedan inaccesibles hasta que se configure.
  */
 @Injectable()
 export class OwnerGuard implements CanActivate {
