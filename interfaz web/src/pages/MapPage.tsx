@@ -1683,9 +1683,9 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
               </div>
             )}
 
-            {/* Desktop layer toggles — shift up so they don't overlap report button */}
+            {/* Desktop layer toggles — pegados al fondo (marcadores y botones de ayuda) */}
             <div className="map-toggles-desktop">
-              <LayerToggles bottomOffset={60} />
+              <LayerToggles bottomOffset={14} />
             </div>
 
             {/* Mobile layer toggles — compactos (solo ícono), 15px sobre el navbar; ocultos al expandir el sheet */}
@@ -1708,8 +1708,8 @@ export default function MapPage({ store, setPage, openReportes = 0 }: Props) {
               title="Centro de notificaciones"
               className="notif-bell"
               style={{
-                position: 'absolute', bottom: 104, right: 10, zIndex: 400,
-                background: 'rgba(255,255,255,0.95)', border: '1px solid #d1d5db',
+                position: 'absolute', bottom: 60, right: 10, zIndex: 400,
+                background: 'rgba(255,255,255,0.95)', border: '2px solid #003893',
                 borderRadius: 999, width: 40, height: 40, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 2px 10px rgba(0,0,0,0.2)', backdropFilter: 'blur(4px)', fontSize: 17,

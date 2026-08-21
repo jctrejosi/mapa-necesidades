@@ -272,18 +272,31 @@ export default function DashboardPage({ store }: Props) {
                     <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>atendido</span>
                   </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[
                     { label: 'Atendidas', value: atendidas, color: '#2E9E5B' },
                     { label: 'En proceso', value: enProceso, color: '#E08E00' },
                     { label: 'Sin asignar', value: sinAsignar, color: '#CE1126' },
                   ].map(item => (
-                    <div key={item.label} onClick={() => openGrupo(item.label)} title={`Ver reportes: ${item.label}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, cursor: 'pointer' }}>
-                      <div style={{ width: 12, height: 12, borderRadius: 2, background: item.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 14, color: '#6b7280', flex: 1 }}>{item.label}</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value}</span>
-                      <span style={{ fontSize: 12, color: '#9AA0AC' }}>({total > 0 ? Math.round((item.value / total) * 100) : 0}%)</span>
-                    </div>
+                    <button
+                      key={item.label}
+                      onClick={() => openGrupo(item.label)}
+                      title={`Ver reportes: ${item.label}`}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                        padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                        background: '#fff', border: `1.5px solid ${item.color}`,
+                        fontFamily: "'Nunito', sans-serif", textAlign: 'left',
+                        transition: 'box-shadow .15s, transform .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 3px 10px ${item.color}40`; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                      onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = '' }}
+                    >
+                      <div style={{ width: 12, height: 12, borderRadius: 3, background: item.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, color: '#1f2430', flex: 1, fontWeight: 700 }}>{item.label}</span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: item.color }}>{item.value}</span>
+                      <span style={{ fontSize: 12, color: '#9AA0AC', fontWeight: 600 }}>({total > 0 ? Math.round((item.value / total) * 100) : 0}%)</span>
+                    </button>
                   ))}
                 </div>
               </div>
