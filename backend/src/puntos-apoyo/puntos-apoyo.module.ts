@@ -16,6 +16,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { puntosApoyo } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -212,6 +213,7 @@ export class PuntosApoyoController {
 
   @Post()
   // Crear un punto de apoyo es público: cualquier persona puede aportar un lugar.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() b: PuntoApoyoBody) {
     return this.svc.create(b);
   }

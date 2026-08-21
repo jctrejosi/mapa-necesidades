@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { desc, eq } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { reportesDanos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -322,6 +323,7 @@ export class DanosController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() b: DanoBody) {
     return this.svc.create(b);
   }

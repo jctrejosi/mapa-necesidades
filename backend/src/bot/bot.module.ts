@@ -1,9 +1,11 @@
 import { Body, Controller, HttpException, HttpStatus, Module, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 /** URL del servicio de chatbot (FastAPI). Solo el backend lo conoce. */
 const BOT_SERVICE_URL = (process.env.BOT_SERVICE_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 
 @Controller('bot')
+@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class BotController {
   @Post('chat')
   async chat(@Body() body: Record<string, unknown>) {

@@ -16,6 +16,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { ofrecimientos } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -227,6 +228,7 @@ export class OfrecimientosController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() b: OfrecimientoBody) {
     return this.svc.create(b);
   }

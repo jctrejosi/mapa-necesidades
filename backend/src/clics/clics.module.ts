@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { count, desc, sql } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { clics } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -98,6 +99,7 @@ export class ClicsController {
   constructor(private readonly svc: ClicsService) {}
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Req() req: Request, @Body() b: ClicBody) {
     return this.svc.create(req, b);
   }

@@ -16,6 +16,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { eventos, puntosApoyo } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -341,6 +342,7 @@ export class EventosController {
 
   /** Crear un evento es público, pero exige el PIN del punto de apoyo asociado. */
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() b: EventoBody) {
     return this.svc.create(b);
   }

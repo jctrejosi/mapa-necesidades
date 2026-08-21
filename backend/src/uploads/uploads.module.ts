@@ -10,6 +10,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Throttle } from '@nestjs/throttler';
 import { str } from '../common/util';
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -67,6 +68,7 @@ class UploadsService {
 }
 
 @Controller('uploads')
+@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class UploadsController {
   constructor(private readonly svc: UploadsService) {}
 

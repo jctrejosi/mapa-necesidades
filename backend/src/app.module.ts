@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/throttler.guard';
 import { DatabaseModule } from './db/database';
 import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
@@ -24,6 +27,10 @@ import { ClicsModule } from './clics/clics.module';
 
 @Module({
   imports: [
+    // Límites por IP: global alto (anti-inundación; el mapa recarga ~70
+    // requests por ciclo de 30s y cada evento SSE dispara un refresh) y
+    // 10/min en los endpoints sensibles (ver @Throttle en cada controlador).
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 3000 }]),
     DatabaseModule,
     EventsModule,
     AuthModule,
@@ -46,6 +53,12 @@ import { ClicsModule } from './clics/clics.module';
     VoluntariosModule,
     BuscarModule,
     ClicsModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

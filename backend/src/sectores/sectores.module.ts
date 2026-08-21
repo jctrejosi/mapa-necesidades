@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { contactos, sectores } from '../db/schema';
 import { AdminGuard } from '../common/admin.guard';
@@ -255,6 +256,7 @@ export class SectoresController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(@Body() b: SectorBody) {
     return this.svc.create(b);
   }
