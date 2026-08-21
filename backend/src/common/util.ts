@@ -58,6 +58,20 @@ export function isAdminPass(pass: unknown): boolean {
 }
 
 /**
+ * Contraseña del rol OWNER (OWNER_PASSWORD en el .env). Si no está definida,
+ * cae a ADMIN_PASSWORD: así, sin configurar, admin y owner son lo mismo (no
+ * se bloquea a nadie); al definir OWNER_PASSWORD se separan los roles.
+ */
+export function isOwnerPass(pass: unknown): boolean {
+  const expected = process.env.OWNER_PASSWORD ?? process.env.ADMIN_PASSWORD ?? 'admin123';
+  const a = String(pass ?? '');
+  if (a.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
  * Llave universal de EDICIÓN de reportes (ADMIN_EDIT en el .env).
  * Permite editar/borrar cualquier reporte sin conocer su PIN/radicado.
  * Acepta varias llaves separadas por coma (ej. ADMIN_EDIT=admin-edit-2026,2026)

@@ -15,7 +15,7 @@ import { desc, sql, count, countDistinct, eq } from 'drizzle-orm';
 import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { visitas } from '../db/schema';
-import { AdminGuard } from '../common/admin.guard';
+import { OwnerGuard } from '../common/owner.guard';
 import { str, toInt } from '../common/util';
 
 type VisitaBody = {
@@ -168,13 +168,13 @@ export class VisitasController {
   }
 
   @Get('admin/resumen')
-  @UseGuards(AdminGuard)
+  @UseGuards(OwnerGuard)
   resumen() {
     return this.svc.resumen();
   }
 
   @Get('admin')
-  @UseGuards(AdminGuard)
+  @UseGuards(OwnerGuard)
   list(@Query('limit') limit?: string) {
     return this.svc.list(toInt(limit, 50));
   }

@@ -27,6 +27,16 @@ export function setAdminPass(pass: string | null) {
   else sessionStorage.removeItem('cr_admin_pass')
 }
 
+/** Rol de la sesión ('owner' o 'admin'). Se guarda al iniciar sesión. */
+export function getAdminRol(): 'owner' | 'admin' {
+  return sessionStorage.getItem('cr_admin_rol') === 'owner' ? 'owner' : 'admin'
+}
+
+export function setAdminRol(rol: 'owner' | 'admin' | null) {
+  if (rol) sessionStorage.setItem('cr_admin_rol', rol)
+  else sessionStorage.removeItem('cr_admin_rol')
+}
+
 export class ApiError extends Error {
   status: number
   constructor(message: string, status: number) {

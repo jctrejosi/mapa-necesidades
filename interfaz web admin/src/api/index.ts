@@ -29,7 +29,7 @@ export const cityLabel = (id: string): string => BY_ID.get(id) ?? id
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 
-export const verifyAdmin = (admin_password: string): Promise<{ ok: boolean }> =>
+export const verifyAdmin = (admin_password: string): Promise<{ ok: boolean; rol?: 'owner' | 'admin' | null }> =>
   request('/auth/verify', { method: 'POST', body: { admin_password } })
 
 // ── Sectores / contactos ────────────────────────────────────────────────────
@@ -227,6 +227,10 @@ export const listVisitas = (limit = 100): Promise<any[]> =>
 /** Contadores de visitas para el resumen del admin. */
 export const visitasResumen = (): Promise<{ total: number; hoy: number; unicos: number; ultima_visita: string | null }> =>
   request('/visitas/admin/resumen')
+
+/** Contadores de clics agrupados por enlace (ej. cuántos lleva DSI). */
+export const clicsResumen = (): Promise<{ total: number; porEnlace: { enlace: string; total: number }[] }> =>
+  request('/clics/admin/resumen')
 
 // ── Auditoría (rastro de modificaciones) ─────────────────────────────────────
 

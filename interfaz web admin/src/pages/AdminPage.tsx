@@ -3,7 +3,8 @@ import type { Store } from '../store'
 import { fmtFecha } from '../store'
 import Modal from '../components/Modal'
 import ImageInput from '../components/ImageInput'
-import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria, verifyAdmin } from '../api'
+import { restablecerPin, verPin, cityId, CITIES, listVisitas, visitasResumen, listAuditoria, clicsResumen, verifyAdmin } from '../api'
+import { getAdminRol } from '../api/client'
 import type { Necesidad, ReporteDano } from '../api/types'
 
 interface Props { store: Store }
@@ -234,6 +235,7 @@ const TipoSelect = ({ value, options, groups, onPick }: { value: string; options
 export default function AdminPage({ store }: Props) {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('cr_admin') === '1')
+  const [rol, setRol] = useState<'owner' | 'admin'>(() => getAdminRol())
   const [loginError, setLoginError] = useState(false)
 
   const {
@@ -260,6 +262,7 @@ export default function AdminPage({ store }: Props) {
   const [visitas, setVisitas] = useState<any[]>([])
   const [visitasLoading, setVisitasLoading] = useState(false)
   const [visitasKpi, setVisitasKpi] = useState<{ total: number; hoy: number; unicos: number; ultima_visita: string | null }>({ total: 0, hoy: 0, unicos: 0, ultima_visita: null })
+  const [clics, setClics] = useState<{ total: number; porEnlace: { enlace: string; total: number }[] }>({ total: 0, porEnlace: [] })
   const [auditoria, setAuditoria] = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditDetail, setAuditDetail] = useState<any | null>(null)
@@ -289,6 +292,7 @@ export default function AdminPage({ store }: Props) {
     const ok = await loginAdmin(password)
     if (ok) {
       sessionStorage.setItem('cr_admin', '1')
+      setRol(getAdminRol())
       setAuthed(true)
     } else {
       setLoginError(true)
@@ -298,6 +302,7 @@ export default function AdminPage({ store }: Props) {
   const handleLogout = async () => {
     sessionStorage.removeItem('cr_admin')
     await logoutAdmin()
+    setRol('admin')
     setAuthed(false)
   }
 
@@ -331,13 +336,17 @@ export default function AdminPage({ store }: Props) {
     setVisitasLoading(false)
   }
 
+  const loadClics = async () => {
+    try { setClics(await clicsResumen()) } catch (e) { alert(e instanceof Error ? e.message : String(e)) }
+  }
+
   const loadAuditoria = async () => {
     setAuditLoading(true)
     try { setAuditoria(await listAuditoria(200)) } catch (e) { alert(e instanceof Error ? e.message : String(e)) }
     setAuditLoading(false)
   }
 
-  useEffect(() => { if (authed && section === 'visitas') loadVisitas() }, [authed, section])
+  useEffect(() => { if (authed && section === 'visitas') { loadVisitas(); loadClics() } }, [authed, section])
   useEffect(() => { if (authed && section === 'auditoria') loadAuditoria() }, [authed, section])
   // Contador de visitas para el resumen (se refresca al entrar y al visitar la sección)
   useEffect(() => {
@@ -642,7 +651,6 @@ export default function AdminPage({ store }: Props) {
     { id: 'ofrecimientos', icon: '🤝', label: 'Ofrecimientos' },
     { id: 'sectores', icon: '📍', label: 'Sectores' },
     { id: 'danos', icon: '🏚️', label: 'Daños' },
-    { id: 'mascotas', icon: '🐾', label: 'Mascotas' },
     { id: 'viviendas', icon: '🏠', label: 'Viviendas' },
     { id: 'centros', icon: '📦', label: 'Centros' },
     { id: 'puntos', icon: '🏪', label: 'Puntos de apoyo' },
@@ -650,9 +658,20 @@ export default function AdminPage({ store }: Props) {
     { id: 'noticias', icon: '📰', label: 'Noticias' },
     { id: 'visitas', icon: '👥', label: 'Visitas' },
     { id: 'auditoria', icon: '🧾', label: 'Auditoría' },
-  ]
+    // Visitas y auditoría son solo para el rol owner.
+  ].filter(n => (n.id !== 'visitas' && n.id !== 'auditoria') || rol === 'owner')
 
   const renderSection = () => {
+    // Aunque los tabs estén ocultos, blindamos las secciones por si se navega directo.
+    if ((section === 'auditoria' || section === 'visitas') && rol !== 'owner') {
+      return (
+        <Section title={section === 'auditoria' ? 'Auditoría' : 'Visitas'} icon="🔒" count={0}>
+          <p style={{ fontSize: 13, color: '#6b7280' }}>
+            🔒 Esta sección solo está disponible para el rol <strong>owner</strong>.
+          </p>
+        </Section>
+      )
+    }
     if (section === 'necesidades') {
       return (
         <Section title="Necesidades reportadas" icon="🆘" count={needsRows.length} toolbar={
@@ -1125,6 +1144,25 @@ export default function AdminPage({ store }: Props) {
             <button className="btn btn-outline btn-sm" onClick={loadVisitas} disabled={visitasLoading}>↻ Actualizar</button>
           </div>
         }>
+          {/* 👇 Clics en enlaces (ej. DSI) dentro del módulo de visitas */}
+          <div style={{ background: '#f8f9fb', border: '1px solid #e1e4e9', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#1f2430' }}>🔗 Clics en enlaces</h3>
+              <button className="btn btn-outline btn-sm" onClick={loadClics}>↻</button>
+            </div>
+            {clics.porEnlace.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: '#6b7280', margin: '8px 0 0' }}>Sin clics registrados todavía.</p>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                {clics.porEnlace.map(c => (
+                  <div key={c.enlace} style={{ flex: 1, minWidth: 130, background: '#fff', border: c.enlace === 'dsi' ? '1.5px solid #003893' : '1px solid #e1e4e9', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: c.enlace === 'dsi' ? '#003893' : '#1f2430' }}>{c.total}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{c.enlace === 'dsi' ? '🏢 DSI' : c.enlace}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr><Th>Fecha</Th><Th>Hora</Th><Th>Página</Th><Th>Ciudad</Th><Th>Idioma</Th><Th>Referrer</Th></tr></thead>
             <tbody>
@@ -1189,7 +1227,9 @@ export default function AdminPage({ store }: Props) {
           <KpiCard icon="🤝" label="Ofrecimientos libres" value={kpis.disponibles} tone="blue" onClick={() => { setSearch(''); setOChip('disponibles'); setSection('ofrecimientos') }} />
           <KpiCard icon="🏚️" label="Daños pendientes" value={kpis.danosPendientes} tone="red" onClick={() => { setSearch(''); setDChip('pendientes'); setSection('danos') }} />
           <KpiCard icon="🏠" label="Viviendas disponibles" value={kpis.viviendas} tone="blue" onClick={() => { setSearch(''); setVChip('disponibles'); setSection('viviendas') }} />
-          <KpiCard icon="👥" label="Visitas al sitio" value={visitasKpi.total} tone="yellow" sub={`hoy ${visitasKpi.hoy} · ${visitasKpi.unicos} visitantes únicos`} onClick={() => { setSearch(''); setSection('visitas') }} />
+          {rol === 'owner' && (
+            <KpiCard icon="👥" label="Visitas al sitio" value={visitasKpi.total} tone="yellow" sub={`hoy ${visitasKpi.hoy} · ${visitasKpi.unicos} visitantes únicos`} onClick={() => { setSearch(''); setSection('visitas') }} />
+          )}
         </div>
 
         <div className="card admin-section">

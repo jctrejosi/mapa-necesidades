@@ -16,7 +16,7 @@ import { count, desc, sql } from 'drizzle-orm';
 import { Throttle } from '@nestjs/throttler';
 import { DB, Db } from '../db/database';
 import { clics } from '../db/schema';
-import { AdminGuard } from '../common/admin.guard';
+import { OwnerGuard } from '../common/owner.guard';
 import { str, toInt } from '../common/util';
 
 type ClicBody = {
@@ -105,13 +105,13 @@ export class ClicsController {
   }
 
   @Get('admin/resumen')
-  @UseGuards(AdminGuard)
+  @UseGuards(OwnerGuard)
   resumen() {
     return this.svc.resumen();
   }
 
   @Get('admin')
-  @UseGuards(AdminGuard)
+  @UseGuards(OwnerGuard)
   list(@Query('limit') limit?: string) {
     return this.svc.list(toInt(limit, 50));
   }

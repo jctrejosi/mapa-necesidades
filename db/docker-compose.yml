@@ -49,6 +49,7 @@ services:
       DB_SSL: "false"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       ADMIN_EDIT: ${ADMIN_EDIT:-admin-edit-2026}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
       FRONTEND_ORIGIN: http://localhost:8080,http://localhost:8081
@@ -135,6 +136,7 @@ services:
       DB_SSL: "false"
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       ADMIN_EDIT: ${ADMIN_EDIT:-admin-edit-2026}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
       FRONTEND_ORIGIN: http://localhost:8080,http://localhost:8081

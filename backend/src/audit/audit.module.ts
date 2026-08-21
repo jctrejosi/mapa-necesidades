@@ -2,7 +2,7 @@ import { Controller, Get, Inject, Injectable, Module, Query, UseGuards } from '@
 import { desc } from 'drizzle-orm';
 import { DB, Db } from '../db/database';
 import { auditoria } from '../db/schema';
-import { AdminGuard } from '../common/admin.guard';
+import { OwnerGuard } from '../common/owner.guard';
 import { toInt } from '../common/util';
 
 @Injectable()
@@ -21,7 +21,7 @@ class AuditoriaService {
 }
 
 @Controller('auditoria')
-@UseGuards(AdminGuard)
+@UseGuards(OwnerGuard)
 export class AuditoriaController {
   constructor(private readonly svc: AuditoriaService) {}
 

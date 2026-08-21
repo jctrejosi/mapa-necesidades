@@ -14,6 +14,7 @@ services:
       DB_SSL: "false"
       ADMIN_PASSWORD: admin123
       ADMIN_EDIT: admin-edit-2026
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
       FRONTEND_ORIGIN: http://localhost:8080,http://localhost:8081
       DEEPSEEK_API_KEY_BOT: ${DEEPSEEK_API_KEY_BOT:-}
       DEEPSEEK_API_KEY_IA_SERVICE: ${DEEPSEEK_API_KEY_IA_SERVICE:-}

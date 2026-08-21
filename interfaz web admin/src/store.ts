@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import * as api from './api'
-import { getAdminPass, imgUrl, setAdminPass } from './api/client'
+import { getAdminPass, imgUrl, setAdminPass, setAdminRol } from './api/client'
 import { cityLabel } from './api'
 import { subscribeEvents, type AppEvent } from './api/events'
 import type {
@@ -373,9 +373,11 @@ export function useStore() {
   }, [])
 
   const loginAdmin = useCallback(async (password: string): Promise<boolean> => {
-    const { ok } = await api.verifyAdmin(password)
-    if (!ok) return false
+    const res = await api.verifyAdmin(password)
+    if (!res.ok) return false
     setAdminPass(password)
+    // Rol de la sesión: 'owner' (contraseña OWNER_PASSWORD) o 'admin'.
+    setAdminRol(res.rol === 'owner' ? 'owner' : 'admin')
     // Si un listado falla al refrescar, igual se entra al panel y los datos
     // se recargan con el SSE / al navegar.
     try { await refresh(ciudad) } catch { /* silencioso */ }
@@ -384,6 +386,7 @@ export function useStore() {
 
   const logoutAdmin = useCallback(async () => {
     setAdminPass(null)
+    setAdminRol(null)
     await refresh(ciudad)
   }, [ciudad])
 
