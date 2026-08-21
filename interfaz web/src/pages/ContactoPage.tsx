@@ -1,4 +1,5 @@
 import logoDsi from '../../assets/logo-dsi.png'
+import logoWater from '../../assets/logo-water.png'
 import { registrarClic } from '../api'
 
 const TELEFONOS = [
@@ -53,12 +54,22 @@ export default function ContactoPage() {
           <img src={logoDsi} alt="DSI" style={{ height: 20, objectFit: 'contain' }} />
         </a>
         <a
+          href="https://purewater.com.co/"
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => { registrarClic('water').catch(() => {}) }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none', marginBottom: 10 }}
+        >
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Con el apoyo de</span>
+          <img src={logoWater} alt="Water" style={{ height: 28, objectFit: 'contain' }} />
+        </a>
+        <a
           href="https://www.jcti.xyz"
           target="_blank"
           rel="noreferrer"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: '#fff', border: '1px solid #e1e4e9', borderRadius: 10, textDecoration: 'none' }}
         >
-          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Colaborador</span>
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>Desarrollador</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#003893' }}>www.jcti.xyz</span>
         </a>
       </div>

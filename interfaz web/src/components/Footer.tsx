@@ -1,4 +1,5 @@
 import logoDsi from '../../assets/logo-dsi.png'
+import logoWater from '../../assets/logo-water.png'
 import { registrarClic } from '../api'
 
 export default function Footer() {
@@ -13,26 +14,18 @@ export default function Footer() {
       marginTop: 'auto',
       flexShrink: 0,
     }}>
-      {/* Créditos DSI: misma redirección y mismo contador de clics que Contáctanos */}
-      <a
-        href="https://dsi-software.co/"
-        target="_blank"
-        rel="noreferrer"
-        onClick={() => { registrarClic('dsi').catch(() => {}) }}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5.46,
-          color: '#3f4550',
-          textDecoration: 'none',
-          whiteSpace: 'nowrap',
-          fontSize: 13.11,
-          lineHeight: 1.4,
-        }}
-      >
-        <span>Desarrollo respaldado por DSI</span>
-        <img src={logoDsi} alt="DSI" style={{ height: 12.02, objectFit: 'contain' }} />
-      </a>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5.46, color: '#3f4550', whiteSpace: 'nowrap' }}>
+        Desarrollo respaldado por
+        {/* DSI: misma redirección y mismo contador de clics que Contáctanos */}
+        <a href="https://dsi-software.co/" target="_blank" rel="noreferrer" onClick={() => { registrarClic('dsi').catch(() => {}) }} style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <img src={logoDsi} alt="DSI" style={{ height: 12.02, objectFit: 'contain' }} />
+        </a>
+        <span>&</span>
+        {/* Pure Water: misma redirección y mismo contador de clics que Contáctanos */}
+        <a href="https://purewater.com.co/" target="_blank" rel="noreferrer" onClick={() => { registrarClic('water').catch(() => {}) }} style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <img src={logoWater} alt="Pure Water" style={{ height: 15, objectFit: 'contain' }} />
+        </a>
+      </span>
     </footer>
   )
 }

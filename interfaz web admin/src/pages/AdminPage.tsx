@@ -1178,11 +1178,22 @@ export default function AdminPage({ store }: Props) {
             {clics.porEnlace.length === 0 ? (
               <p style={{ fontSize: 12.5, color: '#6b7280', margin: '8px 0 0' }}>Sin clics registrados todavía.</p>
             ) : (
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-                {clics.porEnlace.map(c => (
-                  <div key={c.enlace} style={{ flex: 1, minWidth: 130, background: '#fff', border: c.enlace === 'dsi' ? '1.5px solid #003893' : '1px solid #e1e4e9', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: c.enlace === 'dsi' ? '#003893' : '#1f2430' }}>{c.total}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{c.enlace === 'dsi' ? '🏢 DSI' : c.enlace}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                {/* DSI primero, Pure Water debajo, y el resto después */}
+                {[...clics.porEnlace].sort((a, b) => {
+                  const order = { dsi: 0, water: 1 }
+                  return ((order as any)[a.enlace] ?? 2) - ((order as any)[b.enlace] ?? 2)
+                }).map(c => (
+                  <div key={c.enlace} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                    background: '#fff',
+                    border: c.enlace === 'dsi' || c.enlace === 'water' ? '1.5px solid #003893' : '1px solid #e1e4e9',
+                    borderRadius: 10, padding: '8px 12px',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2430' }}>
+                      {c.enlace === 'dsi' ? '🏢 DSI' : c.enlace === 'water' ? '💧 Pure Water' : c.enlace}
+                    </span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: c.enlace === 'dsi' ? '#003893' : c.enlace === 'water' ? '#0284c7' : '#1f2430' }}>{c.total}</span>
                   </div>
                 ))}
               </div>
